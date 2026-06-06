@@ -1,0 +1,70 @@
+- generic [ref=e3]:
+  - generic [ref=e77]:
+    - button "← Назад" [ref=e78] [cursor=pointer]
+    - heading "Уведомления" [level=1] [ref=e79]
+    - paragraph [ref=e80]: Управляйте Telegram-уведомлениями от платформы. Настройки применяются мгновенно после сохранения.
+    - generic [ref=e82]:
+      - generic [ref=e83]:
+        - generic [ref=e84]: Полный «не беспокоить»
+        - generic [ref=e85]: Отключает все уведомления, включая срочные про споры.
+      - checkbox "Полный режим не беспокоить" [ref=e86] [cursor=pointer]
+    - generic [ref=e87]:
+      - heading "Типы событий" [level=2] [ref=e88]
+      - paragraph [ref=e89]: Снимите флажок, чтобы заглушить отдельный тип уведомлений.
+      - generic [ref=e90]:
+        - generic [ref=e91]:
+          - generic [ref=e92]: Новая сделка (для продавца)
+          - generic [ref=e93]: deal.created
+        - checkbox "Уведомления типа deal.created" [checked] [ref=e94] [cursor=pointer]
+      - generic [ref=e95]:
+        - generic [ref=e96]:
+          - generic [ref=e97]: Оплата получена в эскроу
+          - generic [ref=e98]: deal.payment_received
+        - checkbox "Уведомления типа deal.payment_received" [checked] [ref=e99] [cursor=pointer]
+      - generic [ref=e100]:
+        - generic [ref=e101]:
+          - generic [ref=e102]: Сделка завершена
+          - generic [ref=e103]: deal.completed
+        - checkbox "Уведомления типа deal.completed" [checked] [ref=e104] [cursor=pointer]
+      - generic [ref=e105]:
+        - generic [ref=e106]:
+          - generic [ref=e107]: Сделка отменена
+          - generic [ref=e108]: deal.cancelled
+        - checkbox "Уведомления типа deal.cancelled" [checked] [ref=e109] [cursor=pointer]
+      - generic [ref=e110]:
+        - generic [ref=e111]:
+          - generic [ref=e112]: Контрагент принял приглашение
+          - generic [ref=e113]: invite.accepted
+        - checkbox "Уведомления типа invite.accepted" [checked] [ref=e114] [cursor=pointer]
+      - generic [ref=e115]:
+        - generic [ref=e116]:
+          - generic [ref=e117]: По вашей сделке открыт спор
+          - generic [ref=e118]: dispute.opened
+        - checkbox "Уведомления типа dispute.opened" [checked] [ref=e119] [cursor=pointer]
+      - generic [ref=e120]:
+        - generic [ref=e121]:
+          - generic [ref=e122]: Арбитр назначен на ваш спор
+          - generic [ref=e123]: dispute.arbitrator_assigned
+        - checkbox "Уведомления типа dispute.arbitrator_assigned" [checked] [ref=e124] [cursor=pointer]
+      - generic [ref=e125]:
+        - generic [ref=e126]:
+          - generic [ref=e127]: Принято решение по спору
+          - generic [ref=e128]: dispute.decision_made
+        - checkbox "Уведомления типа dispute.decision_made" [checked] [ref=e129] [cursor=pointer]
+    - generic [ref=e130]:
+      - heading "Тихие часы" [level=2] [ref=e131]
+      - paragraph [ref=e132]: В этом окне (по UTC) уведомления будут отложены до его окончания. Срочные dispute-уведомления могут прийти раньше.
+      - generic [ref=e133]:
+        - generic [ref=e135]: Включить тихие часы
+        - checkbox "Включить тихие часы" [ref=e136] [cursor=pointer]
+    - button "Сохранить" [disabled] [ref=e138]
+  - navigation [ref=e19]:
+    - button "Сделки" [ref=e20] [cursor=pointer]:
+      - img [ref=e21]
+      - generic [ref=e23]: Сделки
+    - button "Новая" [ref=e24] [cursor=pointer]:
+      - img [ref=e25]
+      - generic [ref=e27]: Новая
+    - button "Профиль" [ref=e28] [cursor=pointer]:
+      - img [ref=e29]
+      - generic [ref=e31]: Профиль

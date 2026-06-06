@@ -1,0 +1,248 @@
+.admin-page {
+  padding: 16px;
+  padding-bottom: 80px;
+}
+
+.admin-header h1 {
+  margin: 0 0 4px;
+  font-size: 24px;
+}
+
+.admin-subtitle {
+  margin: 0 0 24px;
+  color: var(--tg-theme-hint-color, #999);
+  font-size: 14px;
+}
+
+.admin-placeholder {
+  padding: 20px;
+  border-radius: 12px;
+  background: var(--tg-theme-secondary-bg-color, #f4f4f5);
+  color: var(--tg-theme-hint-color, #999);
+  text-align: center;
+}
+
+.admin-placeholder p {
+  margin: 4px 0;
+}
+
+.admin-tabs {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 16px;
+}
+
+.admin-tab {
+  flex: 1;
+  padding: 10px 14px;
+  border: 1px solid var(--tg-theme-section-separator-color, #e5e7eb);
+  background: var(--tg-theme-secondary-bg-color, #f4f4f5);
+  color: var(--tg-theme-text-color, #111);
+  border-radius: 10px;
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.admin-tab.active {
+  background: var(--tg-theme-button-color, #2481cc);
+  color: var(--tg-theme-button-text-color, #fff);
+  border-color: var(--tg-theme-button-color, #2481cc);
+}
+
+.admin-banner {
+  padding: 10px 12px;
+  margin-bottom: 12px;
+  border-radius: 10px;
+  background: #fef3c7;
+  color: #92400e;
+  font-size: 13px;
+}
+
+.admin-error {
+  color: #dc2626;
+}
+
+.admin-card {
+  padding: 14px 16px;
+  border-radius: 12px;
+  background: var(--tg-theme-secondary-bg-color, #f4f4f5);
+  margin-bottom: 12px;
+}
+
+.admin-card-meta {
+  font-size: 13px;
+}
+
+.admin-card-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 6px 0;
+}
+
+.admin-card-label {
+  color: var(--tg-theme-hint-color, #999);
+  font-size: 13px;
+}
+
+.admin-card-value {
+  font-weight: 600;
+  font-size: 16px;
+  font-variant-numeric: tabular-nums;
+}
+
+.admin-card-value.admin-warn {
+  color: #b45309;
+}
+
+.admin-card-mono {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 12px;
+}
+
+.admin-link-button {
+  display: inline-block;
+  padding: 8px 14px;
+  border: 1px solid var(--tg-theme-section-separator-color, #e5e7eb);
+  background: transparent;
+  color: var(--tg-theme-link-color, #2481cc);
+  border-radius: 8px;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.admin-link-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.admin-filters {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+
+.admin-filter-input {
+  flex: 1;
+  padding: 8px 10px;
+  border: 1px solid var(--tg-theme-section-separator-color, #e5e7eb);
+  border-radius: 8px;
+  font-size: 13px;
+  background: var(--tg-theme-bg-color, #fff);
+  color: var(--tg-theme-text-color, #111);
+}
+
+.admin-audit-list {
+  list-style: none;
+  padding: 0;
+  margin: 0 0 12px;
+}
+
+.admin-audit-item {
+  padding: 10px 12px;
+  margin-bottom: 8px;
+  border-radius: 10px;
+  background: var(--tg-theme-secondary-bg-color, #f4f4f5);
+}
+
+.admin-audit-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: 8px;
+}
+
+.admin-audit-action {
+  font-weight: 600;
+  font-size: 14px;
+  word-break: break-all;
+}
+
+.admin-audit-time {
+  font-size: 11px;
+  color: var(--tg-theme-hint-color, #999);
+  white-space: nowrap;
+}
+
+.admin-audit-meta {
+  display: flex;
+  gap: 12px;
+  margin-top: 4px;
+  font-size: 12px;
+  color: var(--tg-theme-hint-color, #999);
+}
+
+.admin-audit-details {
+  margin: 8px 0 0;
+  padding: 8px;
+  background: var(--tg-theme-bg-color, #fff);
+  border-radius: 6px;
+  font-size: 11px;
+  white-space: pre-wrap;
+  word-break: break-all;
+  max-height: 160px;
+  overflow-y: auto;
+}
+
+.admin-pager {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 12px;
+  margin-top: 8px;
+}
+
+.admin-pager-info {
+  font-size: 13px;
+  color: var(--tg-theme-hint-color, #999);
+}
+
+.admin-section-title {
+  margin: 0 0 6px;
+  font-size: 16px;
+}
+
+.admin-stuck-section {
+  margin-bottom: 16px;
+  padding: 12px;
+  border-radius: 12px;
+  background: #fef3c7;
+}
+
+.admin-stuck-hint {
+  margin: 0 0 10px;
+  font-size: 12px;
+  color: #92400e;
+}
+
+.admin-payment-item {
+  padding: 10px 12px;
+  margin-bottom: 8px;
+  border-radius: 10px;
+  background: var(--tg-theme-secondary-bg-color, #f4f4f5);
+}
+
+.admin-payment-status {
+  font-size: 12px;
+  font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: var(--tg-theme-bg-color, #fff);
+}
+
+.admin-payment-status.status-completed {
+  color: #15803d;
+}
+
+.admin-payment-status.status-pending {
+  color: #b45309;
+}
+
+.admin-payment-status.status-failed,
+.admin-payment-status.status-expired {
+  color: #dc2626;
+}
+
+.admin-payment-status.status-refunded {
+  color: #6366f1;
+}

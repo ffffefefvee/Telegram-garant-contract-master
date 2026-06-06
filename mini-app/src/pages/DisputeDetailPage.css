@@ -1,0 +1,73 @@
+.dispute-detail__body {
+  padding: var(--space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.dispute-detail__usdt {
+  font-size: var(--text-sm);
+  color: var(--color-hint);
+  margin-top: 4px;
+}
+
+.dispute-detail__reason {
+  margin-top: var(--space-3);
+  font-size: var(--text-sm);
+  line-height: 1.5;
+}
+
+.dispute-timeline h2,
+.dispute-detail__body > section > h2 {
+  font-size: var(--text-base);
+  font-weight: var(--weight-semibold);
+  margin-bottom: var(--space-3);
+}
+
+.dispute-timeline ul {
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.dispute-timeline__item {
+  display: flex;
+  gap: var(--space-3);
+  position: relative;
+}
+
+.dispute-timeline__dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--color-accent);
+  flex-shrink: 0;
+  margin-top: 4px;
+}
+
+.dispute-timeline__item time {
+  font-size: var(--text-xs);
+  color: var(--color-hint);
+}
+
+.dispute-evidence-grid {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.dispute-evidence-meta {
+  font-size: var(--text-xs);
+  color: var(--color-hint);
+}
+
+.dispute-decision h2 {
+  margin-bottom: var(--space-2);
+}
+
+.dispute-decision__comment {
+  margin: var(--space-2) 0;
+  font-size: var(--text-sm);
+  line-height: 1.5;
+}

@@ -1,0 +1,55 @@
+- generic [ref=e3]:
+  - generic [ref=e32]:
+    - generic [ref=e33]:
+      - generic [ref=e34]: T
+      - generic [ref=e35]:
+        - heading "Test" [level=1] [ref=e36]
+        - generic [ref=e37]: "@test_user"
+        - generic [ref=e39]: Покупатель
+    - generic [ref=e40]:
+      - generic [ref=e41]:
+        - generic [ref=e42]: "0.00"
+        - generic [ref=e43]: Баланс
+      - generic [ref=e44]:
+        - generic [ref=e45]: "0.00"
+        - generic [ref=e46]: Репутация
+      - generic [ref=e47]:
+        - generic [ref=e48]: "0"
+        - generic [ref=e49]: Сделок
+    - generic [ref=e50]:
+      - generic [ref=e51]:
+        - heading "Кошелёк для выплат" [level=3] [ref=e52]
+        - generic [ref=e53]: не привязан
+      - paragraph [ref=e54]: Требуется для продавца и арбитра — на этот адрес будут приходить USDT-выплаты.
+      - textbox "0x..." [ref=e55]
+      - button "Привязать" [disabled] [ref=e56]
+    - generic [ref=e57]:
+      - generic [ref=e58]:
+        - generic [ref=e59]: Завершено
+        - generic [ref=e60]: "0"
+      - generic [ref=e61]:
+        - generic [ref=e62]: Отменено
+        - generic [ref=e63]: "0"
+      - generic [ref=e64]:
+        - generic [ref=e65]: Со спорами
+        - generic [ref=e66]: "0"
+    - generic [ref=e67]:
+      - button "Настройки" [ref=e68] [cursor=pointer]:
+        - img [ref=e69]
+        - text: Настройки
+      - button "Помощь" [ref=e71] [cursor=pointer]:
+        - img [ref=e72]
+        - text: Помощь
+      - button "Выйти" [ref=e74] [cursor=pointer]:
+        - img [ref=e75]
+        - text: Выйти
+  - navigation [ref=e19]:
+    - button "Сделки" [ref=e20] [cursor=pointer]:
+      - img [ref=e21]
+      - generic [ref=e23]: Сделки
+    - button "Новая" [ref=e24] [cursor=pointer]:
+      - img [ref=e25]
+      - generic [ref=e27]: Новая
+    - button "Профиль" [active] [ref=e28] [cursor=pointer]:
+      - img [ref=e29]
+      - generic [ref=e31]: Профиль

@@ -1,0 +1,121 @@
+.arbitrator-page {
+  padding: 16px;
+  padding-bottom: 80px;
+}
+
+.arbitrator-header h1 {
+  margin: 0 0 4px;
+  font-size: 24px;
+}
+
+.arbitrator-subtitle {
+  margin: 0 0 24px;
+  color: var(--tg-theme-hint-color, #999);
+  font-size: 14px;
+}
+
+.arbitrator-placeholder {
+  padding: 20px;
+  border-radius: 12px;
+  background: var(--tg-theme-secondary-bg-color, #f4f4f5);
+  color: var(--tg-theme-hint-color, #999);
+  text-align: center;
+}
+
+.arbitrator-placeholder p {
+  margin: 4px 0;
+}
+
+.arbitrator-availability-card {
+  margin-bottom: 16px;
+  padding: 16px;
+  border-radius: 12px;
+  background: var(--tg-theme-secondary-bg-color, #f4f4f5);
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.arbitrator-availability-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.arbitrator-availability-label {
+  font-size: 13px;
+  color: var(--tg-theme-hint-color, #999);
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.arbitrator-availability-status {
+  font-size: 13px;
+  padding: 4px 8px;
+  border-radius: 999px;
+  font-weight: 600;
+}
+
+.arbitrator-availability-status--active {
+  background: rgba(34, 197, 94, 0.15);
+  color: #16a34a;
+}
+
+.arbitrator-availability-status--pending {
+  background: rgba(234, 179, 8, 0.15);
+  color: #ca8a04;
+}
+
+.arbitrator-availability-status--suspended,
+.arbitrator-availability-status--rejected {
+  background: rgba(239, 68, 68, 0.15);
+  color: #dc2626;
+}
+
+.arbitrator-availability-toggle {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.arbitrator-availability-buttons {
+  display: flex;
+  gap: 8px;
+}
+
+.arbitrator-availability-btn {
+  flex: 1;
+  padding: 10px 12px;
+  border: 1px solid var(--tg-theme-section-separator-color, #ddd);
+  border-radius: 10px;
+  background: var(--tg-theme-bg-color, #fff);
+  color: var(--tg-theme-text-color, #000);
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, opacity 0.15s;
+}
+
+.arbitrator-availability-btn:disabled:not(.is-active) {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.arbitrator-availability-btn.is-active {
+  background: var(--tg-theme-button-color, #2481cc);
+  color: var(--tg-theme-button-text-color, #fff);
+  border-color: var(--tg-theme-button-color, #2481cc);
+  cursor: default;
+}
+
+.arbitrator-availability-hint {
+  margin: 0;
+  font-size: 12px;
+  color: var(--tg-theme-hint-color, #999);
+}
+
+.arbitrator-availability-error {
+  margin: 0;
+  font-size: 12px;
+  color: #dc2626;
+}

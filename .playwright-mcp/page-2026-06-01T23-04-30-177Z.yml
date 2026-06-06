@@ -1,0 +1,132 @@
+- main [ref=e8]:
+  - generic [ref=e9]:
+    - generic [ref=e10]:
+      - button "Назад" [ref=e11] [cursor=pointer]:
+        - img [ref=e12]
+      - heading "Steam key" [level=1] [ref=e14]
+    - generic "Прогресс сделки" [ref=e188]:
+      - generic [ref=e189]:
+        - generic [ref=e190]:
+          - img [ref=e192]
+          - generic [ref=e195]: Условия
+          - generic [ref=e196]: Созданы
+        - generic [ref=e197]:
+          - img [ref=e199]
+          - generic [ref=e202]: Контракт
+          - generic [ref=e203]: Создан
+        - generic [ref=e204]:
+          - img [ref=e206]
+          - generic [ref=e209]: Оплата
+          - generic [ref=e210]: Ожидается
+        - generic [ref=e211]:
+          - img [ref=e213]
+          - generic [ref=e216]: Подтверждение
+          - generic [ref=e217]: На проверке
+        - generic [ref=e218]:
+          - img [ref=e220]
+          - generic [ref=e223]: Завершено
+          - generic [ref=e224]: Готово
+    - generic [ref=e231]:
+      - generic [ref=e232]:
+        - generic [ref=e233]:
+          - generic [ref=e234]:
+            - generic [ref=e235]: S
+            - generic [ref=e236]: Seller
+            - generic [ref=e237]: Продавец
+          - generic [ref=e239]:
+            - generic [ref=e240]: T
+            - generic [ref=e241]: Test
+            - generic [ref=e242]: Покупатель
+        - generic [ref=e244]:
+          - img [ref=e245]
+          - text: Безопасная сделка
+      - generic [ref=e247]:
+        - generic [ref=e248]:
+          - generic [ref=e249]: Ожидает оплаты
+          - generic [ref=e250]:
+            - generic [ref=e251]: 1 500RUB
+            - generic [ref=e252]: ≈ 16,3 USDT
+        - paragraph [ref=e253]: Сеть проверяет платёж. Обычно это занимает 2–5 минут
+      - tablist [ref=e254]:
+        - tab "Чат" [selected] [ref=e255] [cursor=pointer]
+        - tab "Условия" [ref=e256] [cursor=pointer]
+        - tab "Контракт" [ref=e257] [cursor=pointer]
+      - generic [ref=e258]:
+        - generic [ref=e259]:
+          - generic [ref=e260]:
+            - generic [ref=e263]: Ожидает оплаты
+            - paragraph [ref=e264]: Покупатель ещё не отправил средства. Как только он это сделает, они будут заморожены в контракте и отобразятся здесь.
+          - generic [ref=e265]:
+            - generic [ref=e266]:
+              - heading "Смарт-контракт" [level=3] [ref=e267]
+              - button "Что такое смарт-контракт" [ref=e269] [cursor=pointer]:
+                - img [ref=e270]
+            - generic [ref=e273]:
+              - paragraph [ref=e274]: Адрес контракта
+              - generic [ref=e275]:
+                - code [ref=e276]: 0x742d…0bEb
+                - button "Копировать адрес" [ref=e277] [cursor=pointer]:
+                  - img [ref=e278]
+            - generic [ref=e281]:
+              - generic [ref=e282]: 16,3 USDT
+              - generic [ref=e283]: ≈ 0.000245 BTC для продавца (BTC)
+            - generic [ref=e284]:
+              - generic [ref=e285]: "Валюта оплаты:"
+              - combobox "Валюта оплаты:" [ref=e286] [cursor=pointer]:
+                - option "USDT" [selected]
+                - option "BTC"
+                - option "ETH"
+                - option "RUB"
+            - generic [ref=e287]:
+              - generic [ref=e288]: "Продавец получит в:"
+              - combobox "Продавец получит в:" [ref=e289] [cursor=pointer]:
+                - option "USDT"
+                - option "BTC" [selected]
+                - option "ETH"
+                - option "RUB"
+          - generic [ref=e290]:
+            - button "Почему это безопасно?" [expanded] [ref=e291] [cursor=pointer]:
+              - img [ref=e292]
+              - generic [ref=e294]: Почему это безопасно?
+              - img [ref=e295]
+            - generic [ref=e297]:
+              - generic [ref=e298]:
+                - img [ref=e300]
+                - generic [ref=e302]: Смарт-контракт нельзя подделать
+              - generic [ref=e303]:
+                - img [ref=e305]
+                - generic [ref=e310]: Арбитр решит спор, если что-то пойдёт не так
+              - generic [ref=e311]:
+                - img [ref=e313]
+                - generic [ref=e316]: Деньги заморожены, продавец получит их только после вашего подтверждения
+        - generic [ref=e317]:
+          - generic [ref=e319]: "Подтверждений: 3/10"
+          - progressbar [ref=e320]
+          - paragraph [ref=e322]:
+            - img [ref=e323]
+            - text: Сеть проверяет платёж. Обычно это занимает 2–5 минут
+        - button "Открыть спор" [ref=e327] [cursor=pointer]:
+          - img [ref=e328]
+          - text: Открыть спор
+        - button "Отменить сделку" [ref=e331] [cursor=pointer]
+        - generic [ref=e333]:
+          - generic [ref=e334]:
+            - generic [ref=e336]: T
+            - generic [ref=e337]:
+              - generic [ref=e338]: Test
+              - generic [ref=e339]: Переписка по сделке
+          - generic [ref=e340]:
+            - generic [ref=e342]: "Система: условия согласованы обеими сторонами. Продавец может создать смарт-контракт."
+            - generic [ref=e344]: "Система: смарт-контракт создан. Теперь покупатель может безопасно отправить средства — они будут заморожены до вашего подтверждения."
+          - generic [ref=e345]:
+            - textbox "Напишите сообщение…" [ref=e346]
+            - button "Отправить" [disabled] [ref=e347]:
+              - img [ref=e348]
+    - dialog [ref=e351]:
+      - heading "Проверка оплаты" [level=2] [ref=e353]
+      - generic [ref=e354]:
+        - img [ref=e355]
+        - paragraph [ref=e359]:
+          - strong [ref=e360]: Оплата не найдена
+        - paragraph [ref=e361]: Убедитесь, что платёж через Cryptomus завершён.
+      - button "Закрыть" [ref=e363] [cursor=pointer]

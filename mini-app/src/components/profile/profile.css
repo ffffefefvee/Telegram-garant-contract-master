@@ -1,0 +1,114 @@
+.trust-score__head {
+  display: flex;
+  justify-content: space-between;
+  font-size: var(--text-sm);
+  margin-bottom: var(--space-2);
+}
+
+.trust-score__track {
+  height: 8px;
+  background: var(--color-border);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.trust-score__fill {
+  height: 100%;
+  border-radius: 4px;
+  transition: width 0.4s ease;
+}
+
+.profile-rating-blocks {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: var(--space-3);
+  margin-top: var(--space-4);
+}
+
+.profile-rating-blocks > div {
+  padding: var(--space-3);
+  background: var(--color-surface-elevated);
+  border-radius: var(--radius-md);
+  font-size: var(--text-xs);
+}
+
+.profile-rating-blocks span {
+  color: var(--color-hint);
+  display: block;
+  margin-bottom: 4px;
+}
+
+.profile-rating-blocks p {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  font-weight: var(--weight-semibold);
+  font-size: var(--text-sm);
+}
+
+.risk-warnings {
+  margin-top: var(--space-3);
+  padding: var(--space-3);
+  background: var(--color-warning-soft);
+  border-radius: var(--radius-md);
+  font-size: var(--text-sm);
+  color: var(--color-warning);
+}
+
+.risk-warnings p {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin: 4px 0;
+}
+
+.counterparty-results {
+  margin-top: var(--space-3);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+  max-height: 160px;
+  overflow-y: auto;
+}
+
+.counterparty-row {
+  width: 100%;
+  text-align: left;
+  padding: var(--space-3);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  cursor: pointer;
+  color: var(--color-text);
+}
+
+.counterparty-row--selected {
+  border-color: var(--color-accent);
+}
+
+.counterparty-row__meta {
+  display: block;
+  font-size: var(--text-xs);
+  color: var(--color-hint);
+}
+
+.counterparty-detail {
+  margin-top: var(--space-4);
+}
+
+.profile-registered {
+  font-size: var(--text-xs);
+  color: var(--color-hint);
+  text-align: center;
+  margin-top: var(--space-2);
+}
+
+.profile-reviews-section {
+  margin-top: var(--space-2);
+}
+
+.profile-reviews-section h2 {
+  font-size: var(--text-base);
+  font-weight: var(--weight-semibold);
+  margin-bottom: var(--space-3);
+}

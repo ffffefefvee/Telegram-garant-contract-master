@@ -1,0 +1,35 @@
+- generic [ref=e3]:
+  - generic [ref=e7]:
+    - banner [ref=e8]:
+      - button "Назад" [ref=e9] [cursor=pointer]: ←
+      - heading "Новая сделка" [level=1] [ref=e10]
+      - generic [ref=e11]: 1/4
+    - generic [ref=e12]:
+      - paragraph [ref=e13]: "Цифровой товар — выберите подкатегорию:"
+      - generic [ref=e14]:
+        - button "Аккаунт Логин, доступ, передача учётной записи" [ref=e15] [cursor=pointer]:
+          - strong [ref=e16]: Аккаунт
+          - generic [ref=e17]: Логин, доступ, передача учётной записи
+        - button "Ключ / код Лицензия, промокод, ключ активации" [ref=e18] [cursor=pointer]:
+          - strong [ref=e19]: Ключ / код
+          - generic [ref=e20]: Лицензия, промокод, ключ активации
+        - button "Цифровой файл Файл, архив, материалы для скачивания" [ref=e21] [cursor=pointer]:
+          - strong [ref=e22]: Цифровой файл
+          - generic [ref=e23]: Файл, архив, материалы для скачивания
+        - button "Онлайн-услуга Работа, консультация, выполнение задачи" [ref=e24] [cursor=pointer]:
+          - strong [ref=e25]: Онлайн-услуга
+          - generic [ref=e26]: Работа, консультация, выполнение задачи
+        - button "Перенос подписки Передача подписки или слота" [ref=e27] [cursor=pointer]:
+          - strong [ref=e28]: Перенос подписки
+          - generic [ref=e29]: Передача подписки или слота
+      - button "Далее" [disabled] [ref=e30]
+  - navigation [ref=e31]:
+    - button "Сделки" [ref=e32] [cursor=pointer]:
+      - img [ref=e33]
+      - generic [ref=e35]: Сделки
+    - button "Новая" [ref=e36] [cursor=pointer]:
+      - img [ref=e37]
+      - generic [ref=e39]: Новая
+    - button "Профиль" [ref=e40] [cursor=pointer]:
+      - img [ref=e41]
+      - generic [ref=e43]: Профиль

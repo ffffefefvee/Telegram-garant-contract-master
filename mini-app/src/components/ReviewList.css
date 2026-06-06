@@ -1,0 +1,128 @@
+.review-list {
+  padding: var(--spacing-lg);
+}
+
+.review-list-loading,
+.review-list-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 48px 16px;
+  color: var(--tg-theme-hint-color);
+  text-align: center;
+}
+
+.review-list-loading .spinner {
+  width: 32px;
+  height: 32px;
+  border: 3px solid var(--gray-200);
+  border-top-color: var(--primary-color);
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin-bottom: 16px;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.review-stats {
+  display: flex;
+  gap: var(--spacing-xl);
+  padding: var(--spacing-lg);
+  background-color: var(--tg-theme-secondary-bg-color);
+  border-radius: var(--radius-lg);
+  margin-bottom: var(--spacing-lg);
+}
+
+.stats-average {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding-right: var(--spacing-xl);
+  border-right: 1px solid var(--gray-200);
+  min-width: 120px;
+}
+
+.average-value {
+  font-size: 48px;
+  font-weight: 700;
+  color: var(--primary-color);
+  line-height: 1;
+}
+
+.average-stars {
+  font-size: 20px;
+  color: #ffc107;
+  margin: var(--spacing-sm) 0;
+  letter-spacing: 3px;
+}
+
+.average-total {
+  font-size: 13px;
+  color: var(--tg-theme-hint-color);
+}
+
+.stats-distribution {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-xs);
+  justify-content: center;
+}
+
+.distribution-row {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+}
+
+.distribution-rating {
+  font-size: 13px;
+  color: var(--tg-theme-text-color);
+  min-width: 24px;
+}
+
+.distribution-bar {
+  flex: 1;
+  height: 8px;
+  background-color: var(--gray-200);
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.distribution-fill {
+  height: 100%;
+  background-color: #ffc107;
+  border-radius: 4px;
+  transition: width 0.3s ease;
+}
+
+.distribution-count {
+  font-size: 12px;
+  color: var(--tg-theme-hint-color);
+  min-width: 24px;
+  text-align: right;
+}
+
+.reviews {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-md);
+}
+
+@media (max-width: 480px) {
+  .review-stats {
+    flex-direction: column;
+  }
+
+  .stats-average {
+    padding-right: 0;
+    padding-bottom: var(--spacing-lg);
+    border-right: none;
+    border-bottom: 1px solid var(--gray-200);
+  }
+}

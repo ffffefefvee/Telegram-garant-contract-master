@@ -1,0 +1,5 @@
+- generic [ref=e4]:
+  - heading "Не удалось войти" [level=2] [ref=e5]
+  - paragraph [ref=e6]: Telegram WebApp context not available
+  - paragraph [ref=e7]: Откройте мини-приложение заново из Telegram.
+  - button "Попробовать снова" [ref=e8] [cursor=pointer]

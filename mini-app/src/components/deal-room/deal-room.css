@@ -1,0 +1,706 @@
+.deal-room-tabs {
+  display: flex;
+  gap: var(--space-1);
+  padding: 4px;
+  background: var(--color-surface);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border);
+  margin-bottom: var(--space-3);
+}
+
+.deal-room-tab {
+  flex: 1;
+  padding: 8px 12px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: var(--color-hint);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  cursor: pointer;
+}
+
+.deal-room-tab--active {
+  background: var(--color-surface-elevated);
+  color: var(--color-text);
+}
+
+/* ─── 5-step deal flow progress ─── */
+.deal-flow-progress {
+  padding: var(--space-3) var(--space-4);
+  background: var(--color-surface);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.deal-flow-progress__track {
+  display: flex;
+  justify-content: space-between;
+  gap: var(--space-1);
+  margin-bottom: var(--space-2);
+}
+
+.deal-flow-progress__step {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  gap: 2px;
+}
+
+.deal-flow-progress__icon-wrap {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--color-surface-elevated);
+  border: 1px solid var(--color-border);
+  color: var(--color-hint);
+  transition: background var(--transition), color var(--transition), border-color var(--transition);
+}
+
+.deal-flow-progress__step--done .deal-flow-progress__icon-wrap {
+  background: var(--color-accent-soft);
+  border-color: var(--color-accent);
+  color: var(--color-accent);
+}
+
+.deal-flow-progress__step--active .deal-flow-progress__icon-wrap {
+  background: var(--color-accent);
+  border-color: var(--color-accent);
+  color: var(--color-accent-text);
+  box-shadow: 0 2px 8px rgba(46, 184, 114, 0.3);
+}
+
+.deal-flow-progress__label {
+  font-size: 9px;
+  font-weight: var(--weight-semibold);
+  color: var(--color-hint);
+  line-height: 1.2;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  max-width: 100%;
+}
+
+.deal-flow-progress__step--active .deal-flow-progress__label {
+  color: var(--color-accent);
+}
+
+.deal-flow-progress__step--done .deal-flow-progress__label {
+  color: var(--color-text);
+}
+
+.deal-flow-progress__desc {
+  font-size: 8px;
+  color: var(--color-hint);
+  opacity: 0.75;
+  line-height: 1.2;
+}
+
+.deal-flow-progress__step--active .deal-flow-progress__desc {
+  color: var(--color-accent);
+  opacity: 1;
+}
+
+.deal-flow-progress__bar {
+  display: flex;
+  gap: 3px;
+  height: 3px;
+}
+
+.deal-flow-progress__bar-segment {
+  flex: 1;
+  border-radius: 2px;
+  background: var(--color-border);
+  transition: background var(--transition);
+}
+
+.deal-flow-progress__bar-segment--filled {
+  background: var(--color-accent);
+}
+
+/* ─── Contract status card ─── */
+.contract-status-card {
+  padding: var(--space-3) var(--space-4);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-card);
+}
+
+.contract-status-card__header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-bottom: var(--space-2);
+}
+
+.contract-status__dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.contract-status__dot--warning {
+  background: var(--color-warning);
+  box-shadow: 0 0 6px var(--color-warning-soft);
+}
+
+.contract-status__dot--success {
+  background: var(--color-success);
+  box-shadow: 0 0 6px var(--color-success-soft);
+}
+
+.contract-status-card__label {
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+  color: var(--color-text);
+  flex: 1;
+}
+
+.contract-status-card__icon {
+  color: var(--color-success);
+}
+
+.contract-status-card__desc {
+  font-size: var(--text-xs);
+  color: var(--color-hint);
+  line-height: 1.5;
+  margin: 0;
+}
+
+/* ─── Contract panel ─── */
+.contract-panel-stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.contract-panel__title-row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-bottom: var(--space-3);
+}
+
+.contract-panel__title {
+  font-size: var(--text-md);
+  font-weight: var(--weight-semibold);
+  margin: 0;
+  flex: 1;
+}
+
+.contract-panel__amounts {
+  margin: var(--space-3) 0;
+}
+
+.contract-panel__amount-primary {
+  font-size: var(--text-xl);
+  font-weight: var(--weight-bold);
+  font-variant-numeric: tabular-nums;
+  color: var(--color-text);
+}
+
+.contract-panel__amount-secondary {
+  font-size: var(--text-xs);
+  color: var(--color-hint);
+  margin-top: 4px;
+}
+
+.contract-panel__currency-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+}
+
+.contract-panel__currency-label {
+  font-size: var(--text-sm);
+  color: var(--color-hint);
+  flex-shrink: 0;
+}
+
+.contract-panel__select {
+  flex: 1;
+  max-width: 140px;
+  padding: 8px 12px;
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-elevated);
+  color: var(--color-text);
+  font-size: var(--text-sm);
+  font-family: var(--font-body);
+  outline: none;
+  cursor: pointer;
+}
+
+.contract-panel__select:focus {
+  border-color: var(--color-accent);
+}
+
+.contract-panel__balance {
+  font-size: var(--text-xl);
+  font-weight: var(--weight-bold);
+  margin: var(--space-3) 0;
+}
+
+/* ─── Smart contract tooltip ─── */
+.smart-contract-tooltip {
+  position: relative;
+  flex-shrink: 0;
+}
+
+.smart-contract-tooltip__btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border: none;
+  border-radius: 50%;
+  background: var(--color-surface-elevated);
+  color: var(--color-hint);
+  cursor: pointer;
+  transition: color var(--transition), background var(--transition);
+}
+
+.smart-contract-tooltip__btn:hover {
+  color: var(--color-accent);
+  background: var(--color-accent-soft);
+}
+
+.smart-contract-tooltip__popup {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 20;
+  width: min(260px, 70vw);
+  padding: var(--space-3);
+  background: var(--color-surface-elevated);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  box-shadow: var(--shadow-modal);
+  font-size: var(--text-xs);
+  color: var(--color-text);
+  line-height: 1.5;
+}
+
+/* ─── Safety accordion ─── */
+.safety-accordion {
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface);
+  overflow: hidden;
+  box-shadow: var(--shadow-card);
+}
+
+.safety-accordion__header {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  width: 100%;
+  padding: var(--space-3) var(--space-4);
+  border: none;
+  background: transparent;
+  color: var(--color-text);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+  cursor: pointer;
+  text-align: left;
+}
+
+.safety-accordion__header-icon {
+  color: var(--color-accent);
+  flex-shrink: 0;
+}
+
+.safety-accordion__chevron {
+  margin-left: auto;
+  color: var(--color-hint);
+  transition: transform var(--transition);
+  flex-shrink: 0;
+}
+
+.safety-accordion--open .safety-accordion__chevron {
+  transform: rotate(180deg);
+}
+
+.safety-accordion__body {
+  padding: 0 var(--space-4) var(--space-3);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.safety-accordion__item {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  font-size: var(--text-xs);
+  color: var(--color-hint);
+  line-height: 1.45;
+}
+
+.safety-accordion__item-icon {
+  flex-shrink: 0;
+  width: 24px;
+  height: 24px;
+  border-radius: var(--radius-sm);
+  background: var(--color-accent-soft);
+  color: var(--color-accent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* ─── Payment confirmations ─── */
+.payment-confirmations {
+  padding: var(--space-3) var(--space-4);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-card);
+}
+
+.payment-confirmations__header {
+  margin-bottom: var(--space-2);
+}
+
+.payment-confirmations__title {
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+  color: var(--color-text);
+}
+
+.payment-confirmations__bar {
+  height: 6px;
+  border-radius: 3px;
+  background: var(--color-border);
+  overflow: hidden;
+  margin-bottom: var(--space-2);
+}
+
+.payment-confirmations__bar-fill {
+  height: 100%;
+  border-radius: 3px;
+  background: var(--color-accent);
+  transition: width 0.4s ease;
+}
+
+.payment-confirmations__hint {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--text-xs);
+  color: var(--color-hint);
+  margin: 0;
+}
+
+/* ─── Conditions panel ─── */
+.conditions-panel__signed {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  font-size: var(--text-xs);
+  color: var(--color-success);
+  margin-top: var(--space-2);
+}
+
+.conditions-panel__hint {
+  font-size: var(--text-xs);
+  color: var(--color-hint);
+  margin-top: var(--space-3);
+  padding: var(--space-2) var(--space-3);
+  background: var(--color-surface-elevated);
+  border-radius: var(--radius-md);
+  line-height: 1.45;
+}
+
+.dispute-form__files {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+}
+
+.dispute-form__preview {
+  width: 64px;
+  height: 64px;
+  border-radius: var(--radius-sm);
+  object-fit: cover;
+  border: 1px solid var(--color-border);
+}
+
+/* ─── Deal action buttons ─── */
+.deal-action-btn--dispute {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+}
+
+.deal-room-stack {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+/* ─── Deal room header (participants + safe badge) ─── */
+.deal-room-header {
+  padding: var(--space-3) var(--space-4);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-card);
+}
+
+.deal-room-header__participants {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-3);
+  margin-bottom: var(--space-3);
+}
+
+.deal-room-header__participant {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  min-width: 72px;
+}
+
+.deal-room-header__avatar {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: var(--color-accent-soft);
+  color: var(--color-accent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: var(--weight-semibold);
+  font-size: var(--text-md);
+  border: 2px solid var(--color-border);
+}
+
+.deal-room-header__name {
+  font-size: var(--text-xs);
+  font-weight: var(--weight-semibold);
+  color: var(--color-text);
+  text-align: center;
+  max-width: 80px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.deal-room-header__role {
+  font-size: 10px;
+  color: var(--color-hint);
+}
+
+.deal-room-header__connector {
+  width: 24px;
+  height: 2px;
+  background: var(--color-border);
+  border-radius: 1px;
+  flex-shrink: 0;
+}
+
+.deal-room-header__footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  padding-top: var(--space-2);
+  border-top: 1px solid var(--color-border);
+}
+
+.deal-room-header__badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--text-xs);
+  font-weight: var(--weight-medium);
+  color: var(--color-accent);
+  background: var(--color-accent-soft);
+  padding: 6px 10px;
+  border-radius: var(--radius-md);
+}
+
+/* ─── Deal completed card ─── */
+.deal-completed-card__title {
+  font-size: var(--text-md);
+  font-weight: var(--weight-semibold);
+  margin: 0 0 var(--space-2);
+  color: var(--color-success);
+}
+
+.deal-completed-card__desc {
+  font-size: var(--text-sm);
+  color: var(--color-hint);
+  margin: 0 0 var(--space-3);
+  line-height: 1.45;
+}
+
+.deal-completed-card__tx {
+  margin-bottom: var(--space-3);
+}
+
+/* ─── Deal room header (step 0) ─── */
+.deal-room-header {
+  padding: var(--space-3) var(--space-4);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  box-shadow: var(--shadow-card);
+}
+
+.deal-room-header__participants {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  margin-bottom: var(--space-3);
+}
+
+.deal-room-header__person {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+
+.deal-room-header__avatar {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: var(--weight-semibold);
+  font-size: var(--text-base);
+  color: var(--color-accent-text);
+}
+
+.deal-room-header__avatar--buyer {
+  background: var(--color-accent);
+}
+
+.deal-room-header__avatar--seller {
+  background: #6366f1;
+}
+
+.deal-room-header__avatar--empty {
+  opacity: 0.45;
+  border: 1px dashed var(--color-border);
+  background: var(--color-surface-elevated);
+  color: var(--color-hint);
+}
+
+.deal-room-header__name {
+  font-size: var(--text-xs);
+  font-weight: var(--weight-semibold);
+  color: var(--color-text);
+  text-align: center;
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.deal-room-header__role {
+  font-size: 10px;
+  color: var(--color-hint);
+}
+
+.deal-room-header__vs {
+  font-size: var(--text-xs);
+  color: var(--color-hint);
+  flex-shrink: 0;
+}
+
+.deal-room-header__footer {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.deal-room-header__safe-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: var(--color-accent-soft);
+  color: var(--color-accent);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-medium);
+}
+
+/* ─── Create contract CTA ─── */
+.deal-create-contract__header {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  margin-bottom: var(--space-3);
+}
+
+.deal-create-contract__icon {
+  color: var(--color-accent);
+  flex-shrink: 0;
+}
+
+.deal-create-contract__title {
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+  margin: 0 0 4px;
+}
+
+.deal-create-contract__desc {
+  font-size: var(--text-xs);
+  color: var(--color-hint);
+  margin: 0;
+  line-height: 1.45;
+}
+
+/* ─── Completed deal card ─── */
+.deal-completed-card__title {
+  font-size: var(--text-md);
+  font-weight: var(--weight-semibold);
+  margin: 0 0 var(--space-2);
+}
+
+.deal-completed-card__desc {
+  font-size: var(--text-sm);
+  color: var(--color-hint);
+  margin: 0 0 var(--space-3);
+  line-height: 1.45;
+}
+
+.deal-completed-card__tx {
+  margin-bottom: var(--space-3);
+}
+
+.deal-completed-card .ui-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+}
+
+/* ─── Dispute button (gray + flag) ─── */
+.deal-action-btn--dispute.ui-btn--secondary {
+  border-radius: var(--radius-lg);
+}

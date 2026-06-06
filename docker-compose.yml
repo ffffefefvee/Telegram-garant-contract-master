@@ -1,0 +1,102 @@
+services:
+  postgres:
+    image: postgres:15-alpine
+    container_name: tg-garant-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${DB_USERNAME:-garant_user}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-garant_pass}
+      POSTGRES_DB: ${DB_NAME:-garant_db}
+    ports:
+      - "${DB_PORT:-5432}:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    networks:
+      - garant-network
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USERNAME:-garant_user} -d ${DB_NAME:-garant_db}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  redis:
+    image: redis:7-alpine
+    container_name: tg-garant-redis
+    restart: unless-stopped
+    command: redis-server --requirepass ${REDIS_PASSWORD:-garant_redis}
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis_data:/data
+    networks:
+      - garant-network
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD:-garant_redis}", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  user-service:
+    build:
+      context: ./services/user-service
+      dockerfile: Dockerfile
+    container_name: tg-garant-user-service
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      NODE_ENV: ${NODE_ENV:-development}
+      AUTH_DEV_MODE: ${AUTH_DEV_MODE:-false}
+      USER_SERVICE_PORT: ${USER_SERVICE_PORT:-3001}
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USERNAME: ${DB_USERNAME:-garant_user}
+      DB_PASSWORD: ${DB_PASSWORD:-garant_pass}
+      DB_NAME: ${DB_NAME:-garant_db}
+      DB_USE_SQLITE: "false"
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-garant_redis}
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN}
+      TELEGRAM_CHAT_ID: ${TELEGRAM_CHAT_ID:-}
+      TELEGRAM_TEST_INJECT_ENABLED: ${TELEGRAM_TEST_INJECT_ENABLED:-false}
+      TELEGRAM_TEST_INJECT_SECRET: ${TELEGRAM_TEST_INJECT_SECRET:-}
+      TELEGRAM_BOT_USERNAME: ${TELEGRAM_BOT_USERNAME:-}
+      TELEGRAM_MINIAPP_SLUG: ${TELEGRAM_MINIAPP_SLUG:-app}
+      MINI_APP_URL: ${MINI_APP_URL:-}
+      BACKEND_URL: ${BACKEND_URL:-}
+      HTTP_PROXY: ${HTTP_PROXY:-}
+      HTTPS_PROXY: ${HTTPS_PROXY:-}
+      TELEGRAM_API_ROOT: ${TELEGRAM_API_ROOT:-}
+      NO_PROXY: postgres,redis,localhost,127.0.0.1,host.docker.internal
+      JWT_SECRET: ${JWT_SECRET}
+      CORS_ORIGIN: ${CORS_ORIGIN:-*}
+      I18N_HOT_RELOAD: ${I18N_HOT_RELOAD:-true}
+    ports:
+      - "${USER_SERVICE_PORT:-3001}:3001"
+    networks:
+      - garant-network
+
+  mini-app:
+    build:
+      context: ./mini-app
+      dockerfile: Dockerfile
+    container_name: tg-garant-mini-app
+    restart: unless-stopped
+    depends_on:
+      - user-service
+    ports:
+      - "${MINI_APP_PORT:-8080}:80"
+    networks:
+      - garant-network
+
+networks:
+  garant-network:
+    driver: bridge
+
+volumes:
+  postgres_data:
+  redis_data:

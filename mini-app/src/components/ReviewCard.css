@@ -1,0 +1,135 @@
+.review-card {
+  background-color: var(--tg-theme-bg-color);
+  border-radius: var(--radius-lg);
+  padding: var(--spacing-lg);
+  margin-bottom: var(--spacing-md);
+  box-shadow: var(--shadow-sm);
+  border: 1px solid var(--gray-200);
+}
+
+.review-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: var(--spacing-md);
+  flex-wrap: wrap;
+  gap: var(--spacing-sm);
+}
+
+.review-rating {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.stars {
+  font-size: 20px;
+  color: #ffc107;
+  letter-spacing: 2px;
+}
+
+.rating-label {
+  font-size: 13px;
+  font-weight: 500;
+}
+
+.review-author {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--tg-theme-text-color);
+}
+
+.review-date {
+  font-size: 13px;
+  color: var(--tg-theme-hint-color);
+}
+
+.review-comment {
+  font-size: 15px;
+  line-height: 1.5;
+  color: var(--tg-theme-text-color);
+  margin-bottom: var(--spacing-md);
+  padding-bottom: var(--spacing-md);
+  border-bottom: 1px solid var(--gray-200);
+}
+
+.review-ratings {
+  display: flex;
+  flex-direction: column;
+  gap: var(--spacing-sm);
+  margin-bottom: var(--spacing-md);
+  padding-bottom: var(--spacing-md);
+  border-bottom: 1px solid var(--gray-200);
+}
+
+.rating-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: var(--spacing-md);
+}
+
+.rating-name {
+  font-size: 14px;
+  color: var(--tg-theme-hint-color);
+  min-width: 100px;
+}
+
+.rating-stars {
+  font-size: 16px;
+  color: #ffc107;
+  letter-spacing: 2px;
+}
+
+.review-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: var(--spacing-sm);
+}
+
+.review-helpful {
+  display: flex;
+  align-items: center;
+  gap: var(--spacing-sm);
+}
+
+.helpful-count {
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--primary-color);
+  min-width: 24px;
+}
+
+.helpful-btn {
+  padding: 6px 12px;
+  border: 1px solid var(--gray-300);
+  border-radius: var(--radius-sm);
+  background-color: var(--tg-theme-bg-color);
+  color: var(--tg-theme-text-color);
+  font-size: 13px;
+  cursor: pointer;
+  transition: all 0.2s;
+}
+
+.helpful-btn:hover:not(:disabled) {
+  background-color: var(--gray-100);
+  border-color: var(--primary-color);
+}
+
+.helpful-btn.active {
+  background-color: var(--primary-color);
+  color: white;
+  border-color: var(--primary-color);
+}
+
+.helpful-btn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.review-helpfulness {
+  font-size: 12px;
+  color: var(--tg-theme-hint-color);
+}

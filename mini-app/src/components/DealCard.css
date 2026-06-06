@@ -1,0 +1,131 @@
+.deal-card {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
+  padding: var(--space-4);
+  cursor: pointer;
+  position: relative;
+  overflow: hidden;
+  box-shadow: var(--shadow-card);
+  transition: transform var(--transition), border-color var(--transition);
+  -webkit-tap-highlight-color: transparent;
+}
+
+[data-theme='dark'] .deal-card {
+  background: rgba(28, 28, 28, 0.85);
+  backdrop-filter: blur(6px);
+  border-color: rgba(255, 255, 255, 0.06);
+}
+
+.deal-card:active {
+  transform: scale(0.985);
+}
+
+.deal-card--action {
+  border-color: color-mix(in srgb, var(--color-accent) 40%, var(--color-border));
+}
+
+.deal-card::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  width: 3px;
+  background: var(--deal-status-color, var(--color-hint));
+}
+
+.deal-card[data-status='in_progress']::before,
+.deal-card[data-status='pending_confirmation']::before { --deal-status-color: var(--color-info); }
+.deal-card[data-status='pending_payment']::before,
+.deal-card[data-status='pending_acceptance']::before { --deal-status-color: var(--color-warning); }
+.deal-card[data-status='completed']::before { --deal-status-color: var(--color-success); }
+.deal-card[data-status='disputed']::before,
+.deal-card[data-status='frozen']::before { --deal-status-color: var(--color-danger); }
+.deal-card[data-status='cancelled']::before,
+.deal-card[data-status='refunded']::before { --deal-status-color: var(--color-hint); }
+
+.deal-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: var(--space-2);
+  gap: var(--space-2);
+}
+
+.deal-card-number {
+  font-size: var(--text-xs);
+  color: var(--color-hint);
+  font-weight: var(--weight-medium);
+  font-variant-numeric: tabular-nums;
+}
+
+.deal-card-title {
+  font-size: var(--text-base);
+  font-weight: var(--weight-medium);
+  color: var(--color-text);
+  margin-bottom: var(--space-3);
+  line-height: 1.35;
+}
+
+.deal-card-info {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: var(--space-3);
+  padding-bottom: var(--space-3);
+  border-bottom: 1px solid var(--color-border);
+}
+
+.deal-card-type {
+  font-size: var(--text-sm);
+  color: var(--color-hint);
+}
+
+.deal-card-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+}
+
+.deal-card-party {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+.deal-card-avatar {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  background: var(--color-accent-soft);
+  color: var(--color-accent);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: var(--text-sm);
+  font-weight: var(--weight-bold);
+  flex-shrink: 0;
+}
+
+.deal-card-party > div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.deal-card-role {
+  font-size: var(--text-xs);
+  color: var(--color-hint);
+}
+
+.deal-card-name {
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+}
+
+.deal-card-time {
+  font-size: var(--text-xs);
+  color: var(--color-hint);
+  font-variant-numeric: tabular-nums;
+}

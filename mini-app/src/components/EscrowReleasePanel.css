@@ -1,0 +1,35 @@
+.escrow-release-panel {
+  margin: 12px 16px;
+  padding: 14px;
+  border-radius: 12px;
+  background: var(--tg-theme-secondary-bg-color, #f4f4f5);
+  border: 1px solid var(--tg-theme-hint-color, #ccc);
+}
+
+.escrow-release-panel h4 {
+  margin: 0 0 8px;
+  font-size: 15px;
+}
+
+.escrow-release-hint {
+  margin: 0 0 12px;
+  font-size: 13px;
+  color: var(--tg-theme-hint-color, #666);
+  line-height: 1.4;
+}
+
+.escrow-release-hint code {
+  font-size: 12px;
+}
+
+.escrow-wallet-connected {
+  margin: 8px 0 0;
+  font-size: 12px;
+  color: var(--tg-theme-hint-color, #666);
+}
+
+.escrow-release-error {
+  margin: 8px 0 0;
+  font-size: 13px;
+  color: #e53935;
+}

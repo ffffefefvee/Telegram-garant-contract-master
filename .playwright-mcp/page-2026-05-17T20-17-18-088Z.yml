@@ -1,0 +1,22 @@
+- generic [ref=e3]:
+  - generic [ref=e7]:
+    - generic [ref=e8]:
+      - heading "Мои сделки" [level=1] [ref=e9]
+      - button "+ Новая сделка" [ref=e10] [cursor=pointer]
+    - generic [ref=e11]:
+      - button "Активные" [ref=e12] [cursor=pointer]
+      - button "Завершённые" [ref=e13] [cursor=pointer]
+      - button "Споры" [ref=e14] [cursor=pointer]
+    - generic [ref=e16]:
+      - paragraph [ref=e17]: Сделок пока нет
+      - button "Создать первую сделку" [ref=e18] [cursor=pointer]
+  - navigation [ref=e19]:
+    - button "Сделки" [ref=e20] [cursor=pointer]:
+      - img [ref=e21]
+      - generic [ref=e23]: Сделки
+    - button "Новая" [ref=e24] [cursor=pointer]:
+      - img [ref=e25]
+      - generic [ref=e27]: Новая
+    - button "Профиль" [ref=e28] [cursor=pointer]:
+      - img [ref=e29]
+      - generic [ref=e31]: Профиль

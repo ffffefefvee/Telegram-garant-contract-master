@@ -1,0 +1,79 @@
+.app-top-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin-bottom: var(--space-2);
+}
+
+.app-top-bar__user-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: 6px 12px 6px 6px;
+  border-radius: 999px;
+  background: rgba(28, 28, 28, 0.75);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  backdrop-filter: blur(12px);
+  max-width: 58%;
+}
+
+[data-theme='light'] .app-top-bar__user-pill {
+  background: rgba(255, 255, 255, 0.9);
+  border-color: var(--color-border);
+}
+
+.app-top-bar__avatar {
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: linear-gradient(135deg, #14b8a6, #0d9488);
+  color: #fff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: var(--text-sm);
+  font-weight: var(--weight-bold);
+  flex-shrink: 0;
+}
+
+.app-top-bar__handle {
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  color: var(--color-text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.app-top-bar__actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-shrink: 0;
+}
+
+.app-top-bar__logo {
+  width: 36px;
+  height: 36px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.app-top-bar__logo-z {
+  font-size: 22px;
+  font-weight: 800;
+  font-style: italic;
+  background: linear-gradient(135deg, #fff 40%, var(--color-accent) 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
+  line-height: 1;
+}
+
+[data-theme='light'] .app-top-bar__logo-z {
+  background: linear-gradient(135deg, #111 30%, var(--color-accent) 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+}

@@ -1,0 +1,68 @@
+- main [ref=e8]:
+  - generic [ref=e9]:
+    - generic [ref=e10]:
+      - button "Назад" [ref=e11] [cursor=pointer]:
+        - img [ref=e12]
+      - heading "Подписка Premium" [level=1] [ref=e14]
+    - generic "Прогресс сделки" [ref=e15]:
+      - generic [ref=e16]:
+        - generic [ref=e17]:
+          - img [ref=e19]
+          - generic [ref=e22]: Условия
+          - generic [ref=e23]: Созданы
+        - generic [ref=e24]:
+          - img [ref=e26]
+          - generic [ref=e29]: Контракт
+          - generic [ref=e30]: Создан
+        - generic [ref=e31]:
+          - img [ref=e33]
+          - generic [ref=e36]: Оплата
+          - generic [ref=e37]: Ожидается
+        - generic [ref=e38]:
+          - img [ref=e40]
+          - generic [ref=e43]: Подтверждение
+          - generic [ref=e44]: На проверке
+        - generic [ref=e45]:
+          - img [ref=e47]
+          - generic [ref=e50]: Завершено
+          - generic [ref=e51]: Готово
+    - generic [ref=e58]:
+      - generic [ref=e59]:
+        - generic [ref=e60]:
+          - generic [ref=e61]:
+            - generic [ref=e62]: S
+            - generic [ref=e63]: Seller
+            - generic [ref=e64]: Продавец
+          - generic [ref=e66]:
+            - generic [ref=e67]: T
+            - generic [ref=e68]: Test
+            - generic [ref=e69]: Покупатель
+        - generic [ref=e71]:
+          - img [ref=e72]
+          - text: Безопасная сделка
+      - generic [ref=e74]:
+        - generic [ref=e75]:
+          - generic [ref=e76]: Ожидает оплаты
+          - generic [ref=e77]:
+            - generic [ref=e78]: 2 500RUB
+            - generic [ref=e79]: ≈ 27,17 USDT
+        - paragraph [ref=e80]: Отправьте средства и нажмите «Я отправил средства» после перевода
+      - tablist [ref=e81]:
+        - tab "Чат" [selected] [ref=e82] [cursor=pointer]
+        - tab "Условия" [ref=e83] [cursor=pointer]
+        - tab "Контракт" [ref=e84] [cursor=pointer]
+      - generic [ref=e85]:
+        - button "Отменить сделку" [ref=e92] [cursor=pointer]
+        - generic [ref=e94]:
+          - generic [ref=e95]:
+            - generic [ref=e97]: T
+            - generic [ref=e98]:
+              - generic [ref=e99]: Test
+              - generic [ref=e100]: Переписка по сделке
+          - generic [ref=e101]:
+            - generic [ref=e112]: "Система: условия согласованы обеими сторонами. Продавец может создать смарт-контракт."
+            - generic [ref=e114]: "Система: смарт-контракт создан. Теперь покупатель может безопасно отправить средства — они будут заморожены до вашего подтверждения."
+          - generic [ref=e105]:
+            - textbox "Напишите сообщение…" [ref=e106]
+            - button "Отправить" [disabled] [ref=e107]:
+              - img [ref=e108]

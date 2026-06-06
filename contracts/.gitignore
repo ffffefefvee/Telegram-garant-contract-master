@@ -1,0 +1,11 @@
+node_modules
+artifacts
+cache
+typechain-types
+coverage
+coverage.json
+.coverage_artifacts
+.coverage_cache
+.coverage_contracts
+deployments/hardhat.json
+deployments/localhost.json

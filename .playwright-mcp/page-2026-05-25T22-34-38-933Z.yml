@@ -1,0 +1,578 @@
+- generic [active] [ref=e1]:
+  - img [ref=e2]
+  - generic [ref=e4]:
+    - generic [ref=e7]:
+      - generic [ref=e8]:
+        - button [ref=e11] [cursor=pointer]
+        - generic [ref=e13]:
+          - textbox [ref=e14]:
+            - /placeholder: " "
+          - generic: 
+          - generic: Search
+      - generic:
+        - generic:
+          - generic:
+            - generic:
+              - generic:
+                - img [ref=e21] [cursor=pointer]
+                - generic: Аленка ...........
+              - generic:
+                - img [ref=e28] [cursor=pointer]
+                - generic: Михаил Барбер
+              - generic:
+                - img [ref=e35] [cursor=pointer]
+                - generic:
+                  - generic:
+                    - text: Milenchik
+                    - img "💗"
+              - generic:
+                - generic [ref=e41] [cursor=pointer]: Л
+                - generic: Лиля
+              - generic:
+                - img [ref=e48] [cursor=pointer]
+                - generic: Материнка
+              - generic:
+                - img [ref=e55] [cursor=pointer]
+                - generic: тёмная
+      - generic [ref=e56]:
+        - generic [ref=e58]:
+          - generic [ref=e61] [cursor=pointer]:
+            - button "" [ref=e63]:
+              - generic: 
+            - generic:
+              - generic:
+                - generic:
+                  - text: Never miss a message!
+                  - img "🔔"
+            - generic:
+              - generic: Enable notifications to stay updated.
+          - list [ref=e69]:
+            - generic [ref=e70] [cursor=pointer]:
+              - generic:
+                - generic:
+                  - generic: 
+              - generic:
+                - generic: Archived Chats
+              - generic:
+                - generic:
+                  - generic:
+                    - img "📉"
+                    - text: HURMA TRADERS CHAT...
+                  - text: ", ZELENKA | УСЛУГИ,"
+                  - generic:
+                    - img "☘️"
+                    - text: XDice Bonus
+                  - text: ", Мама, Мама, АНЕКДОТЫ, ?? НОВОСТИ КАВО???, DDoSia Project, тёмная киса, Swill chat"
+                - generic: "81"
+            - link "Я на уроке  Лизик Mon" [ref=e72] [cursor=pointer]:
+              - /url: "#282583589"
+              - generic:
+                - generic:
+                  - generic: Я на уроке
+                - generic: 
+              - generic:
+                - generic:
+                  - generic: Лизик
+                - generic:
+                  - generic: Mon
+              - generic:
+                - img
+            - link "https://connliberty.com/connection/subs/7cc59780-4ff6-4cd6-9fd2-a64a40d02a11  Даня  May 24 Д" [ref=e74] [cursor=pointer]:
+              - /url: "#6349596699"
+              - generic:
+                - generic:
+                  - generic: https://connliberty.com/connection/subs/7cc59780-4ff6-4cd6-9fd2-a64a40d02a11
+                - generic: 
+              - generic:
+                - generic:
+                  - generic: Даня
+                - generic:
+                  - generic:
+                    - generic: 
+                  - generic: May 24
+              - generic: Д
+            - link "Клавиатурные кнопки (Reply Keyboards)  Saved Messages May 21 " [ref=e76] [cursor=pointer]:
+              - /url: "#7124952069"
+              - generic:
+                - generic:
+                  - generic: Клавиатурные кнопки (Reply Keyboards)
+                - generic: 
+              - generic:
+                - generic:
+                  - generic: Saved Messages
+                - generic:
+                  - generic: May 21
+              - generic:
+                - generic: 
+            - link "Уважаемые родители! Алисова, Демчинская, Жиженков, Саргсян, Романов, Парамонов, Давидович, Котельник...  Мама May 20" [ref=e78] [cursor=pointer]:
+              - /url: "#1833638429"
+              - generic:
+                - generic:
+                  - generic: Уважаемые родители! Алисова, Демчинская, Жиженков, Саргсян, Романов, Парамонов, Давидович, Котельник...
+                - generic: 
+              - generic:
+                - generic:
+                  - generic: Мама
+                - generic:
+                  - generic: May 20
+              - generic:
+                - img
+            - link "Иначе будет всё в мозолях  Сончик May 19" [ref=e80] [cursor=pointer]:
+              - /url: "#216709823"
+              - generic:
+                - generic:
+                  - generic: Иначе будет всё в мозолях
+                - generic: 
+              - generic:
+                - generic:
+                  - generic:
+                    - generic: Сончик
+                    - generic:
+                      - img
+                      - img
+                - generic:
+                  - generic: May 19
+              - generic:
+                - img
+            - 'link ".: /и @molokolll1 341.5K FRK | WHITE 3:0  01:34" [ref=e455] [cursor=pointer]':
+              - /url: "#-2158855644"
+              - generic:
+                - generic:
+                  - generic:
+                    - generic: ".:"
+                  - generic: /и @molokolll1
+                - generic: 341.5K
+              - generic:
+                - generic:
+                  - generic: FRK | WHITE 3:0
+                  - generic: 
+                - generic:
+                  - generic: 01:34
+              - generic:
+                - img
+            - 'link "👁️ : 🎲 146.8K FRK | ИГРЫ ♣️  01:34" [ref=e456] [cursor=pointer]':
+              - /url: "#-2133630662"
+              - generic:
+                - generic:
+                  - generic:
+                    - generic:
+                      - generic:
+                        - img "👁️"
+                      - text: ":"
+                  - generic:
+                    - generic:
+                      - img "🎲"
+                - generic: 146.8K
+              - generic:
+                - generic:
+                  - generic:
+                    - text: FRK | ИГРЫ
+                    - img "♣️"
+                  - generic: 
+                - generic:
+                  - generic: 01:34
+              - generic:
+                - img
+            - 'link "Crear Nueva Transacción: 📦 Bienes Físicos Ingrese monto de la transacción: ℹ️ El comprador paga e... Garant-t 01:34 G" [ref=e457] [cursor=pointer]':
+              - /url: "#8681747855"
+              - generic:
+                - generic:
+                  - generic:
+                    - text: "Crear Nueva Transacción:"
+                    - img "📦"
+                    - text: "Bienes Físicos Ingrese monto de la transacción:"
+                    - img "ℹ️"
+                    - text: El comprador paga e...
+              - generic:
+                - generic:
+                  - generic: Garant-t
+                - generic:
+                  - generic: 01:34
+              - generic: G
+            - 'link "Atomic: Профессиональная разработка Сайтов - Ботов - Скриптов Разработка и дизайн веб-сайтов и прилож... 8.6K Lustify. Dark / Services  01:34" [ref=e413] [cursor=pointer]':
+              - /url: "#-2499948325"
+              - generic:
+                - generic:
+                  - generic:
+                    - generic: "Atomic:"
+                  - generic:
+                    - generic:
+                      - img
+                  - generic:
+                    - generic:
+                      - img
+                    - text: Профессиональная разработка Сайтов - Ботов - Скриптов
+                    - text: Разработка и дизайн веб-сайтов и прилож...
+                - generic: 8.6K
+              - generic:
+                - generic:
+                  - generic: Lustify. Dark / Services
+                  - generic: 
+                - generic:
+                  - generic: 01:34
+              - generic:
+                - img
+            - 'link "angeloxhek: но я ошибался 3.6K print(\"Привет, мир! \") 💻  01:30" [ref=e88] [cursor=pointer]':
+              - /url: "#-3273892606"
+              - generic:
+                - generic:
+                  - generic:
+                    - generic: "angeloxhek:"
+                  - generic:
+                    - generic:
+                      - img
+                  - generic: но я ошибался
+                - generic: 3.6K
+              - generic:
+                - generic:
+                  - generic:
+                    - text: print("Привет, мир! ")
+                    - img "💻"
+                  - generic: 
+                - generic:
+                  - generic: 01:30
+              - generic:
+                - img
+        - button " " [ref=e92] [cursor=pointer]:
+          - generic: 
+          - generic: 
+        - generic [ref=e96] [cursor=pointer]: UPDATE
+    - generic [ref=e100]:
+      - generic [ref=e106] [cursor=pointer]:
+        - generic [ref=e108]:
+          - generic [ref=e109]: G
+          - generic [ref=e110]:
+            - generic [ref=e113]: Garant-t
+            - generic [ref=e115]: bot
+        - generic [ref=e116]:
+          - text: "#"
+          - button "" [ref=e117]:
+            - generic: 
+          - button "" [ref=e119]:
+            - generic: 
+      - generic [ref=e125]:
+        - generic [ref=e128] [cursor=pointer]: Today
+        - generic [ref=e129]:
+          - generic [ref=e140]:
+            - img "📋" [ref=e141]
+            - text: Mis Transacciones
+            - generic "26 May 2026, 01:23:23" [ref=e142] [cursor=pointer]:
+              - generic: 
+              - generic [ref=e143]: 01:23
+          - generic [ref=e146]:
+            - generic [ref=e147]:
+              - link "/language" [ref=e148] [cursor=pointer]:
+                - /url: tg://bot_command?command=language
+              - generic "26 May 2026, 01:23:31" [ref=e149] [cursor=pointer]:
+                - generic: 
+                - generic [ref=e150]: 01:23
+            - img [ref=e151]
+        - generic [ref=e155]:
+          - generic [ref=e156]:
+            - generic [ref=e157]:
+              - text: "Язык успешно изменен: Русский"
+              - generic "26 May 2026, 01:23:31" [ref=e158] [cursor=pointer]:
+                - generic [ref=e159]: 01:23
+            - img [ref=e160]
+          - generic [ref=e162]:
+            - link " 📲 Открыть приложение" [ref=e164] [cursor=pointer]:
+              - /url: https://t.me/Garantt_antiscam_bot/app
+              - generic: 
+              - generic:
+                - img "📲"
+                - text: Открыть приложение
+            - generic [ref=e166]:
+              - button "➕ Новая сделка" [ref=e167] [cursor=pointer]:
+                - generic:
+                  - img "➕"
+                  - text: Новая сделка
+              - button "📋 Мои сделки" [ref=e169] [cursor=pointer]:
+                - generic:
+                  - img "📋"
+                  - text: Мои сделки
+            - generic [ref=e171]:
+              - button "💰 Баланс" [ref=e172] [cursor=pointer]:
+                - generic:
+                  - img "💰"
+                  - text: Баланс
+              - button "👤 Профиль" [ref=e174] [cursor=pointer]:
+                - generic:
+                  - img "👤"
+                  - text: Профиль
+            - generic [ref=e176]:
+              - button "🌐 Язык" [ref=e177] [cursor=pointer]:
+                - generic:
+                  - img "🌐"
+                  - text: Язык
+              - button "❓ Помощь" [ref=e179] [cursor=pointer]:
+                - generic:
+                  - img "❓"
+                  - text: Помощь
+            - button "📞 Поддержка" [ref=e182] [cursor=pointer]:
+              - generic:
+                - img "📞"
+                - text: Поддержка
+        - generic [ref=e184]:
+          - generic [ref=e188]:
+            - img "➕" [ref=e189]
+            - text: Nueva Transacción
+            - generic "26 May 2026, 01:23:35" [ref=e190] [cursor=pointer]:
+              - generic: 
+              - generic [ref=e191]: 01:23
+          - generic [ref=e194]:
+            - generic [ref=e195]:
+              - link "/start" [ref=e196] [cursor=pointer]:
+                - /url: tg://bot_command?command=start
+              - generic "26 May 2026, 01:23:48" [ref=e197] [cursor=pointer]:
+                - generic: 
+                - generic [ref=e198]: 01:23
+            - img [ref=e199]
+        - generic [ref=e201]:
+          - generic [ref=e205]:
+            - generic [ref=e206]:
+              - img "👋" [ref=e207]
+              - text: Добро пожаловать в
+              - strong [ref=e208]: Гарант Бот
+              - text: "! Безопасные сделки с защитой эскроу."
+              - img "✅" [ref=e209]
+              - text: Создайте сделку
+              - img "✅" [ref=e210]
+              - text: Пригласите контрагента
+              - img "✅" [ref=e211]
+              - text: Деньги заморожены до выполнения
+              - img "✅" [ref=e212]
+              - text: Арбитраж при спорах
+              - emphasis [ref=e213]:
+                - text: Кнопки меню уже появились ниже
+                - img "👇" [ref=e214]
+            - generic "26 May 2026, 01:23:48" [ref=e215] [cursor=pointer]:
+              - generic [ref=e216]: 01:23
+          - generic [ref=e218]:
+            - generic [ref=e219]:
+              - generic [ref=e220]:
+                - generic [ref=e221]:
+                  - img "📲" [ref=e222]
+                  - text: Открыть приложение
+                - generic "26 May 2026, 01:23:49" [ref=e223] [cursor=pointer]:
+                  - generic [ref=e224]: 01:23
+              - img [ref=e225]
+            - link " 📲 Открыть приложение" [ref=e229] [cursor=pointer]:
+              - /url: https://t.me/Garantt_antiscam_bot/app
+              - generic: 
+              - generic:
+                - img "📲"
+                - text: Открыть приложение
+        - generic [ref=e231]:
+          - generic [ref=e235]:
+            - img "📋" [ref=e236]
+            - text: Мои сделки
+            - generic "26 May 2026, 01:24:09" [ref=e237] [cursor=pointer]:
+              - generic: 
+              - generic [ref=e238]: 01:24
+          - generic [ref=e241]:
+            - generic [ref=e242]:
+              - img "👤" [ref=e243]
+              - text: Профиль
+              - generic "26 May 2026, 01:24:30" [ref=e244] [cursor=pointer]:
+                - generic: 
+                - generic [ref=e245]: 01:24
+            - img [ref=e246]
+        - generic [ref=e248]:
+          - generic [ref=e252]:
+            - generic [ref=e253]:
+              - img "👋" [ref=e254]
+              - text: Добро пожаловать в
+              - strong [ref=e255]: Гарант Бот
+              - text: "! Безопасные сделки с защитой эскроу."
+              - img "✅" [ref=e256]
+              - text: Создайте сделку
+              - img "✅" [ref=e257]
+              - text: Пригласите контрагента
+              - img "✅" [ref=e258]
+              - text: Деньги заморожены до выполнения
+              - img "✅" [ref=e259]
+              - text: Арбитраж при спорах
+              - emphasis [ref=e260]:
+                - text: Кнопки меню уже появились ниже
+                - img "👇" [ref=e261]
+            - generic "26 May 2026, 01:28:57" [ref=e262] [cursor=pointer]:
+              - generic [ref=e263]: 01:28
+          - generic [ref=e265]:
+            - generic [ref=e267]:
+              - generic [ref=e268]:
+                - img "📲" [ref=e269]
+                - text: Открыть приложение
+              - generic "26 May 2026, 01:28:58" [ref=e270] [cursor=pointer]:
+                - generic [ref=e271]: 01:28
+            - link " 📲 Открыть приложение" [ref=e274] [cursor=pointer]:
+              - /url: https://t.me/Garantt_antiscam_bot/app
+              - generic: 
+              - generic:
+                - img "📲"
+                - text: Открыть приложение
+          - generic [ref=e279]:
+            - generic [ref=e280]:
+              - img "❌" [ref=e281]
+              - text: Неизвестная команда. Используйте кнопки меню ниже
+              - img "👇" [ref=e282]
+            - generic "26 May 2026, 01:28:58" [ref=e283] [cursor=pointer]:
+              - generic [ref=e284]: 01:28
+          - generic [ref=e286]:
+            - generic [ref=e288]:
+              - text: "Crear Nueva Transacción Seleccione tipo de transacción:"
+              - generic "26 May 2026, 01:29:04" [ref=e289] [cursor=pointer]:
+                - generic [ref=e290]: 01:29
+            - generic [ref=e291]:
+              - button "📦 Bienes Físicos" [ref=e293] [cursor=pointer]:
+                - generic:
+                  - img "📦"
+                  - text: Bienes Físicos
+              - button "💻 Bienes Digitales" [ref=e296] [cursor=pointer]:
+                - generic:
+                  - img "💻"
+                  - text: Bienes Digitales
+              - button "🛠️ Servicios" [ref=e299] [cursor=pointer]:
+                - generic:
+                  - img "🛠️"
+                  - text: Servicios
+              - button "🏠 Alquiler" [ref=e302] [cursor=pointer]:
+                - generic:
+                  - img "🏠"
+                  - text: Alquiler
+              - button "Atrás" [ref=e305] [cursor=pointer]:
+                - generic: Atrás
+          - generic [ref=e308]:
+            - generic [ref=e310]:
+              - generic [ref=e311]:
+                - img "📋" [ref=e312]
+                - text: Mis Transacciones (1)
+              - generic "26 May 2026, 01:29:07" [ref=e313] [cursor=pointer]:
+                - generic [ref=e314]: 01:29
+            - generic [ref=e315]:
+              - button "2605-0001 — 1000.00 RUB" [ref=e317] [cursor=pointer]:
+                - generic: 2605-0001 — 1000.00 RUB
+              - generic [ref=e319]:
+                - button "🟢 Activas" [ref=e320] [cursor=pointer]:
+                  - generic:
+                    - img "🟢"
+                    - text: Activas
+                - button "✅ Completadas" [ref=e322] [cursor=pointer]:
+                  - generic:
+                    - img "✅"
+                    - text: Completadas
+                - button "📋 Todas" [ref=e324] [cursor=pointer]:
+                  - generic:
+                    - img "📋"
+                    - text: Todas
+              - button "⬅️ Volver al Menú" [ref=e327] [cursor=pointer]:
+                - generic:
+                  - img "⬅️"
+                  - text: Volver al Menú
+          - generic [ref=e330]:
+            - generic [ref=e332]:
+              - generic [ref=e333]:
+                - img "📋" [ref=e334]
+                - text: Mis Transacciones (1)
+              - generic "26 May 2026, 01:29:07" [ref=e335] [cursor=pointer]:
+                - generic [ref=e336]: 01:29
+            - generic [ref=e337]:
+              - button "2605-0001 — 1000.00 RUB" [ref=e339] [cursor=pointer]:
+                - generic: 2605-0001 — 1000.00 RUB
+              - generic [ref=e341]:
+                - button "🟢 Activas" [ref=e342] [cursor=pointer]:
+                  - generic:
+                    - img "🟢"
+                    - text: Activas
+                - button "✅ Completadas" [ref=e344] [cursor=pointer]:
+                  - generic:
+                    - img "✅"
+                    - text: Completadas
+                - button "📋 Todas" [ref=e346] [cursor=pointer]:
+                  - generic:
+                    - img "📋"
+                    - text: Todas
+              - button "⬅️ Volver al Menú" [ref=e349] [cursor=pointer]:
+                - generic:
+                  - img "⬅️"
+                  - text: Volver al Menú
+          - generic [ref=e354]:
+            - generic [ref=e355]:
+              - text: "Enlace de invitación:"
+              - link "https://t.me/Garantt_antiscam_bot?start=invite_3a82ec873da11ebd563e894735141350fbc8efa611019e371af1f0d76562b151" [ref=e356] [cursor=pointer]:
+                - /url: https://t.me/Garantt_antiscam_bot?start=invite_3a82ec873da11ebd563e894735141350fbc8efa611019e371af1f0d76562b151
+            - generic "26 May 2026, 01:29:09" [ref=e357] [cursor=pointer]:
+              - generic [ref=e358]: 01:29
+          - generic [ref=e359]:
+            - text: Unread Messages
+            - generic [ref=e362]:
+              - generic [ref=e363]:
+                - img "❌" [ref=e364]
+                - text: Ocurrió un error. Intente más tarde.
+              - generic "26 May 2026, 01:29:09" [ref=e365] [cursor=pointer]:
+                - generic [ref=e366]: 01:29
+          - generic [ref=e370]:
+            - generic [ref=e371]:
+              - img "📱" [ref=e372]
+              - text: "Menú Principal Seleccione una acción:"
+            - generic "26 May 2026, 01:29:10" [ref=e373] [cursor=pointer]:
+              - generic [ref=e374]: 01:29
+          - generic [ref=e376]:
+            - generic [ref=e377]:
+              - generic [ref=e378]:
+                - generic [ref=e379]:
+                  - img "📲" [ref=e380]
+                  - text: Abrir aplicación
+                - generic "26 May 2026, 01:29:10" [ref=e381] [cursor=pointer]:
+                  - generic [ref=e382]: 01:29
+              - img [ref=e383]
+            - link " 📲 Abrir aplicación" [ref=e387] [cursor=pointer]:
+              - /url: https://t.me/Garantt_antiscam_bot/app
+              - generic: 
+              - generic:
+                - img "📲"
+                - text: Abrir aplicación
+        - generic [ref=e421]:
+          - generic [ref=e422]:
+            - link "/new_deal" [ref=e423] [cursor=pointer]:
+              - /url: tg://bot_command?command=new_deal
+            - generic "26 May 2026, 01:34:18" [ref=e424] [cursor=pointer]:
+              - generic: 
+              - generic [ref=e425]: 01:34
+          - img [ref=e426]
+        - generic [ref=e460]:
+          - generic [ref=e461]:
+            - generic [ref=e462]:
+              - text: "Crear Nueva Transacción:"
+              - img "📦" [ref=e463]
+              - text: "Bienes Físicos Ingrese monto de la transacción:"
+              - img "ℹ️" [ref=e464]
+              - text: El comprador paga el monto de la transacción y la comisión. Mostraremos el total exacto en el siguiente paso.
+            - generic "26 May 2026, 01:34:19" [ref=e465] [cursor=pointer]:
+              - generic [ref=e466]: 01:34
+          - img [ref=e467]
+      - generic [ref=e390]:
+        - generic [ref=e392]:
+          - img [ref=e393]
+          - generic:
+            - button
+            - button "":
+              - generic: 
+          - generic [ref=e395]:
+            - button "" [ref=e398] [cursor=pointer]:
+              - generic: 
+            - generic [ref=e399]:
+              - generic: Message
+            - button "" [ref=e401] [cursor=pointer]:
+              - generic: 
+            - generic [ref=e402] [cursor=pointer]:
+              - generic: 
+        - generic [ref=e404]:
+          - generic:
+            - generic: 
+            - generic: NaN
+          - button "    " [ref=e405] [cursor=pointer]:
+            - generic: 
+            - generic: 
+            - generic: 
+            - generic: 
+            - generic: 

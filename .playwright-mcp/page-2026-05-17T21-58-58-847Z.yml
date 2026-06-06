@@ -1,0 +1,33 @@
+- generic [ref=e3]:
+  - generic [ref=e7]:
+    - banner [ref=e8]:
+      - button "Назад" [ref=e9] [cursor=pointer]: ←
+      - heading "Новая сделка" [level=1] [ref=e10]
+      - generic [ref=e11]: 2/4
+    - generic [ref=e44]:
+      - paragraph [ref=e45]: Аккаунт
+      - generic [ref=e46]:
+        - generic [ref=e47]: Название (необязательно)
+        - textbox "Название (необязательно)" [ref=e48]:
+          - /placeholder: Кратко о товаре
+      - generic [ref=e49]:
+        - generic [ref=e50]: Описание сделки *
+        - textbox "Описание сделки *" [ref=e51]:
+          - /placeholder: Что передаётся, сроки, условия
+      - generic [ref=e52]:
+        - generic [ref=e53]: Детали передачи
+        - textbox "Детали передачи" [ref=e54]:
+          - /placeholder: Как продавец передаст товар после оплаты
+      - generic [ref=e55]:
+        - button "Назад" [ref=e56] [cursor=pointer]
+        - button "Далее" [disabled] [ref=e57]
+  - navigation [ref=e31]:
+    - button "Сделки" [ref=e32] [cursor=pointer]:
+      - img [ref=e33]
+      - generic [ref=e35]: Сделки
+    - button "Новая" [ref=e36] [cursor=pointer]:
+      - img [ref=e37]
+      - generic [ref=e39]: Новая
+    - button "Профиль" [ref=e40] [cursor=pointer]:
+      - img [ref=e41]
+      - generic [ref=e43]: Профиль

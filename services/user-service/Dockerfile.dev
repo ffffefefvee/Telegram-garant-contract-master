@@ -1,0 +1,17 @@
+# Dev image: deps baked in for fast volume init; source mounted from host at runtime.
+FROM node:20-alpine
+
+WORKDIR /app
+
+RUN apk add --no-cache python3 make g++ sqlite-dev sqlite-libs
+
+COPY package*.json ./
+RUN npm install
+
+COPY docker-entrypoint.dev.sh /usr/local/bin/docker-entrypoint.dev.sh
+RUN chmod +x /usr/local/bin/docker-entrypoint.dev.sh
+
+EXPOSE 3001
+
+ENTRYPOINT ["docker-entrypoint.dev.sh"]
+CMD ["npm", "run", "start:dev"]

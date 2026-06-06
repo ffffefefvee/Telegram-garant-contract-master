@@ -1,0 +1,74 @@
+- generic [ref=e3]:
+  - main [ref=e4]:
+    - generic [ref=e190]:
+      - generic [ref=e191]:
+        - generic [ref=e192]:
+          - generic [ref=e193]: T
+          - generic [ref=e194]: "@under_heavenly"
+        - generic [ref=e195]:
+          - button "Тёмная тема" [ref=e196] [cursor=pointer]:
+            - img [ref=e197]
+          - button "Уведомления" [ref=e199] [cursor=pointer]:
+            - img [ref=e200]
+            - generic [ref=e203]: "2"
+          - generic [ref=e205]: Z
+      - generic [ref=e206]:
+        - paragraph [ref=e207]: Добро пожаловать,
+        - heading "Test" [level=1] [ref=e208]
+      - generic [ref=e209]:
+        - button "Новая сделка" [ref=e210] [cursor=pointer]:
+          - img [ref=e211]
+          - generic [ref=e212]: Новая сделка
+        - button "Мои сделки" [ref=e213] [cursor=pointer]:
+          - img [ref=e214]
+          - generic [ref=e215]: Мои сделки
+        - button "Создать бота" [ref=e216] [cursor=pointer]:
+          - img [ref=e217]
+          - generic [ref=e220]: Создать бота
+      - generic [ref=e221]:
+        - generic [ref=e222]:
+          - heading "Мои боты" [level=2] [ref=e223]
+          - button "Все" [ref=e224] [cursor=pointer]
+        - generic [ref=e225]:
+          - button "Shop Bot 24 транзакций · Активен" [ref=e226] [cursor=pointer]:
+            - img [ref=e228]
+            - generic [ref=e231]:
+              - generic [ref=e232]: Shop Bot
+              - generic [ref=e233]: 24 транзакций · Активен
+          - button "Keys Store 3 транзакций · Неактивен" [ref=e234] [cursor=pointer]:
+            - img [ref=e236]
+            - generic [ref=e239]:
+              - generic [ref=e240]: Keys Store
+              - generic [ref=e241]: 3 транзакций · Неактивен
+      - generic [ref=e242]:
+        - generic [ref=e243]:
+          - heading "Сделки" [level=2] [ref=e244]
+          - paragraph [ref=e245]: Портфель эскроу · USDT в контракте
+        - generic [ref=e246]:
+          - button "Обновить" [ref=e247] [cursor=pointer]:
+            - img [ref=e248]
+          - button "Новая" [ref=e253] [cursor=pointer]:
+            - img [ref=e254]
+            - text: Новая
+      - tablist [ref=e255]:
+        - tab "Активные" [selected] [ref=e256] [cursor=pointer]
+        - tab "Завершённые" [ref=e257] [cursor=pointer]
+        - tab "Споры" [ref=e258] [cursor=pointer]
+      - generic [ref=e259]:
+        - img [ref=e260]
+        - heading "Нет активных сделок" [level=3] [ref=e263]
+        - paragraph [ref=e264]: Создайте новую сделку или примите приглашение от контрагента
+        - button "Создать сделку" [ref=e265] [cursor=pointer]
+  - navigation "Основная навигация" [ref=e78]:
+    - button "Сделки" [active] [ref=e79] [cursor=pointer]:
+      - img [ref=e81]
+      - generic [ref=e84]: Сделки
+    - button "Боты" [ref=e85] [cursor=pointer]:
+      - img [ref=e87]
+      - generic [ref=e90]: Боты
+    - button "Споры" [ref=e91] [cursor=pointer]:
+      - img [ref=e93]
+      - generic [ref=e97]: Споры
+    - button "Профиль" [ref=e98] [cursor=pointer]:
+      - img [ref=e100]
+      - generic [ref=e103]: Профиль

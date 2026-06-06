@@ -1,0 +1,140 @@
+.contract-address {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-3);
+  background: var(--color-surface-elevated);
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border);
+}
+
+.contract-address__text {
+  flex: 1;
+  font-size: var(--text-sm);
+  color: var(--color-text);
+  word-break: break-all;
+}
+
+.contract-address__copy {
+  flex-shrink: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border: none;
+  border-radius: var(--radius-sm);
+  background: var(--color-accent-soft);
+  color: var(--color-accent);
+  cursor: pointer;
+}
+
+.escrow-trust-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 10px;
+  border-radius: var(--radius-md);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-semibold);
+}
+
+.escrow-trust-badge--in_contract {
+  background: var(--color-success-soft);
+  color: var(--color-success);
+}
+
+.escrow-trust-badge--released_to_seller {
+  background: var(--color-accent-soft);
+  color: var(--color-accent);
+}
+
+.escrow-trust-badge--dispute {
+  background: var(--color-danger-soft);
+  color: var(--color-danger);
+}
+
+.escrow-trust-badge--pending {
+  background: var(--color-warning-soft);
+  color: var(--color-warning);
+}
+
+.deal-progress {
+  display: flex;
+  gap: 4px;
+  margin-top: var(--space-2);
+}
+
+.deal-progress__step {
+  flex: 1;
+  height: 4px;
+  border-radius: 2px;
+  background: var(--color-border);
+  transition: background var(--transition);
+}
+
+.deal-progress__step--done {
+  background: var(--color-success);
+}
+
+.deal-progress__step--current {
+  background: var(--color-accent);
+}
+
+.notification-bell {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border: none;
+  border-radius: var(--radius-md);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  color: var(--color-text);
+  cursor: pointer;
+}
+
+[data-theme='dark'] .notification-bell {
+  background: rgba(28, 28, 28, 0.85);
+  border-color: rgba(255, 255, 255, 0.1);
+  color: var(--color-hint);
+}
+
+.notification-bell__badge {
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  min-width: 16px;
+  height: 16px;
+  padding: 0 4px;
+  border-radius: 8px;
+  background: var(--color-danger);
+  color: #fff;
+  font-size: 10px;
+  font-weight: var(--weight-bold);
+  line-height: 16px;
+  text-align: center;
+}
+
+.payment-verify-modal__status {
+  text-align: center;
+  padding: var(--space-4);
+}
+
+.payment-verify-modal__spinner {
+  margin: 0 auto var(--space-3);
+}
+
+.payment-verify-modal__icon--ok {
+  color: var(--color-success);
+}
+
+.payment-verify-modal__icon--warn {
+  color: var(--color-warning);
+}
+
+.payment-verify-modal__icon--err {
+  color: var(--color-danger);
+}

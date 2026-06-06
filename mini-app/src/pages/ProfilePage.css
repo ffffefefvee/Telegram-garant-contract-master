@@ -1,0 +1,165 @@
+.profile-page {
+  padding: var(--space-4);
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.profile-hero {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-4);
+}
+
+.profile-hero__main {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+}
+
+.profile-hero--zelenka {
+  align-items: center;
+  text-align: center;
+}
+
+.profile-avatar--large {
+  width: 88px;
+  height: 88px;
+  font-size: 32px;
+  margin: 0 auto;
+  background: linear-gradient(135deg, #2eb872, #1a6b42);
+}
+
+.profile-username--center {
+  display: block;
+  text-align: center;
+  font-size: var(--text-lg);
+  font-weight: var(--weight-bold);
+}
+
+.profile-avatar {
+  width: 72px;
+  height: 72px;
+  border-radius: 50%;
+  background: var(--color-accent);
+  color: var(--color-accent-text);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 28px;
+  font-weight: var(--weight-bold);
+  flex-shrink: 0;
+}
+
+.profile-hero__info h1 {
+  font-size: var(--text-lg);
+  font-weight: var(--weight-bold);
+  color: var(--color-text);
+  margin: 0 0 3px;
+}
+
+.profile-username {
+  font-size: var(--text-sm);
+  color: var(--color-hint);
+}
+
+.profile-roles {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-1);
+  margin-top: 6px;
+}
+
+.profile-hero__stats {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: var(--space-2);
+}
+
+.profile-stat {
+  background: var(--color-bg);
+  border-radius: var(--radius-md);
+  padding: var(--space-3);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+
+.profile-stat__value {
+  font-size: var(--text-xl);
+  font-weight: var(--weight-bold);
+  font-variant-numeric: tabular-nums;
+  color: var(--color-text);
+}
+
+.profile-stat__label {
+  font-size: var(--text-xs);
+  color: var(--color-hint);
+  text-align: center;
+}
+
+.profile-stat--demo {
+  opacity: 0.85;
+}
+
+.profile-demo-hint {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: var(--text-xs);
+  color: var(--color-hint);
+  margin: 0;
+  line-height: 1.4;
+}
+
+.profile-deals-summary {
+  overflow: hidden;
+  padding: 0;
+}
+
+.deals-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 13px var(--space-4);
+  position: relative;
+}
+
+.deals-row + .deals-row::before {
+  content: '';
+  position: absolute;
+  top: 0;
+  left: var(--space-4);
+  right: 0;
+  height: 1px;
+  background: var(--color-separator);
+}
+
+.deals-row span:first-child {
+  font-size: var(--text-sm);
+  color: var(--color-text);
+}
+
+.deals-value {
+  font-size: var(--text-sm);
+  font-weight: var(--weight-semibold);
+  font-variant-numeric: tabular-nums;
+}
+
+.deals-value.success { color: var(--color-success); }
+.deals-value.danger  { color: var(--color-danger); }
+.deals-value.warning { color: var(--color-warning); }
+
+.profile-menu {
+  overflow: hidden;
+  padding: 0;
+}
+
+.profile-empty {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 200px;
+  color: var(--color-hint);
+}

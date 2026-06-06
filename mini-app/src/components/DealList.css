@@ -1,0 +1,30 @@
+.deal-list {
+  padding: var(--spacing-lg);
+}
+
+.deal-list-loading,
+.deal-list-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 48px 16px;
+  color: var(--tg-theme-hint-color);
+  text-align: center;
+}
+
+.deal-list-loading .spinner {
+  width: 32px;
+  height: 32px;
+  border: 3px solid var(--gray-200);
+  border-top-color: var(--primary-color);
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  margin-bottom: 16px;
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}

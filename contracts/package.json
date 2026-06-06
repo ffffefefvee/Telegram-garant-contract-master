@@ -1,0 +1,23 @@
+{
+  "name": "telegram-garant-contracts",
+  "version": "1.0.0",
+  "description": "Smart contracts for Telegram Garant escrow platform",
+  "private": true,
+  "scripts": {
+    "compile": "hardhat compile",
+    "test": "hardhat test",
+    "coverage": "hardhat coverage",
+    "deploy:amoy": "hardhat run scripts/deploy.ts --network amoy",
+    "deploy:local": "hardhat run scripts/deploy.ts --network localhost",
+    "verify": "hardhat verify",
+    "lint": "solhint 'contracts/**/*.sol'"
+  },
+  "devDependencies": {
+    "@nomicfoundation/hardhat-toolbox": "^4.0.0",
+    "@openzeppelin/contracts": "^5.0.0",
+    "hardhat": "^2.22.0",
+    "solhint": "^4.5.0",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.4.5"
+  }
+}

@@ -1,0 +1,417 @@
+{
+  "common": {
+    "welcome": "Welcome",
+    "goodbye": "Goodbye",
+    "error": "Error occurred",
+    "success": "Success",
+    "loading": "Loading...",
+    "cancel": "Cancel",
+    "confirm": "Confirm",
+    "back": "Back",
+    "next": "Next",
+    "save": "Save",
+    "delete": "Delete",
+    "edit": "Edit",
+    "close": "Close",
+    "menu": "Menu",
+    "settings": "Settings",
+    "help": "Help",
+    "about": "About",
+    "contact": "Contact",
+    "support": "Support",
+    "language": "Language",
+    "select_language": "Select language",
+    "language_changed": "Language successfully changed",
+    "retry": "Retry",
+    "yes": "Yes",
+    "no": "No",
+    "ok": "OK"
+  },
+  "bot": {
+    "start_message": "👋 Welcome to <b>Guarantee Bot</b>!\n\nSecure escrow-protected deals.\n\n✅ Create a deal\n✅ Invite a counterparty\n✅ Funds held until completion\n✅ Arbitration for disputes\n\n<i>Menu buttons are shown below 👇</i>",
+    "menu_title": "📱 <b>Main Menu</b>",
+    "menu_description": "Select an action:",
+    "help_message": "❓ <b>Help</b>\n\n<b>Menu buttons:</b>\n➕ New Deal — create a deal\n📋 My Deals — your deals list\n💰 Balance — your account\n👤 Profile — statistics\n⚙️ Settings — language &amp; notifications\n📞 Support — contact us\n\n<b>Commands:</b>\n/menu — show menu\n/new_deal — new deal\n/my_deals — my deals\n\n<b>Security:</b>\n🔒 All payments protected by escrow\n⚖️ 24/7 arbitration\n\n<b>Support:</b> @support",
+    "unknown_command": "❌ Unknown command.\nUse the menu buttons below 👇",
+    "maintenance": "🔧 Maintenance in progress. Please try again later.",
+    "blocked": "❌ Your account is blocked. Contact support.",
+    "private_only": "❌ This bot only works in private messages.",
+    "use_buttons": "👇 Use the menu buttons:",
+    "balance_card": "💰 <b>Balance</b>\n━━━━━━━━━━━━━━━\nAvailable: <b>{{balance}} ₽</b>\n<i>Top-up coming soon. Pay for deals via «Pay» in the deal card.</i>",
+    "settings_intro": "⚙️ <b>Settings</b>\n\nChoose interface language or return to the menu."
+  },
+  "menu": {
+    "main": "📱 Main Menu",
+    "new_deal": "➕ New Deal",
+    "my_deals": "📋 My Deals",
+    "balance": "💰 Balance",
+    "profile": "👤 Profile",
+    "settings": "⚙️ Settings",
+    "help": "❓ Help",
+    "language": "🌐 Language",
+    "support": "📞 Support",
+    "reviews": "⭐ Reviews",
+    "arbitration": "⚖️ Arbitration",
+    "back_to_menu": "⬅️ Back to Menu",
+    "open_mini_app": "📲 Open app"
+  },
+  "deal": {
+    "types": {
+      "physical": "📦 Physical Goods",
+      "digital": "💻 Digital Goods",
+      "service": "🛠️ Services",
+      "rent": "🏠 Rent"
+    },
+    "select_type": "Select deal type:",
+    "create_title": "Create New Deal",
+    "enter_amount": "Enter deal amount:",
+    "enter_description": "Enter deal description:",
+    "amount_hint": "The buyer pays the deal amount plus commission. We will show the exact total on the next step.",
+    "description_hint": "Describe the goods or service in enough detail for the counterparty to understand the terms.",
+    "invite_counterparty": "Invite counterparty:",
+    "waiting_payment": "Waiting for payment...",
+    "payment_completed": "Payment confirmed",
+    "deal_completed": "Deal completed",
+    "deal_cancelled": "Deal cancelled",
+    "dispute_opened": "Dispute opened",
+    "status": {
+      "draft": "📝 Draft",
+      "pending_acceptance": "⏳ Pending Acceptance",
+      "pending_payment": "💳 Pending Payment",
+      "in_progress": "🔄 In Progress",
+      "pending_confirmation": "✅ Pending Confirmation",
+      "completed": "✅ Completed",
+      "cancelled": "❌ Cancelled",
+      "refunded": "💰 Refunded",
+      "disputed": "⚖️ Disputed",
+      "dispute_resolved": "✅ Dispute Resolved",
+      "frozen": "❄️ Frozen"
+    },
+    "actions": {
+      "accept": "✅ Accept",
+      "reject": "❌ Reject",
+      "cancel": "🚫 Cancel",
+      "confirm": "✅ Confirm",
+      "dispute": "⚖️ Open Dispute",
+      "pay": "💳 Pay",
+      "start": "▶️ Start",
+      "invite": "📧 Invite",
+      "ship": "📦 Mark shipped"
+    },
+    "list_empty": "You have no deals yet.",
+    "filter": {
+      "active": "🟢 Active",
+      "completed": "✅ Completed",
+      "all": "📋 All"
+    },
+    "invite_link": "Invite link:",
+    "on_chain_proof": "View on-chain",
+    "details": {
+      "number": "Deal #:",
+      "type": "Type:",
+      "status": "Status:",
+      "buyer": "Buyer:",
+      "seller": "Seller:",
+      "amount": "Amount:",
+      "commission": "Commission:",
+      "total": "Total to pay:",
+      "seller_receives": "Seller receives:",
+      "description": "Description:",
+      "terms": "Terms:",
+      "deadline": "Deadline:",
+      "created": "Created:",
+      "accepted": "Accepted:",
+      "paid": "Paid:",
+      "completed": "Completed:"
+    },
+    "messages": {
+      "title": "💬 Deal Chat",
+      "type_message": "Type a message:",
+      "message_sent": "Message sent",
+      "no_messages": "No messages yet"
+    },
+    "invites": {
+      "title": "📧 Invites",
+      "create": "Create invite",
+      "sent": "Invite sent",
+      "accepted": "Invite accepted",
+      "rejected": "Invite rejected",
+      "expired": "Invite expired",
+      "url": "Invite link:",
+      "expires_in": "Valid until:",
+      "enter_telegram": "Enter counterparty Telegram:"
+    },
+    "errors": {
+      "not_found": "❌ Deal not found",
+      "not_yours": "❌ This is not your deal",
+      "cannot_cancel": "❌ Cannot cancel deal in current status",
+      "cannot_edit": "❌ Cannot edit deal in current status",
+      "description_too_short": "❌ Description is too short. Minimum 10 characters.",
+      "already_accepted": "❌ Deal already accepted",
+      "invite_expired": "❌ Invite has expired",
+      "invite_invalid": "❌ Invalid invite"
+    },
+    "progress": {
+      "step_1": "Creation",
+      "step_2": "Acceptance",
+      "step_3": "Payment",
+      "step_4": "Fulfillment",
+      "step_5": "Confirmation",
+      "step_6": "Completion"
+    }
+  },
+  "payment": {
+    "title": "💳 Payment",
+    "amount": "Amount:",
+    "commission": "Commission:",
+    "total": "Total:",
+    "pay": "Pay",
+    "waiting": "Waiting for payment...",
+    "confirm": "Confirm payment",
+    "success": "✅ Payment successful",
+    "error": "❌ Payment error",
+    "refund": "Refund",
+    "pay_now": "Pay now",
+    "open_link": "Open the payment link below or scan the QR code.",
+    "methods": {
+      "cryptomus": "Cryptomus (crypto)",
+      "card": "Bank card",
+      "e_wallet": "E-wallet",
+      "crypto": "Cryptocurrency",
+      "balance": "Internal balance"
+    },
+    "status": {
+      "pending": "⏳ Pending",
+      "processing": "🔄 Processing",
+      "completed": "✅ Completed",
+      "expired": "⌛ Expired",
+      "cancelled": "❌ Cancelled",
+      "failed": "❌ Failed",
+      "refunded": "💰 Refunded"
+    },
+    "types": {
+      "deposit": "Balance deposit",
+      "deal_payment": "Deal payment",
+      "refund": "Refund",
+      "withdraw": "Withdraw",
+      "commission": "System commission",
+      "arbitration_fee": "Arbitration fee"
+    },
+    "details": {
+      "transaction_id": "Transaction ID:",
+      "payment_method": "Payment method:",
+      "fee": "Fee:",
+      "crypto_amount": "Crypto amount:",
+      "wallet": "Wallet:",
+      "expires_at": "Valid until:",
+      "paid_at": "Paid at:",
+      "payment_url": "Payment URL:"
+    },
+    "instructions": {
+      "pay_title": "💳 Deal Payment",
+      "pay_description": "Follow the link below to pay:",
+      "pay_warning": "Pay within 1 hour or the deal will be cancelled",
+      "confirm_title": "Payment Confirmation",
+      "confirm_description": "Click the button below after payment",
+      "wait_callback": "Waiting for payment system confirmation..."
+    },
+    "errors": {
+      "not_found": "❌ Payment not found",
+      "already_paid": "❌ Payment already completed",
+      "expired": "❌ Payment expired",
+      "invalid_amount": "❌ Invalid payment amount",
+      "callback_failed": "❌ Payment processing error"
+    }
+  },
+  "profile": {
+    "title": "👤 Your Profile",
+    "name": "Name:",
+    "username": "Username:",
+    "balance": "Balance:",
+    "reputation": "Reputation:",
+    "deals_count": "Deals:",
+    "completed_deals": "Completed:",
+    "member_since": "Member since:",
+    "language": "Language:",
+    "edit_profile": "Edit Profile"
+  },
+  "review": {
+    "title": "⭐ Reviews",
+    "write": "Write Review",
+    "rating": "Rating:",
+    "comment": "Comment:",
+    "submit": "Submit Review",
+    "success": "✅ Review submitted successfully",
+    "error": "❌ Error submitting review",
+    "anonymous": "Anonymous",
+    "helpful": "Helpful",
+    "not_helpful": "Not Helpful",
+    "ratings": {
+      "communication": "Communication",
+      "quality": "Quality",
+      "speed": "Speed",
+      "accuracy": "Accuracy"
+    },
+    "levels": {
+      "new": "⚪ New",
+      "beginner": "🟡 Beginner",
+      "experienced": "🔵 Experienced",
+      "reliable": "🟢 Reliable",
+      "verified": "✅ Verified"
+    },
+    "stats": {
+      "total": "Total reviews:",
+      "average": "Average rating:",
+      "positive": "Positive:",
+      "negative": "Negative:",
+      "distribution": "Rating distribution"
+    },
+    "errors": {
+      "not_found": "❌ Review not found",
+      "already_exists": "❌ Review already exists",
+      "not_completed": "❌ Can only review after deal completion",
+      "own_review": "❌ Cannot review yourself",
+      "delete_forbidden": "❌ Can only delete your own review"
+    }
+  },
+  "reputation": {
+    "title": "📊 Reputation",
+    "score": "Score:",
+    "level": "Level:",
+    "history": "History",
+    "events": {
+      "review_received": "Review received",
+      "deal_completed": "Completed deal",
+      "deal_cancelled": "Cancelled deal",
+      "dispute_opened": "Dispute opened",
+      "dispute_won": "Dispute won",
+      "dispute_lost": "Dispute lost",
+      "rule_violation": "Rule violation",
+      "verification_completed": "Verification completed",
+      "bonus": "Bonus",
+      "penalty": "Penalty"
+    }
+  },
+  "validation": {
+    "invalid_amount": "❌ Invalid amount. Enter a number greater than 0.",
+    "invalid_email": "❌ Invalid email format.",
+    "required_field": "❌ Field is required.",
+    "too_short": "❌ Value too short.",
+    "too_long": "❌ Value too long.",
+    "invalid_format": "❌ Invalid format.",
+    "already_exists": "❌ Already exists.",
+    "not_found": "❌ Not found."
+  },
+  "wallet": {
+    "link": "🔗 Link wallet",
+    "enter_address": "Send your Polygon wallet address (0x...):",
+    "linked": "✅ Wallet linked.",
+    "invalid_address": "❌ Invalid wallet address. Send a Polygon address in 0x... format."
+  },
+  "errors": {
+    "generic": "❌ An error occurred. Try again later.",
+    "not_found": "❌ Requested resource not found.",
+    "unauthorized": "❌ Unauthorized. Please log in.",
+    "forbidden": "❌ Access denied.",
+    "conflict": "❌ Data conflict.",
+    "server_error": "❌ Internal server error.",
+    "network": "❌ Network error. Check connection.",
+    "timeout": "❌ Request timeout."
+  },
+  "notifications": {
+    "new_deal": "📬 New deal created",
+    "deal_accepted": "Deal accepted",
+    "payment_received": "💰 Payment received",
+    "deal_completed": "✅ Deal completed",
+    "dispute_opened": "⚖️ Dispute opened for deal",
+    "review_received": "⭐ You received a review",
+    "mention": "📍 You were mentioned in a message"
+  },
+  "arbitration": {
+    "title": "⚖️ Arbitration",
+    "open_dispute": "🔓 Open Dispute",
+    "my_disputes": "📋 My Disputes",
+    "dispute_details": "📄 Dispute Details",
+    "submit_evidence": "📎 Submit Evidence",
+    "assign_arbitrator": "👨‍⚖️ Assign Arbitrator",
+    "make_decision": "⚖️ Make Decision",
+    "appeal": "🔄 Appeal",
+    "chat": "💬 Arbitration Chat",
+    "settings": "⚙️ Arbitration Settings",
+    "status": {
+      "opened": "🔓 Opened",
+      "waiting_seller_response": "⏳ Waiting Seller Response",
+      "waiting_buyer_evidence": "⏳ Waiting Buyer Evidence",
+      "waiting_seller_evidence": "⏳ Waiting Seller Evidence",
+      "pending_arbitrator": "⏳ Pending Arbitrator",
+      "under_review": "🔍 Under Review",
+      "decision_made": "✅ Decision Made",
+      "appeal_period": "⏳ Waiting Appeal",
+      "appealed": "🔄 Appealed",
+      "enforced": "✅ Enforced",
+      "closed": "🔒 Closed"
+    },
+    "type": {
+      "product_mismatch": "Product Mismatch",
+      "not_received": "Not Received",
+      "not_working": "Not Working",
+      "seller_no_response": "Seller No Response",
+      "buyer_no_confirm": "Buyer No Confirm",
+      "refund_request": "Refund Request",
+      "fraud": "Fraud",
+      "other": "Other"
+    },
+    "decision": {
+      "full_refund_to_buyer": "Full Refund to Buyer",
+      "partial_refund_to_buyer": "Partial Refund to Buyer",
+      "full_payment_to_seller": "Full Payment to Seller",
+      "partial_payment_to_seller": "Partial Payment to Seller",
+      "split_funds": "Split Funds",
+      "refund_no_penalty": "Refund No Penalty"
+    },
+    "evidence": {
+      "screenshot": "📸 Screenshot",
+      "video": "🎥 Video",
+      "file": "📁 File",
+      "link": "🔗 Link",
+      "text": "📝 Text",
+      "audio": "🎵 Audio"
+    },
+    "messages": {
+      "dispute_opened": "✅ Dispute successfully opened. Wait for counterparty response.",
+      "evidence_submitted": "✅ Evidence uploaded",
+      "arbitrator_assigned": "✅ Arbitrator assigned. Wait for review.",
+      "decision_made": "✅ Decision made. You have 24 hours to appeal.",
+      "appeal_filed": "🔄 Appeal filed. Case will be reviewed by senior arbitrator.",
+      "dispute_closed": "🔒 Dispute closed",
+      "confirm_open": "Are you sure you want to open a dispute? This action cannot be undone.",
+      "select_type": "Select dispute type",
+      "describe_reason": "Describe the reason for dispute",
+      "upload_evidence": "Upload evidence (screenshots, videos, files)",
+      "arbitrator_apply": "Apply to become arbitrator",
+      "arbitrator_requirements": "Arbitrator Requirements",
+      "no_disputes": "You have no disputes yet",
+      "access_denied": "Access denied. Only deal parties and arbitrator can view dispute."
+    },
+    "fees": {
+      "penalty": "Penalty from violator: {{percent}}%",
+      "arbitrator_fee": "Arbitrator fee: {{percent}}% of penalty",
+      "platform_fee": "Platform fee: {{percent}}% of penalty",
+      "seller_success": "Honest seller fee: 0%"
+    }
+  },
+  "admin": {
+    "arbitration": "⚖️ Arbitration Management",
+    "arbitrators": "👨‍⚖️ Arbitrators",
+    "disputes": "📋 Disputes",
+    "settings": "⚙️ Settings",
+    "approve_arbitrator": "Approve Arbitrator",
+    "reject_arbitrator": "Reject Arbitrator",
+    "suspend_arbitrator": "Suspend Arbitrator",
+    "reactivate_arbitrator": "Reactivate Arbitrator",
+    "reassign_arbitrator": "Reassign Arbitrator",
+    "close_dispute": "Close Dispute",
+    "view_statistics": "📊 Statistics",
+    "analytics": "📈 Analytics"
+  }
+}
