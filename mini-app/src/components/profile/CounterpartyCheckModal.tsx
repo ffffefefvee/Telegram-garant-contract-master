@@ -1,7 +1,9 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { Star, AlertTriangle } from 'lucide-react';
 import { BottomSheet, Input, Button } from '../ui';
+import { usersApi } from '../../api';
 import { MOCK_SEARCH_USERS, type SearchUserResult } from '../../mocks/users';
+import { USE_UI_MOCKS } from '../../mocks/config';
 import { TrustScoreBar } from './TrustScoreBar';
 import './profile.css';
 
@@ -27,18 +29,69 @@ function RiskWarnings({ user }: { user: SearchUserResult }) {
   );
 }
 
+const SEARCH_DEBOUNCE_MS = 400;
+const MIN_QUERY_LENGTH = 2;
+
 export const CounterpartyCheckModal: React.FC<CounterpartyCheckModalProps> = ({
   open,
   onClose,
 }) => {
   const [query, setQuery] = useState('');
   const [selected, setSelected] = useState<SearchUserResult | null>(null);
+  const [results, setResults] = useState<SearchUserResult[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const results = MOCK_SEARCH_USERS.filter(
-    (u) =>
-      !query.trim() ||
-      u.username.toLowerCase().includes(query.toLowerCase()),
-  );
+  useEffect(() => {
+    if (timerRef.current) clearTimeout(timerRef.current);
+    const trimmed = query.trim().replace(/^@/, '');
+
+    if (trimmed.length < MIN_QUERY_LENGTH) {
+      setResults([]);
+      setLoading(false);
+      setError(null);
+      return;
+    }
+
+    if (USE_UI_MOCKS) {
+      setResults(
+        MOCK_SEARCH_USERS.filter((u) =>
+          u.username.toLowerCase().includes(trimmed.toLowerCase()),
+        ),
+      );
+      return;
+    }
+
+    timerRef.current = setTimeout(async () => {
+      setLoading(true);
+      setError(null);
+      try {
+        const res = await usersApi.search(trimmed);
+        setResults(
+          res.users.map((u) => ({
+            id: u.id,
+            username: u.telegramUsername ?? u.id,
+            displayName: u.telegramFirstName ?? u.telegramUsername ?? 'User',
+            dealsCount: u.completedDeals ?? 0,
+            // Backend exposes a single 0–100 reputation score; map it onto
+            // both the trust bar (as-is) and a 5-star scale for display.
+            rating: Math.round(((u.reputationScore ?? 0) / 20) * 10) / 10,
+            trustScore: u.reputationScore ?? 0,
+          })),
+        );
+      } catch {
+        setResults([]);
+        setError('Не удалось выполнить поиск');
+      } finally {
+        setLoading(false);
+      }
+    }, SEARCH_DEBOUNCE_MS);
+
+    return () => {
+      if (timerRef.current) clearTimeout(timerRef.current);
+    };
+  }, [query]);
 
   return (
     <BottomSheet open={open} onClose={onClose} title="Проверить контрагента">
@@ -52,6 +105,12 @@ export const CounterpartyCheckModal: React.FC<CounterpartyCheckModalProps> = ({
         placeholder="@username"
       />
       <div className="counterparty-results">
+        {loading && <p className="deal-new-hint">Поиск…</p>}
+        {error && <p className="deal-new-hint">{error}</p>}
+        {!loading && !error && results.length === 0 &&
+          query.trim().length >= MIN_QUERY_LENGTH && (
+            <p className="deal-new-hint">Никого не нашли</p>
+          )}
         {results.map((u) => (
           <button
             key={u.id}

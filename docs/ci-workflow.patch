@@ -1,0 +1,45 @@
+diff --git a/.github/workflows/ci.yml b/.github/workflows/ci.yml
+index e2d1efc..c35f0e5 100644
+--- a/.github/workflows/ci.yml
++++ b/.github/workflows/ci.yml
+@@ -95,6 +95,9 @@ jobs:
+       - name: Install dependencies
+         run: npm ci
+ 
++      - name: Typecheck
++        run: npm run typecheck
++
+       - name: Build
+         run: npm run build
+         env:
+@@ -121,3 +124,30 @@ jobs:
+ 
+       - name: Compile & test
+         run: npm run compile && npm test
++
++  slither:
++    name: contracts static analysis (slither)
++    runs-on: ubuntu-latest
++    # Informational for now: keep CI green while findings are triaged.
++    # Flip to `false` once the baseline is clean.
++    continue-on-error: true
++
++    steps:
++      - uses: actions/checkout@v4
++
++      - uses: actions/setup-node@v4
++        with:
++          node-version: '20'
++          cache: 'npm'
++          cache-dependency-path: contracts/package-lock.json
++
++      - name: Install contract dependencies
++        run: npm ci
++        working-directory: contracts
++
++      - name: Run slither
++        uses: crytic/slither-action@v0.4.0
++        with:
++          target: contracts/
++          slither-args: '--exclude-dependencies --filter-paths "node_modules|test"'
++          fail-on: high

@@ -38,6 +38,20 @@ export class AdminDisputeController {
     return this.disputeService.findAllForAdmin(page, limit, { status, type });
   }
 
+  // NB: static routes must be declared before ':id', otherwise Nest matches
+  // GET /admin/disputes/stats as :id = 'stats'.
+  @Get('stats')
+  @Roles(Role.ADMIN, Role.SUPER_ADMIN)
+  async getDisputeStats() {
+    return this.disputeService.getAdminStats();
+  }
+
+  @Get('arbitrators/performance')
+  @Roles(Role.ADMIN, Role.SUPER_ADMIN)
+  async getArbitratorsPerformance() {
+    return this.arbitratorService.getAllPerformance();
+  }
+
   @Get(':id')
   @Roles(Role.ADMIN, Role.SUPER_ADMIN)
   async getDispute(@Param('id') id: string) {

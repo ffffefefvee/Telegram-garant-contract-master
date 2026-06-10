@@ -74,7 +74,14 @@ export interface Payment {
   dealId: string;
   amount: number;
   currency: string;
-  status: 'pending' | 'completed' | 'failed' | 'refunded';
+  status:
+    | 'pending'
+    | 'processing'
+    | 'completed'
+    | 'expired'
+    | 'cancelled'
+    | 'failed'
+    | 'refunded';
   paymentUrl?: string;
   createdAt: string;
 }
@@ -88,6 +95,7 @@ export interface Review {
   author?: Pick<User, 'telegramFirstName' | 'telegramUsername'>;
   ratings?: Record<string, number>;
   helpfulCount?: number;
+  notHelpfulCount?: number;
 }
 
 export interface AuthSession {
@@ -134,8 +142,8 @@ export interface TelegramWebApp {
   onEvent: (eventType: string, handler: () => void) => void;
   offEvent: (eventType: string, handler: () => void) => void;
   HapticFeedback?: {
-    impactOccurred?: (style: string) => void;
-    notificationOccurred?: (type: string) => void;
+    impactOccurred: (style: string) => void;
+    notificationOccurred: (type: string) => void;
   };
   MainButton?: {
     text: string;

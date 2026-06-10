@@ -1,4 +1,3 @@
-import React from 'react';
 import clsx from 'clsx';
 import { DEAL_STEPPER_STEPS, getStepperIndex } from '../../constants/dealStatus';
 import './ui.css';
