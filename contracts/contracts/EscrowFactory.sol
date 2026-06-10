@@ -68,6 +68,12 @@ contract EscrowFactory is AccessControl {
     error AmountBelowMinimum();
     error EscrowAlreadyExists();
     error InvalidFeeModel();
+    error InvalidFundingDeadline();
+    error FeeExceedsAmount();
+    error TariffTooHigh();
+
+    /// @notice Верхняя граница процентной комиссии (10%): защита от опечатки/злоупотребления админом.
+    uint16 public constant MAX_PERCENT_FEE_BPS = 1000;
 
     constructor(
         address implementation_,
@@ -88,6 +94,8 @@ contract EscrowFactory is AccessControl {
             relay_ == address(0) ||
             admin == address(0)
         ) revert ZeroAddress();
+
+        if (tariff_.percentFeeBps > MAX_PERCENT_FEE_BPS) revert TariffTooHigh();
 
         implementation = implementation_;
         token = token_;
@@ -148,9 +156,13 @@ contract EscrowFactory is AccessControl {
         if (buyer == address(0) || seller == address(0)) revert ZeroAddress();
         if (amount < minDealAmount) revert AmountBelowMinimum();
         if (escrowOf[dealId] != address(0)) revert EscrowAlreadyExists();
+        if (fundingDeadline <= block.timestamp) revert InvalidFundingDeadline();
 
         uint256 totalFee = computeTotalFee(amount);
         (uint256 buyerFee, uint256 sellerFee) = splitFee(totalFee, feeModel);
+        // sellerFee вычитается из payout продавца — не должна превышать сумму сделки,
+        // иначе release() вечно падал бы на underflow (заперев средства).
+        if (sellerFee > amount) revert FeeExceedsAmount();
 
         escrow = Clones.cloneDeterministic(implementation, dealId);
         escrowOf[dealId] = escrow;
@@ -159,7 +171,6 @@ contract EscrowFactory is AccessControl {
             token: token,
             treasury: treasury,
             registry: registry,
-            relay: relay,
             dealId: dealId,
             buyer: buyer,
             seller: seller,
@@ -198,6 +209,7 @@ contract EscrowFactory is AccessControl {
     }
 
     function setTariff(TariffConfig calldata newTariff) external onlyRole(ADMIN_ROLE) {
+        if (newTariff.percentFeeBps > MAX_PERCENT_FEE_BPS) revert TariffTooHigh();
         tariff = newTariff;
         emit TariffUpdated(newTariff);
     }

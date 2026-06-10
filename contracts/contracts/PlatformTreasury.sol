@@ -34,6 +34,8 @@ contract PlatformTreasury is AccessControl, ReentrancyGuard {
     event UserCompensated(address indexed user, uint256 amount, bytes32 indexed reason);
     event Withdrawn(address indexed to, uint256 amount);
     event ReserveBpsUpdated(uint16 oldBps, uint16 newBps);
+    event ReserveFunded(address indexed from, uint256 amount);
+    event MovedToReserve(uint256 amount);
 
     error ReserveBpsTooHigh();
     error InsufficientMainBalance();
@@ -102,6 +104,26 @@ contract PlatformTreasury is AccessControl, ReentrancyGuard {
         mainBalance -= amount;
         token.safeTransfer(to, amount);
         emit Withdrawn(to, amount);
+    }
+
+    /// @notice Прямое пополнение reserve админом (например, на старте платформы,
+    ///         пока комиссии ещё не накопились). Без этого первый же спор «виновен
+    ///         продавец» падал бы в resolve() на InsufficientReserveBalance.
+    /// @dev Требует предварительного approve на этот контракт.
+    function fundReserve(uint256 amount) external onlyRole(ADMIN_ROLE) nonReentrant {
+        if (amount == 0) revert ZeroAmount();
+        token.safeTransferFrom(msg.sender, address(this), amount);
+        reserveBalance += amount;
+        emit ReserveFunded(msg.sender, amount);
+    }
+
+    /// @notice Перебросить часть main → reserve (чисто бухгалтерская операция).
+    function moveToReserve(uint256 amount) external onlyRole(ADMIN_ROLE) {
+        if (amount == 0) revert ZeroAmount();
+        if (amount > mainBalance) revert InsufficientMainBalance();
+        mainBalance -= amount;
+        reserveBalance += amount;
+        emit MovedToReserve(amount);
     }
 
     /// @notice Выдать свежему escrow-клону ESCROW_ROLE. Вызывает EscrowFactory.

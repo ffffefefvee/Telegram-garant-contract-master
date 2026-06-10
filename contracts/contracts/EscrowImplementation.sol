@@ -9,6 +9,11 @@ import {Initializable} from "@openzeppelin/contracts/proxy/utils/Initializable.s
 import {PlatformTreasury} from "./PlatformTreasury.sol";
 import {ArbitratorRegistry} from "./ArbitratorRegistry.sol";
 
+/// @dev Минимальный интерфейс фабрики (полный import создал бы циклическую зависимость).
+interface IEscrowFactoryRelay {
+    function relay() external view returns (address);
+}
+
 /// @title EscrowImplementation
 /// @notice Эскроу одной сделки (за каждой сделкой клонится через EIP-1167). См. PRODUCT_PLAN §3-§4.
 /// @dev Замена legacy `Escrow.sol`. Фиксы:
@@ -39,7 +44,6 @@ contract EscrowImplementation is Initializable, ReentrancyGuard {
     PlatformTreasury public treasury;
     ArbitratorRegistry public registry;
     address public factory;
-    address public relay;
 
     bytes32 public dealId;
     address public buyer;
@@ -61,6 +65,7 @@ contract EscrowImplementation is Initializable, ReentrancyGuard {
 
     event Initialized(bytes32 indexed dealId, address indexed buyer, address indexed seller, uint256 amount);
     event Funded(uint256 totalReceived);
+    event Rescued(address indexed to, uint256 amount);
     event Cancelled();
     event Released(address indexed seller, uint256 sellerPayout, uint256 toTreasury);
     event Refunded(address indexed buyer, uint256 amount);
@@ -88,6 +93,7 @@ contract EscrowImplementation is Initializable, ReentrancyGuard {
     error InsufficientFunding(uint256 expected, uint256 got);
     error FundingDeadlinePassed();
     error FundingDeadlineNotPassed();
+    error NothingToRescue();
 
     modifier onlyBuyer() {
         if (msg.sender != buyer) revert NotBuyer();
@@ -105,7 +111,7 @@ contract EscrowImplementation is Initializable, ReentrancyGuard {
     }
 
     modifier onlyRelay() {
-        if (msg.sender != relay) revert NotRelay();
+        if (msg.sender != relay()) revert NotRelay();
         _;
     }
 
@@ -114,13 +120,23 @@ contract EscrowImplementation is Initializable, ReentrancyGuard {
         _;
     }
 
+    /// @dev Имплементация-синглтон не должна быть инициализируемой (только клоны).
+    constructor() {
+        _disableInitializers();
+    }
+
+    /// @notice Актуальный relay читается из фабрики — ротация ключа (setRelay)
+    ///         мгновенно действует и на уже развёрнутые клоны.
+    function relay() public view returns (address) {
+        return IEscrowFactoryRelay(factory).relay();
+    }
+
     /// @notice Инициализация клона. Вызывает Factory сразу после cloneDeterministic.
     /// @dev Параметры упакованы в struct из-за лимита stack-depth solc.
     struct InitParams {
         IERC20 token;
         PlatformTreasury treasury;
         ArbitratorRegistry registry;
-        address relay;
         bytes32 dealId;
         address buyer;
         address seller;
@@ -138,7 +154,6 @@ contract EscrowImplementation is Initializable, ReentrancyGuard {
         treasury = p.treasury;
         registry = p.registry;
         factory = msg.sender;
-        relay = p.relay;
         dealId = p.dealId;
         buyer = p.buyer;
         seller = p.seller;
@@ -177,6 +192,29 @@ contract EscrowImplementation is Initializable, ReentrancyGuard {
         if (block.timestamp <= fundingDeadline) revert FundingDeadlineNotPassed();
         status = Status.EXPIRED;
         emit Cancelled();
+    }
+
+    /// @notice Вернуть «застрявшие» токены. Permissionless: получатель детерминирован статусом.
+    /// @dev Два кейса:
+    ///      1) CANCELLED / EXPIRED — relay успел перевести USDT, но notifyFunded() не прошёл
+    ///         (гонка с deadline / падение tx) либо кто-то прислал токены напрямую на
+    ///         предсказуемый CREATE2-адрес. Весь остаток возвращается покупателю.
+    ///      2) RELEASED / REFUNDED / RESOLVED — излишек сверх расчётных выплат (переплата)
+    ///         уходит в Treasury; admin признаёт его через reconcile().
+    function rescue() external nonReentrant {
+        Status s = status;
+        address to;
+        if (s == Status.CANCELLED || s == Status.EXPIRED) {
+            to = buyer;
+        } else if (s == Status.RELEASED || s == Status.REFUNDED || s == Status.RESOLVED) {
+            to = address(treasury);
+        } else {
+            revert WrongStatus();
+        }
+        uint256 bal = token.balanceOf(address(this));
+        if (bal == 0) revert NothingToRescue();
+        token.safeTransfer(to, bal);
+        emit Rescued(to, bal);
     }
 
     /// @notice Покупатель подтверждает получение → продавцу payout, в treasury комиссия.
