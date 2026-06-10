@@ -16,6 +16,7 @@ import { OpsModule } from '../ops/ops.module';
 import { TelegramBotModule } from '../telegram-bot/telegram-bot.module';
 import { BlockchainModule } from '../blockchain/blockchain.module';
 import { MetricsController } from './metrics.controller';
+import { HealthController } from './health.controller';
 
 @Module({
   imports: [
@@ -34,7 +35,7 @@ import { MetricsController } from './metrics.controller';
     forwardRef(() => TelegramBotModule),
     BlockchainModule,
   ],
-  controllers: [MetricsController],
+  controllers: [MetricsController, HealthController],
   providers: [MonitoringService],
   exports: [MonitoringService],
 })
