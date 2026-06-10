@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Review } from '../../types';
+import { Review } from '../types';
 import { format } from 'date-fns';
 import { ru } from 'date-fns/locale';
 import './ReviewCard.css';
@@ -103,9 +103,13 @@ export const ReviewCard: React.FC<ReviewCardProps> = ({
           </button>
         </div>
 
-        {review.helpfulCount > 0 && (
+        {(review.helpfulCount ?? 0) > 0 && (
           <div className="review-helpfulness">
-            {Math.round((review.helpfulCount / (review.helpfulCount + review.notHelpfulCount)) * 100)}%
+            {Math.round(
+              ((review.helpfulCount ?? 0) /
+                ((review.helpfulCount ?? 0) + (review.notHelpfulCount ?? 0))) *
+                100,
+            )}%
             нашли отзыв полезным
           </div>
         )}

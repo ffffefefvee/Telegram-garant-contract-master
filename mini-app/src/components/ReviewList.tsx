@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Review } from '../../types';
+import { Review } from '../types';
 import { reviewsApi } from '../api';
 import { ReviewCard } from './ReviewCard';
 import './ReviewList.css';
@@ -7,13 +7,11 @@ import './ReviewList.css';
 interface ReviewListProps {
   userId: string;
   limit?: number;
-  onReviewClick?: (review: Review) => void;
 }
 
 export const ReviewList: React.FC<ReviewListProps> = ({
   userId,
   limit = 10,
-  onReviewClick,
 }) => {
   const [reviews, setReviews] = useState<Review[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -57,7 +55,7 @@ export const ReviewList: React.FC<ReviewListProps> = ({
       setReviews((prev) =>
         prev.map((r) =>
           r.id === reviewId
-            ? { ...r, helpfulCount: r.helpfulCount + (isHelpful ? 1 : 0) }
+            ? { ...r, helpfulCount: (r.helpfulCount ?? 0) + (isHelpful ? 1 : 0) }
             : r,
         ),
       );

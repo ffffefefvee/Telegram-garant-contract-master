@@ -88,6 +88,14 @@ class ApiClient {
     });
   }
 
+  /** POST multipart/form-data (file uploads). Axios sets the boundary itself. */
+  async postForm<T>(url: string, form: FormData): Promise<T> {
+    const response = await this.client.post<T>(url, form, {
+      headers: { 'Content-Type': 'multipart/form-data' },
+    });
+    return response.data;
+  }
+
   async put<T>(url: string, data?: unknown): Promise<T> {
     const response = await this.client.put<T>(url, data);
     return response.data;
@@ -386,8 +394,18 @@ export const paymentsApi = {
 
   checkStatus: (id: string) => api.post<Payment>(`/payments/${id}/check`),
 
-  getForDeal: (dealId: string) => api.get<Payment>(`/payments/deal/${dealId}`),
+  /** Backend returns ALL payments of the current user for this deal (array). */
+  getForDeal: (dealId: string) => api.get<Payment[]>(`/payments/deal/${dealId}`),
 };
+
+/** Row shape of GET /users/search (subset of User selected by the backend). */
+export interface UserSearchRow {
+  id: string;
+  telegramUsername?: string | null;
+  telegramFirstName?: string | null;
+  reputationScore?: number | null;
+  completedDeals?: number | null;
+}
 
 export const usersApi = {
   getMe: () => api.get<User>('/users/me'),
@@ -408,6 +426,13 @@ export const usersApi = {
     api.post<User>('/users/me/wallet', { walletAddress }),
 
   detachWallet: () => api.delete<User>('/users/me/wallet'),
+
+  /**
+   * Search users by telegram username / first name (min 2 chars,
+   * backend returns an empty list for shorter queries).
+   */
+  search: (q: string, limit = 10) =>
+    api.get<{ users: UserSearchRow[] }>('/users/search', { q, limit }),
 };
 
 export type ArbitratorAvailability = 'available' | 'away';
@@ -433,7 +458,63 @@ export const arbitrationApi = {
       '/arbitration/arbitrators/me/availability',
       { availability },
     ),
+
+  /**
+   * Disputes where the current user participates (opener, arbitrator,
+   * buyer or seller). For arbitrators this is their case list.
+   */
+  getMyDisputes: () => api.get<ArbitratorDisputeRow[]>('/arbitration/disputes'),
+
+  getDisputeById: (id: string) =>
+    api.get<ArbitratorDisputeDetail>(`/arbitration/disputes/${id}`),
+
+  /** Multipart upload to POST /arbitration/disputes/:id/evidence/upload. */
+  uploadEvidence: (
+    disputeId: string,
+    file: File,
+    description?: string,
+    type?: string,
+  ) => {
+    const form = new FormData();
+    form.append('file', file);
+    if (description) form.append('description', description);
+    if (type) form.append('type', type);
+    return api.postForm<unknown>(
+      `/arbitration/disputes/${disputeId}/evidence/upload`,
+      form,
+    );
+  },
 };
+
+/** Deal summary embedded in dispute rows (subset of the Deal entity). */
+export interface DisputeDealSummary {
+  id: string;
+  dealNumber?: number | string;
+  status?: string;
+  amount?: number;
+  currency?: string;
+}
+
+/** Row of GET /arbitration/disputes. */
+export interface ArbitratorDisputeRow {
+  id: string;
+  status: string;
+  type?: string;
+  createdAt: string;
+  deal?: DisputeDealSummary | null;
+}
+
+/** Detail of GET /arbitration/disputes/:id (fields the UI renders). */
+export interface ArbitratorDisputeDetail extends ArbitratorDisputeRow {
+  reason?: string;
+  evidence?: Array<{ id: string; name?: string; uploadedBy?: string }>;
+  timeline?: Array<{ id: string; title: string; description?: string; at: string }>;
+  decision?: {
+    winner?: string;
+    comment?: string;
+    decidedAt?: string;
+  } | null;
+}
 
 export interface TreasurySummary {
   ready: boolean;
@@ -592,13 +673,97 @@ export const adminApi = {
 
   getStuckFundingPayments: (limit = 50) =>
     api.get<AdminPaymentRow[]>('/admin/payments/stuck/funding', { limit }),
+
+  /** GET /admin/deals — paginated, with buyer/seller relations. */
+  getDeals: (page = 1, limit = 20, status?: string) =>
+    api.get<{ deals: AdminDealRow[]; total: number }>('/admin/deals', {
+      page,
+      limit,
+      ...(status ? { status } : {}),
+    }),
+
+  /** GET /admin/disputes — paginated, with deal relation. */
+  getDisputes: (page = 1, limit = 20, status?: string) =>
+    api.get<{ disputes: AdminDisputeRow[]; total: number }>('/admin/disputes', {
+      page,
+      limit,
+      ...(status ? { status } : {}),
+    }),
+
+  /** GET /admin/users — paginated. */
+  getUsers: (page = 1, limit = 20) =>
+    api.get<{ users: AdminUserRow[]; total: number }>('/admin/users', {
+      page,
+      limit,
+    }),
+
+  /** GET /admin/disputes/arbitrators/performance — full arbitrator roster. */
+  getArbitrators: () =>
+    api.get<AdminArbitratorRow[]>('/admin/disputes/arbitrators/performance'),
 };
 
+/** Row of GET /admin/deals (Deal entity with buyer/seller joined). */
+export interface AdminDealRow {
+  id: string;
+  dealNumber?: number | string;
+  type?: string;
+  status: string;
+  amount: number;
+  currency: string;
+  createdAt: string;
+  buyer?: { telegramUsername?: string | null } | null;
+  seller?: { telegramUsername?: string | null } | null;
+}
+
+/** Row of GET /admin/disputes (Dispute entity with deal joined). */
+export interface AdminDisputeRow {
+  id: string;
+  status: string;
+  type?: string;
+  createdAt: string;
+  deal?: { id: string; dealNumber?: number | string } | null;
+  arbitrator?: { id: string } | null;
+}
+
+/** Row of GET /admin/users (User entity). */
+export interface AdminUserRow {
+  id: string;
+  telegramUsername?: string | null;
+  telegramFirstName?: string | null;
+  status: string;
+  roles: string[];
+  reputationScore?: number;
+  completedDeals?: number;
+  createdAt: string;
+}
+
+/** Row of GET /admin/disputes/arbitrators/performance. */
+export interface AdminArbitratorRow {
+  id: string;
+  userId: string;
+  username?: string | null;
+  status: string;
+  availability?: string;
+  rating: number;
+  totalCases: number;
+  completedCases?: number;
+  appealedCases?: number;
+  overturnedCases?: number;
+  totalEarned?: number;
+  user?: { telegramUsername?: string | null } | null;
+}
+
 export const reviewsApi = {
-  getUserReviews: async (_userId: string, _limit = 10) => ({
-    reviews: [] as import('../types').Review[],
-    total: 0,
-    averageRating: 0,
-  }),
-  markHelpful: async (_reviewId: string, _isHelpful: boolean) => ({}),
+  /** GET /reviews/user/:userId — reviews about the user + average rating. */
+  getUserReviews: (userId: string, limit = 10, offset = 0) =>
+    api.get<{
+      reviews: import('../types').Review[];
+      total: number;
+      averageRating: number;
+    }>(`/reviews/user/${userId}`, { limit, offset }),
+
+  markHelpful: (reviewId: string, isHelpful: boolean) =>
+    api.post<import('../types').Review>(`/reviews/${reviewId}/helpful`, {
+      isHelpful,
+    }),
 };

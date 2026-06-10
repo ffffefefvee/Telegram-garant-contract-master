@@ -34,11 +34,13 @@ export const PaymentVerifyModal: React.FC<PaymentVerifyModalProps> = ({
   const [status, setStatus] = useState<PaymentVerifyStatus>('checking');
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const attemptsRef = useRef(0);
+  const paymentIdRef = useRef<string | null>(null);
 
   useEffect(() => {
     if (!open) return;
     setStatus('checking');
     attemptsRef.current = 0;
+    paymentIdRef.current = null;
 
     if (intervalRef.current) {
       clearInterval(intervalRef.current);
@@ -58,7 +60,30 @@ export const PaymentVerifyModal: React.FC<PaymentVerifyModalProps> = ({
     const poll = async () => {
       attemptsRef.current += 1;
       try {
-        const payment = await paymentsApi.checkStatus(dealId);
+        // The check endpoint expects a *payment* id, not a deal id —
+        // resolve the latest payment for this deal once, then poll it.
+        if (!paymentIdRef.current) {
+          const payments = await paymentsApi.getForDeal(dealId);
+          const latest = [...payments].sort(
+            (a, b) =>
+              new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime(),
+          )[0];
+          if (!latest) {
+            // No payment row yet (e.g. webhook still in flight) — keep waiting.
+            if (attemptsRef.current >= MAX_POLL_ATTEMPTS) {
+              if (intervalRef.current) {
+                clearInterval(intervalRef.current);
+                intervalRef.current = null;
+              }
+              setStatus('failed');
+            } else {
+              setStatus('pending');
+            }
+            return;
+          }
+          paymentIdRef.current = latest.id;
+        }
+        const payment = await paymentsApi.checkStatus(paymentIdRef.current);
         let result: PaymentVerifyStatus;
         if (payment.status === 'completed') {
           result = 'confirmed';
