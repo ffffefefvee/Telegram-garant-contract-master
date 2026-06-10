@@ -1,5 +1,0 @@
-- main [ref=e4]:
-  - generic [ref=e6]:
-    - button "Назад" [ref=e7] [cursor=pointer]:
-      - img [ref=e8]
-    - heading "Загрузка…" [level=1] [ref=e10]

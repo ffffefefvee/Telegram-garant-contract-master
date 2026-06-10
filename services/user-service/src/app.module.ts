@@ -163,7 +163,16 @@ synchronize: true,
             AdminProfile,
           ],
           migrations: [__dirname + '/../migrations/*{.ts,.js}'],
-          synchronize: configService.get('DB_SYNCHRONIZE', 'true') === 'true',
+          // synchronize lets TypeORM mutate the schema on boot. Convenient in
+          // dev, destructive in production (can drop/alter columns under
+          // load). Default ON only outside production; in production it must
+          // be explicitly opted into via DB_SYNCHRONIZE=true (use migrations
+          // + DB_MIGRATIONS_RUN=true instead).
+          synchronize:
+            configService.get(
+              'DB_SYNCHRONIZE',
+              configService.get('NODE_ENV') === 'production' ? 'false' : 'true',
+            ) === 'true',
           logging: configService.get('NODE_ENV') === 'development',
           migrationsRun: configService.get('DB_MIGRATIONS_RUN', 'false') === 'true',
           retryAttempts: 3,

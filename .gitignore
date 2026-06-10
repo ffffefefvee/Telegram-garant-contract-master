@@ -46,3 +46,7 @@ contracts/coverage.json
 $null
 *.ts.tmp
 build_output*.txt
+
+# Local screenshots / playwright artifacts
+/*.png
+.playwright-mcp/

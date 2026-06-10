@@ -6,8 +6,11 @@ import {
   HttpCode,
   HttpStatus,
   Logger,
+  Req,
   UseGuards,
 } from '@nestjs/common';
+import { RawBodyRequest } from '@nestjs/common';
+import { Request } from 'express';
 import { WebhookRateLimitGuard } from './webhook-rate-limit.guard';
 import { CryptomusService, CryptomusWebhookPayload } from './cryptomus.service';
 import { PaymentWebhookService } from './payment-webhook.service';
@@ -41,12 +44,17 @@ export class CryptomusWebhookController {
   async handleWebhook(
     @Body() payload: CryptomusWebhookPayload,
     @Headers('sign') signature: string,
+    @Req() req: RawBodyRequest<Request>,
   ): Promise<{ state: number; processed?: object }> {
     this.logger.log(
       `Webhook received: order=${payload?.order_id} status=${payload?.status}`,
     );
 
-    const isValid = await this.cryptomusService.handleWebhook(payload, signature);
+    const isValid = await this.cryptomusService.handleWebhook(
+      payload,
+      signature,
+      req.rawBody,
+    );
     if (!isValid) {
       this.logger.error(`Invalid webhook signature for order=${payload?.order_id}`);
       // state=1 tells Cryptomus we did NOT accept the call. They retry.

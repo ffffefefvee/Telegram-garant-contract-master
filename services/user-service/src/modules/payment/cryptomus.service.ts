@@ -37,6 +37,8 @@ export interface CryptomusWebhookPayload {
   network: string;
   payer_amount: string;
   payer_currency: string;
+  /** Cryptomus includes the signature inside the body as well. */
+  sign?: string;
 }
 
 @Injectable()
@@ -135,9 +137,20 @@ export class CryptomusService {
   async handleWebhook(
     payload: CryptomusWebhookPayload,
     signature: string,
+    rawBody?: Buffer | string,
   ): Promise<boolean> {
+    // Fail closed: with no API key configured an attacker could forge a
+    // valid signature for md5(base64(body) + ''). Never accept webhooks
+    // until CRYPTOMUS_API_KEY is set.
+    if (!this.apiKey) {
+      this.logger.error(
+        'CRYPTOMUS_API_KEY is not configured — rejecting webhook (fail closed)',
+      );
+      return false;
+    }
+
     // Верификация подписи
-    if (!this.verifySignature(payload, signature)) {
+    if (!this.verifySignature(payload, signature, rawBody)) {
       this.logger.error('Invalid webhook signature');
       return false;
     }
@@ -149,19 +162,59 @@ export class CryptomusService {
   }
 
   /**
-   * Верификация подписи Webhook
+   * Верификация подписи Webhook.
+   *
+   * Cryptomus signs md5(base64(json_body_without_sign) + apiKey). The
+   * signature arrives in the `sign` header and/or inside the body. We accept
+   * either source, always strip `sign` from the payload before hashing, and
+   * compare in constant time.
    */
   private verifySignature(
     payload: CryptomusWebhookPayload,
     signature: string,
+    rawBody?: Buffer | string,
   ): boolean {
-    const payloadString = Buffer.from(JSON.stringify(payload)).toString('base64');
-    const expectedSignature = crypto
-      .createHash('md5')
-      .update(payloadString + this.apiKey)
-      .digest('hex');
+    const provided = signature || payload?.sign || '';
+    if (!provided) return false;
 
-    return expectedSignature === signature;
+    const { sign: _sign, ...unsigned } = payload ?? ({} as CryptomusWebhookPayload);
+
+    // Candidate canonical bodies. Cryptomus (PHP) signs json_encode() output
+    // with escaped slashes ("\/"), which differs from JSON.stringify. We try:
+    // 1) the raw request body with the "sign" field stripped (closest to the
+    //    exact bytes Cryptomus hashed), 2) JSON.stringify, 3) JSON.stringify
+    //    with PHP-style escaped slashes.
+    const candidates = new Set<string>();
+    if (rawBody) {
+      const raw = Buffer.isBuffer(rawBody) ? rawBody.toString('utf8') : rawBody;
+      try {
+        // Re-stringify from the raw body: preserves the original key order
+        // (which ValidationPipe/whitelisting may have changed on `payload`).
+        const parsed = JSON.parse(raw);
+        if (parsed && typeof parsed === 'object') {
+          delete parsed.sign;
+          const s = JSON.stringify(parsed);
+          candidates.add(s);
+          candidates.add(s.replace(/\//g, '\\/'));
+        }
+      } catch {
+        /* fall through to payload-based candidates */
+      }
+    }
+    const stringified = JSON.stringify(unsigned);
+    candidates.add(stringified);
+    candidates.add(stringified.replace(/\//g, '\\/'));
+
+    const b = Buffer.from(provided);
+    for (const body of candidates) {
+      const expected = crypto
+        .createHash('md5')
+        .update(Buffer.from(body).toString('base64') + this.apiKey)
+        .digest('hex');
+      const a = Buffer.from(expected);
+      if (a.length === b.length && crypto.timingSafeEqual(a, b)) return true;
+    }
+    return false;
   }
 
   /**
