@@ -48,7 +48,7 @@ export class CreatePaymentDto {
    * 'crypto' (direct USDT transfer to the deal's escrow address on Polygon).
    */
   @IsOptional()
-  @IsIn([PaymentMethod.CRYPTOMUS, PaymentMethod.CRYPTO])
+  @IsIn([PaymentMethod.CRYPTOMUS, PaymentMethod.CRYPTO, PaymentMethod.CRYPTO_TON])
   method?: PaymentMethod;
 }
 

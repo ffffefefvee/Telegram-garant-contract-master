@@ -93,10 +93,12 @@ export interface Payment {
 
 /** Payment rail descriptor from GET /payments/methods. */
 export interface PaymentMethodInfo {
-  method: 'cryptomus' | 'crypto';
+  method: 'cryptomus' | 'crypto' | 'crypto_ton';
   label: string;
   available: boolean;
   kind: 'hosted' | 'direct';
+  /** Network the buyer pays on (direct rails): 'polygon' | 'ton'. */
+  network?: string;
 }
 
 /** Response of POST /payments. */
@@ -104,12 +106,14 @@ export interface CreatePaymentResponse {
   payment: Payment;
   /** Hosted checkout URL (Cryptomus). */
   paymentUrl?: string;
-  /** Direct on-chain deposit details (direct USDT rail). */
+  /** Direct on-chain deposit details (direct USDT / TON rails). */
   deposit?: {
     address: string;
     network: string;
     asset: string;
     requiredAmount: string;
+    /** Transfer comment the buyer MUST attach (TON rail). */
+    memo?: string;
   };
   expiresAt?: string;
 }

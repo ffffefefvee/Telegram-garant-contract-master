@@ -26,6 +26,7 @@ import {
 export class CryptomusRail implements PaymentRail {
   readonly method = PaymentMethod.CRYPTOMUS;
   readonly label = 'Cryptomus (карта/крипта)';
+  readonly kind = 'hosted' as const;
 
   private readonly logger = new Logger(CryptomusRail.name);
   private readonly backendUrl: string;

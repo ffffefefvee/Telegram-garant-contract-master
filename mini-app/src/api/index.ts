@@ -367,7 +367,7 @@ export const paymentsApi = {
     currency?: string;
     description?: string;
     /** 'cryptomus' (hosted, default) | 'crypto' (direct USDT to escrow). */
-    method?: 'cryptomus' | 'crypto';
+    method?: 'cryptomus' | 'crypto' | 'crypto_ton';
   }): Promise<CreatePaymentResponse> => {
     try {
       return await api.post<CreatePaymentResponse>('/payments', data);
@@ -390,7 +390,7 @@ export const paymentsApi = {
           currency: data.currency ?? 'USDT',
           status: 'pending' as const,
           paymentUrl:
-            data.method === 'crypto' ? undefined : 'https://pay.cryptomus.com/mock',
+            data.method === 'cryptomus' ? 'https://pay.cryptomus.com/mock' : undefined,
           createdAt: new Date().toISOString(),
         };
         return {
@@ -404,7 +404,15 @@ export const paymentsApi = {
                   asset: 'USDT',
                   requiredAmount: String(data.amount),
                 }
-              : undefined,
+              : data.method === 'crypto_ton'
+                ? {
+                    address: 'EQCxE6mUtQJKFnGfaROTKOt1lZbDiiX1kCixRv7Nw2Id_sDs',
+                    network: 'ton',
+                    asset: 'USDT',
+                    requiredAmount: String(data.amount),
+                    memo: 'TG-MOCK1234',
+                  }
+                : undefined,
         };
       }
       throw new Error('Failed to create payment');
