@@ -1,0 +1,169 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master, develop]
+  pull_request:
+    branches: [main, master, develop]
+
+jobs:
+  user-service:
+    name: user-service build & test
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: services/user-service
+
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_USER: garant_user
+          POSTGRES_PASSWORD: garant_pass
+          POSTGRES_DB: garant_db_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+      redis:
+        image: redis:7-alpine
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: services/user-service/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint
+        run: npm run lint -- --max-warnings=0
+
+      - name: Build
+        run: npm run build
+        env:
+          NODE_ENV: test
+
+      - name: Unit tests
+        run: npm test -- --passWithNoTests --forceExit
+        env:
+          NODE_ENV: test
+          DB_HOST: localhost
+          DB_PORT: 5432
+          DB_USERNAME: garant_user
+          DB_PASSWORD: garant_pass
+          DB_NAME: garant_db_test
+          DB_USE_SQLITE: false
+          REDIS_HOST: localhost
+          REDIS_PORT: 6379
+          JWT_SECRET: test-jwt-secret-for-ci-only
+          TELEGRAM_BOT_TOKEN: 0:test_token_ci
+          AUTH_DEV_MODE: true
+
+  mini-app:
+    name: mini-app build
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: mini-app
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: mini-app/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Typecheck
+        run: npm run typecheck
+
+      - name: Build
+        run: npm run build
+        env:
+          VITE_API_URL: http://localhost:3001/api
+
+  contracts:
+    name: contracts compile & test
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: contracts
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: contracts/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Lint (solhint)
+        run: npx solhint --max-warnings 0 'contracts/**/*.sol'
+
+      - name: Compile & test
+        run: npm run compile && npm test
+
+      # PRODUCT_PLAN §12 (Spr 1): contracts must stay ≥90% covered.
+      - name: Coverage gate (≥90%)
+        run: npm run coverage:check
+
+  slither:
+    name: contracts static analysis (Slither)
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: contracts
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: contracts/package-lock.json
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Compile
+        run: npx hardhat compile
+
+      - name: Install Slither
+        run: pip install slither-analyzer
+
+      # Medium+High severity only; benign findings are triaged inline with
+      # `slither-disable-next-line` comments next to the code they refer to.
+      - name: Run Slither
+        run: >
+          slither . --hardhat-ignore-compile --exclude-dependencies
+          --exclude-informational --exclude-low
+          --filter-paths "mocks|node_modules"
