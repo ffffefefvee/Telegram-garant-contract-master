@@ -93,7 +93,7 @@ export interface Payment {
 
 /** Payment rail descriptor from GET /payments/methods. */
 export interface PaymentMethodInfo {
-  method: 'cryptomus' | 'crypto' | 'crypto_ton';
+  method: 'cryptomus' | 'crypto' | 'crypto_ton' | 'crypto_toncoin';
   label: string;
   available: boolean;
   kind: 'hosted' | 'direct';
@@ -116,6 +116,10 @@ export interface CreatePaymentResponse {
     memo?: string;
     /** Jetton master contract for token deeplinks (TON rail). */
     jettonMaster?: string;
+    /** Locked TON/USD rate (Toncoin rail) — for display. */
+    lockedRate?: number;
+    /** USDT value of the required amount at the locked rate (Toncoin rail). */
+    usdtEquivalent?: number;
   };
   expiresAt?: string;
 }

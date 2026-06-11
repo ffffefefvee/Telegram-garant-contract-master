@@ -398,6 +398,57 @@ describe('TonApiService parsing', () => {
     expect(result.lastTxHash).toBe('evt-52500000-TG-AAAA2222');
   });
 
+  it('extracts native TON transfers alongside jetton transfers', () => {
+    const service = new TonApiService(config);
+    const walletRaw = TonApiService.friendlyToRaw(TON_WALLET)!;
+    const otherRaw = '0:' + 'f'.repeat(64);
+
+    const transfers = service.extractIncomingTransfers([
+      {
+        event_id: 'evt-mixed',
+        timestamp: 1,
+        actions: [
+          {
+            type: 'TonTransfer',
+            status: 'ok',
+            TonTransfer: {
+              sender: { address: otherRaw },
+              recipient: { address: walletRaw },
+              amount: 20500000000, // tonapi serializes int64 as a number
+              comment: ' TG-NATIVE01 ',
+            },
+          },
+          {
+            type: 'TonTransfer',
+            status: 'ok',
+            TonTransfer: {
+              recipient: { address: otherRaw }, // someone else's wallet
+              amount: 1,
+            },
+          },
+          {
+            type: 'JettonTransfer',
+            status: 'ok',
+            JettonTransfer: {
+              recipient: { address: walletRaw },
+              amount: '1000000',
+              comment: 'TG-AAAA2222',
+              jetton: { address: walletRaw },
+            },
+          },
+        ],
+      },
+    ]);
+
+    expect(transfers).toHaveLength(2);
+    expect(transfers[0]).toMatchObject({
+      asset: 'TON',
+      amountUnits: 20500000000n,
+      comment: 'TG-NATIVE01',
+    });
+    expect(transfers[1]).toMatchObject({ asset: 'USDT' });
+  });
+
   it('ignores transfers to other recipients or other jettons', () => {
     const service = new TonApiService(config);
     const walletRaw = TonApiService.friendlyToRaw(TON_WALLET)!;

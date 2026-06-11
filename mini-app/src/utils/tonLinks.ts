@@ -16,6 +16,9 @@
 
 export const TON_USDT_DECIMALS = 6;
 
+/** Native Toncoin uses 9 decimals (nanotons). */
+export const TON_DECIMALS = 9;
+
 /**
  * Convert a human-readable decimal amount ("105.5") into raw jetton units
  * ("105500000") without floating-point errors. Throws on malformed input —
@@ -39,21 +42,28 @@ export function decimalToUnits(amount: string, decimals = TON_USDT_DECIMALS): st
 export interface TonTransferParams {
   /** Platform TON wallet (friendly EQ…/UQ… form). */
   address: string;
-  /** Human-readable USDT amount, e.g. "105.5". */
+  /** Human-readable amount, e.g. "105.5" (USDT) or "20.1234" (TON). */
   requiredAmount: string;
   /** Mandatory transfer comment (deal memo, e.g. "TG-7K2M9QX4"). */
   memo: string;
-  /** USDT jetton master contract. */
-  jettonMaster: string;
+  /**
+   * USDT jetton master contract. Omit for NATIVE Toncoin transfers —
+   * then `amount` is interpreted in nanotons (9 dp).
+   */
+  jettonMaster?: string;
 }
 
 function buildQuery(p: TonTransferParams): string {
-  const units = decimalToUnits(p.requiredAmount);
-  const params = new URLSearchParams({
-    jetton: p.jettonMaster,
-    amount: units,
-    text: p.memo,
-  });
+  const isJetton = !!p.jettonMaster;
+  const units = decimalToUnits(
+    p.requiredAmount,
+    isJetton ? TON_USDT_DECIMALS : TON_DECIMALS,
+  );
+  const params = new URLSearchParams(
+    isJetton
+      ? { jetton: p.jettonMaster as string, amount: units, text: p.memo }
+      : { amount: units, text: p.memo },
+  );
   return params.toString();
 }
 

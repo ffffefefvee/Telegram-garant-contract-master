@@ -20,6 +20,7 @@ import { CryptomusRail } from './rails/cryptomus.rail';
 import { DirectUsdtRail } from './rails/direct-usdt.rail';
 import { TonApiService } from './rails/ton-api.service';
 import { TonUsdtRail } from './rails/ton-usdt.rail';
+import { ToncoinRail } from './rails/toncoin.rail';
 import { TonUnmatchedScanner } from './rails/ton-unmatched.scanner';
 import { TonRecoveryService } from './rails/ton-recovery.service';
 import { TonUnmatchedDeposit } from './entities/ton-unmatched-deposit.entity';
@@ -52,6 +53,7 @@ import { DirectDepositWatcher } from './direct-deposit.watcher';
     DirectUsdtRail,
     TonApiService,
     TonUsdtRail,
+    ToncoinRail,
     RailRegistryService,
     DirectDepositWatcher,
     TonUnmatchedScanner,

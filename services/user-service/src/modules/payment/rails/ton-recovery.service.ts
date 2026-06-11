@@ -73,9 +73,17 @@ export class TonRecoveryService {
     if (!payment) {
       throw new NotFoundException(`Payment not found: ${paymentId}`);
     }
-    if (payment.paymentMethod !== PaymentMethod.CRYPTO_TON) {
+    // The deposit's units must be the units the payment's rail counts:
+    // USDT jetton units (6 dp) for the USDT-TON rail, nanotons for the
+    // Toncoin rail. Crediting across assets would corrupt amounts.
+    const expectedMethod =
+      deposit.asset === 'TON'
+        ? PaymentMethod.CRYPTO_TONCOIN
+        : PaymentMethod.CRYPTO_TON;
+    if (payment.paymentMethod !== expectedMethod) {
       throw new BadRequestException(
-        'Manual TON matching is only valid for TON-rail payments',
+        `A ${deposit.asset} deposit can only be matched to a ` +
+          `${expectedMethod} payment (got ${payment.paymentMethod})`,
       );
     }
     if (

@@ -12,6 +12,7 @@ function makeDeposit(
 ): TonUnmatchedDeposit {
   return {
     id: 'dep-1',
+    asset: 'USDT',
     eventId: 'event-1',
     actionIndex: 0,
     txTimestamp: 0,
@@ -131,6 +132,32 @@ describe('TonRecoveryService', () => {
       await expect(service.match('dep-1', 'pay-1', 'admin-1')).rejects.toThrow(
         BadRequestException,
       );
+    });
+
+    it('matches a native TON deposit to a Toncoin payment', async () => {
+      await setup();
+      unmatchedRepo.findOne.mockResolvedValue(
+        makeDeposit({ asset: 'TON', amountUnits: '20500000000' }),
+      );
+      paymentRepo.findOne.mockResolvedValue(
+        makePayment({ paymentMethod: PaymentMethod.CRYPTO_TONCOIN }),
+      );
+
+      await service.match('dep-1', 'pay-1', 'admin-1');
+
+      const savedPayment = paymentRepo.save.mock.calls[0][0] as Payment;
+      expect(savedPayment.metadata.manualCreditUnits).toBe('20500000000');
+    });
+
+    it('rejects crediting across assets (TON deposit → USDT payment)', async () => {
+      await setup();
+      unmatchedRepo.findOne.mockResolvedValue(makeDeposit({ asset: 'TON' }));
+      paymentRepo.findOne.mockResolvedValue(makePayment()); // CRYPTO_TON
+
+      await expect(service.match('dep-1', 'pay-1', 'admin-1')).rejects.toThrow(
+        BadRequestException,
+      );
+      expect(paymentRepo.save).not.toHaveBeenCalled();
     });
 
     it('rejects payments that cannot accept funds', async () => {

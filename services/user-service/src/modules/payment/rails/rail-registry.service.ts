@@ -4,6 +4,7 @@ import { PaymentRail } from './payment-rail.types';
 import { CryptomusRail } from './cryptomus.rail';
 import { DirectUsdtRail } from './direct-usdt.rail';
 import { TonUsdtRail } from './ton-usdt.rail';
+import { ToncoinRail } from './toncoin.rail';
 
 export interface RailDescriptor {
   method: PaymentMethod;
@@ -26,11 +27,13 @@ export class RailRegistryService {
     cryptomusRail: CryptomusRail,
     directUsdtRail: DirectUsdtRail,
     tonUsdtRail: TonUsdtRail,
+    toncoinRail: ToncoinRail,
   ) {
     this.rails = new Map<PaymentMethod, PaymentRail>([
       [cryptomusRail.method, cryptomusRail],
       [directUsdtRail.method, directUsdtRail],
       [tonUsdtRail.method, tonUsdtRail],
+      [toncoinRail.method, toncoinRail],
     ]);
   }
 
@@ -69,6 +72,7 @@ export class RailRegistryService {
       case PaymentMethod.CRYPTO:
         return 'polygon';
       case PaymentMethod.CRYPTO_TON:
+      case PaymentMethod.CRYPTO_TONCOIN:
         return 'ton';
       default:
         return undefined;

@@ -11,6 +11,12 @@ export const TON_USDT_JETTON_MAINNET =
 /** USDT-TON jetton uses 6 decimals (same as Polygon USDT). */
 export const TON_USDT_DECIMALS = 6;
 
+/** Native Toncoin uses 9 decimals (nanotons). */
+export const TON_DECIMALS = 9;
+
+/** How long a fetched TON/USD rate is served from cache. */
+const RATE_CACHE_TTL_MS = 60_000;
+
 export interface TonUsdtIncoming {
   /** Sum of all matching finalized transfers, in raw jetton units (6 dp). */
   receivedUnits: bigint;
@@ -18,8 +24,13 @@ export interface TonUsdtIncoming {
   lastTxHash?: string;
 }
 
-/** One finalized incoming USDT jetton transfer to the platform wallet. */
+/** Asset of an incoming transfer to the platform wallet. */
+export type TonIncomingAsset = 'USDT' | 'TON';
+
+/** One finalized incoming transfer (USDT jetton or native TON). */
 export interface TonIncomingTransfer {
+  /** What arrived: USDT jetton (6 dp units) or native TON (nanotons). */
+  asset: TonIncomingAsset;
   /** tonapi event id (proof-of-payment reference). */
   eventId: string;
   /** Index of the JettonTransfer action inside the event. */
@@ -28,7 +39,7 @@ export interface TonIncomingTransfer {
   timestamp: number;
   /** Sender address in raw `0:hex` form as reported by tonapi. */
   sender: string;
-  /** Amount in raw jetton units (6 dp). */
+  /** Amount in raw units: jetton units (6 dp) for USDT, nanotons for TON. */
   amountUnits: bigint;
   /** Transfer comment as sent (trimmed; empty string when absent). */
   comment: string;
@@ -43,6 +54,13 @@ interface TonapiJettonTransferAction {
     amount?: string;
     comment?: string;
     jetton?: { address?: string; decimals?: number; symbol?: string };
+  };
+  TonTransfer?: {
+    sender?: { address?: string };
+    recipient?: { address?: string };
+    /** Nanotons; tonapi serializes int64 as a JSON number. */
+    amount?: number | string;
+    comment?: string;
   };
 }
 
@@ -73,6 +91,9 @@ export class TonApiService {
   private readonly jettonRaw: string | null;
   private readonly baseUrl: string;
   private readonly apiKey: string;
+
+  private cachedRate: number | null = null;
+  private cachedRateAt = 0;
 
   constructor(private readonly config: ConfigService) {
     this.walletAddress = this.config.get<string>('TON_WALLET_ADDRESS', '');
@@ -121,12 +142,68 @@ export class TonApiService {
   }
 
   /**
-   * All finalized incoming USDT jetton transfers to the platform wallet
-   * since `sinceUnix`, regardless of comment. Used by the unmatched-deposit
-   * scanner — every transfer must be attributable, not only the ones whose
-   * memo we expect.
+   * Sum all finalized incoming NATIVE TON transfers to the platform wallet
+   * whose text comment equals `memo`, no older than `sinceUnix`.
+   * Returns nanotons.
    */
-  async listIncomingUsdtTransfers(
+  async findIncomingTonByMemo(
+    memo: string,
+    sinceUnix: number,
+  ): Promise<TonUsdtIncoming> {
+    if (!this.isEnabled()) {
+      return { receivedUnits: 0n };
+    }
+    const events = await this.fetchEvents(sinceUnix);
+    let receivedUnits = 0n;
+    let lastTxHash: string | undefined;
+    for (const transfer of this.extractIncomingTransfers(events)) {
+      if (transfer.asset !== 'TON' || transfer.comment !== memo) continue;
+      receivedUnits += transfer.amountUnits;
+      lastTxHash = transfer.eventId;
+    }
+    return { receivedUnits, lastTxHash };
+  }
+
+  /**
+   * Current TON price in USD from tonapi `/v2/rates` (cached 60s).
+   * Throws when the rate cannot be fetched/parsed — callers must treat a
+   * missing rate as "rail unavailable", never guess a price.
+   */
+  async getTonUsdRate(): Promise<number> {
+    const now = Date.now();
+    if (this.cachedRate !== null && now - this.cachedRateAt < RATE_CACHE_TTL_MS) {
+      return this.cachedRate;
+    }
+    const headers: Record<string, string> = { Accept: 'application/json' };
+    if (this.apiKey) headers['Authorization'] = `Bearer ${this.apiKey}`;
+    const response = await fetch(
+      `${this.baseUrl}/v2/rates?tokens=ton&currencies=usd`,
+      { headers },
+    );
+    if (!response.ok) {
+      throw new Error(
+        `tonapi rates request failed: ${response.status} ${response.statusText}`,
+      );
+    }
+    const body = (await response.json()) as {
+      rates?: Record<string, { prices?: Record<string, number> }>;
+    };
+    const rate = body.rates?.['TON']?.prices?.['USD'];
+    if (typeof rate !== 'number' || !isFinite(rate) || rate <= 0) {
+      throw new Error('tonapi rates response missing TON/USD price');
+    }
+    this.cachedRate = rate;
+    this.cachedRateAt = now;
+    return rate;
+  }
+
+  /**
+   * All finalized incoming transfers (USDT jetton AND native TON) to the
+   * platform wallet since `sinceUnix`, regardless of comment. Used by the
+   * unmatched-deposit scanner — every transfer must be attributable, not
+   * only the ones whose memo we expect.
+   */
+  async listIncomingTransfers(
     sinceUnix: number,
   ): Promise<TonIncomingTransfer[]> {
     if (!this.isEnabled()) {
@@ -160,7 +237,7 @@ export class TonApiService {
     let lastTxHash: string | undefined;
 
     for (const transfer of this.extractIncomingTransfers(events)) {
-      if (transfer.comment !== memo) continue;
+      if (transfer.asset !== 'USDT' || transfer.comment !== memo) continue;
       receivedUnits += transfer.amountUnits;
       lastTxHash = transfer.eventId;
     }
@@ -174,22 +251,50 @@ export class TonApiService {
     for (const event of events) {
       if (event.in_progress) continue; // not finalized yet
       (event.actions ?? []).forEach((action, actionIndex) => {
-        if (action.type !== 'JettonTransfer' || action.status !== 'ok') return;
-        const t = action.JettonTransfer;
-        if (!t?.amount || !t.recipient?.address || !t.jetton?.address) return;
-        if (!this.sameAddress(t.recipient.address, this.walletRaw)) return;
-        if (!this.sameAddress(t.jetton.address, this.jettonRaw)) return;
-        try {
-          transfers.push({
-            eventId: event.event_id,
-            actionIndex,
-            timestamp: event.timestamp,
-            sender: t.sender?.address ?? 'unknown',
-            amountUnits: BigInt(t.amount),
-            comment: (t.comment ?? '').trim(),
-          });
-        } catch {
-          this.logger.warn(`Unparseable jetton amount in event ${event.event_id}`);
+        if (action.status !== 'ok') return;
+
+        if (action.type === 'JettonTransfer') {
+          const t = action.JettonTransfer;
+          if (!t?.amount || !t.recipient?.address || !t.jetton?.address) return;
+          if (!this.sameAddress(t.recipient.address, this.walletRaw)) return;
+          if (!this.sameAddress(t.jetton.address, this.jettonRaw)) return;
+          try {
+            transfers.push({
+              asset: 'USDT',
+              eventId: event.event_id,
+              actionIndex,
+              timestamp: event.timestamp,
+              sender: t.sender?.address ?? 'unknown',
+              amountUnits: BigInt(t.amount),
+              comment: (t.comment ?? '').trim(),
+            });
+          } catch {
+            this.logger.warn(
+              `Unparseable jetton amount in event ${event.event_id}`,
+            );
+          }
+          return;
+        }
+
+        if (action.type === 'TonTransfer') {
+          const t = action.TonTransfer;
+          if (t?.amount == null || !t.recipient?.address) return;
+          if (!this.sameAddress(t.recipient.address, this.walletRaw)) return;
+          try {
+            transfers.push({
+              asset: 'TON',
+              eventId: event.event_id,
+              actionIndex,
+              timestamp: event.timestamp,
+              sender: t.sender?.address ?? 'unknown',
+              amountUnits: BigInt(String(t.amount)),
+              comment: (t.comment ?? '').trim(),
+            });
+          } catch {
+            this.logger.warn(
+              `Unparseable TON amount in event ${event.event_id}`,
+            );
+          }
         }
       });
     }
