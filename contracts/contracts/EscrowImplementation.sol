@@ -70,6 +70,7 @@ contract EscrowImplementation is Initializable, ReentrancyGuard {
     event Released(address indexed seller, uint256 sellerPayout, uint256 toTreasury);
     event Refunded(address indexed buyer, uint256 amount);
     event Disputed(address indexed by);
+    event FundingDeadlineExtended(uint64 previousDeadline, uint64 newDeadline);
     event ArbitratorAssigned(address indexed arbitrator);
     event Resolved(
         address indexed arbitrator,
@@ -94,6 +95,7 @@ contract EscrowImplementation is Initializable, ReentrancyGuard {
     error FundingDeadlinePassed();
     error FundingDeadlineNotPassed();
     error NothingToRescue();
+    error InvalidNewDeadline();
 
     modifier onlyBuyer() {
         if (msg.sender != buyer) revert NotBuyer();
@@ -178,6 +180,26 @@ contract EscrowImplementation is Initializable, ReentrancyGuard {
         if (got < expected) revert InsufficientFunding(expected, got);
         status = Status.FUNDED;
         emit Funded(got);
+    }
+
+    /// @notice Платформа (relay) продлевает funding deadline — спасение «поздних» депозитов:
+    ///         деньги покупателя пришли после дедлайна, но эскроу ещё никто не отменил/не
+    ///         пометил EXPIRED. Продление → штатный путь notifyFunded() вместо ручного возврата.
+    /// @dev Работает ТОЛЬКО пока эскроу в AWAITING_FUNDING (даже если дедлайн уже прошёл).
+    ///      После cancel()/expire() продление невозможно — покупатель уже вправе забрать
+    ///      средства через rescue(), менять это задним числом нельзя. Сократить дедлайн
+    ///      нельзя тоже: это могло бы отрезать уже платящего покупателя.
+    function extendFundingDeadline(uint64 newDeadline)
+        external
+        onlyRelay
+        inStatus(Status.AWAITING_FUNDING)
+    {
+        if (newDeadline <= fundingDeadline || newDeadline <= block.timestamp) {
+            revert InvalidNewDeadline();
+        }
+        uint64 previous = fundingDeadline;
+        fundingDeadline = newDeadline;
+        emit FundingDeadlineExtended(previous, newDeadline);
     }
 
     /// @notice Отменить сделку до funding'а (любая сторона) или после deadline.

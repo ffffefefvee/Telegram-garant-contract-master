@@ -126,6 +126,21 @@ export class RelayService {
   }
 
   /**
+   * Extend the funding deadline of an AWAITING_FUNDING escrow (relay-only
+   * on-chain). Admin recovery for late deposits: extend → the standard
+   * matching/funding path completes instead of a manual refund.
+   */
+  async extendFundingDeadline(
+    escrowAddress: string,
+    newDeadlineUnix: number,
+  ): Promise<string> {
+    if (!this.provider.isReady) {
+      throw new Error('Blockchain not ready');
+    }
+    return this.escrow.extendFundingDeadline(escrowAddress, newDeadlineUnix);
+  }
+
+  /**
    * Returns true when the escrow exists on-chain and is in any FUNDED-or-later status.
    */
   isFundedOrLater(snapshot: EscrowSnapshot): boolean {

@@ -25,6 +25,7 @@ import { TonUnmatchedScanner } from './rails/ton-unmatched.scanner';
 import { TonRecoveryService } from './rails/ton-recovery.service';
 import { TonUnmatchedDeposit } from './entities/ton-unmatched-deposit.entity';
 import { RailRegistryService } from './rails/rail-registry.service';
+import { EscrowDeadlineService } from './escrow-deadline.service';
 import { DirectDepositWatcher } from './direct-deposit.watcher';
 
 @Module({
@@ -58,6 +59,7 @@ import { DirectDepositWatcher } from './direct-deposit.watcher';
     DirectDepositWatcher,
     TonUnmatchedScanner,
     TonRecoveryService,
+    EscrowDeadlineService,
   ],
   exports: [
     PaymentService,
@@ -66,6 +68,7 @@ import { DirectDepositWatcher } from './direct-deposit.watcher';
     CommissionConfigService,
     RailRegistryService,
     TonRecoveryService,
+    EscrowDeadlineService,
     TypeOrmModule,
   ],
 })

@@ -16,6 +16,7 @@ import { RolesGuard } from './guards/roles.guard';
 import { AdminService } from './admin.service';
 import { PaymentService } from '../payment/payment.service';
 import { TonRecoveryService } from '../payment/rails/ton-recovery.service';
+import { EscrowDeadlineService } from '../payment/escrow-deadline.service';
 import type { UnmatchedDepositStatus } from '../payment/entities/ton-unmatched-deposit.entity';
 
 @Controller('admin/payments')
@@ -25,6 +26,7 @@ export class AdminPaymentController {
     private readonly paymentService: PaymentService,
     private readonly adminService: AdminService,
     private readonly tonRecovery: TonRecoveryService,
+    private readonly escrowDeadline: EscrowDeadlineService,
   ) {}
 
   @Get('stats/summary')
@@ -94,6 +96,36 @@ export class AdminPaymentController {
       description: `TON-депозит ${id} помечен ignored. Причина: ${reason}`,
     });
     return deposit;
+  }
+
+  /**
+   * Extend the on-chain funding deadline of a payment's escrow so a LATE
+   * deposit can settle through the standard path instead of a manual refund.
+   */
+  @Post(':id/extend-deadline')
+  @Roles(Role.ADMIN, Role.SUPER_ADMIN)
+  async extendEscrowDeadline(
+    @Param('id') id: string,
+    @Body('hours') hours: number,
+    @Body('extendRateLock') extendRateLock: boolean | undefined,
+    @Body('note') note: string | undefined,
+    @Req() req: any,
+  ) {
+    const result = await this.escrowDeadline.extend(id, Number(hours), req.user?.id, {
+      extendRateLock: extendRateLock === true,
+      note,
+    });
+    await this.adminService.logAction({
+      adminId: req.user?.id,
+      action: 'ESCROW_DEADLINE_EXTEND',
+      targetId: id,
+      description:
+        `Продление funding-дедлайна эскроу ${result.escrowAddress}: ` +
+        `${result.previousDeadlineUnix} → ${result.newDeadlineUnix} (tx ${result.txHash})` +
+        (result.rateLockExtended ? ', rate-lock продлён по зафиксированному курсу' : '') +
+        (note ? `. Заметка: ${note}` : ''),
+    });
+    return result;
   }
 
   @Get(':id')
