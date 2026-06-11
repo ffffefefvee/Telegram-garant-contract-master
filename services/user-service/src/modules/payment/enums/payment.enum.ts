@@ -65,6 +65,9 @@ export enum PaymentMethod {
 
   /** USDT в сети TON (через @wallet и любые TON-кошельки) */
   CRYPTO_TON = 'crypto_ton',
+
+  /** Нативный Toncoin с конвертацией по зафиксированному курсу */
+  CRYPTO_TONCOIN = 'crypto_toncoin',
   
   /** Внутренний баланс */
   BALANCE = 'balance',

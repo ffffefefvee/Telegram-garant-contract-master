@@ -128,7 +128,9 @@ export const DealChatPage: React.FC = () => {
     }
   };
 
-  const handleSelectMethod = async (method: 'cryptomus' | 'crypto' | 'crypto_ton') => {
+  const handleSelectMethod = async (
+    method: 'cryptomus' | 'crypto' | 'crypto_ton' | 'crypto_toncoin',
+  ) => {
     if (!deal) return;
     setActionError(null);
     setActionLoading(true);
@@ -140,7 +142,7 @@ export const DealChatPage: React.FC = () => {
         method,
         description: `Оплата сделки #${deal.dealNumber}`,
       });
-      if (method === 'crypto' || method === 'crypto_ton') {
+      if (method === 'crypto' || method === 'crypto_ton' || method === 'crypto_toncoin') {
         if (!result.deposit) {
           setActionError('Не удалось получить адрес для перевода');
           return;
@@ -167,13 +169,17 @@ export const DealChatPage: React.FC = () => {
   };
 
   /**
-   * One-tap payment links for the TON rail: recipient, USDT jetton, amount
-   * and the mandatory memo are prefilled — the buyer only confirms.
-   * Null when not a TON deposit or when link building fails (then the
-   * copy-paste flow below remains the only path).
+   * One-tap payment links for the TON rails: recipient, asset (USDT jetton
+   * or native Toncoin), amount and the mandatory memo are prefilled — the
+   * buyer only confirms. Null when not a TON deposit or when link building
+   * fails (then the copy-paste flow below remains the only path).
    */
   const tonLinks = React.useMemo(() => {
-    if (!deposit || deposit.network !== 'ton' || !deposit.memo || !deposit.jettonMaster) {
+    if (!deposit || deposit.network !== 'ton' || !deposit.memo) {
+      return null;
+    }
+    // USDT rail carries a jetton master; the Toncoin rail sends native TON.
+    if (deposit.asset !== 'TON' && !deposit.jettonMaster) {
       return null;
     }
     try {
@@ -181,7 +187,7 @@ export const DealChatPage: React.FC = () => {
         address: deposit.address,
         requiredAmount: deposit.requiredAmount,
         memo: deposit.memo,
-        jettonMaster: deposit.jettonMaster,
+        jettonMaster: deposit.asset === 'TON' ? undefined : deposit.jettonMaster,
       };
       return {
         deeplink: buildTonDeeplink(params),
@@ -599,9 +605,11 @@ export const DealChatPage: React.FC = () => {
                     >
                       {m.method === 'crypto_ton'
                         ? 'USDT через @wallet (TON)'
-                        : m.kind === 'direct'
-                          ? 'Перевести USDT напрямую (Polygon)'
-                          : 'Оплатить через Cryptomus'}
+                        : m.method === 'crypto_toncoin'
+                          ? 'Toncoin через @wallet (TON)'
+                          : m.kind === 'direct'
+                            ? 'Перевести USDT напрямую (Polygon)'
+                            : 'Оплатить через Cryptomus'}
                     </Button>
                   ),
                 )}
@@ -636,8 +644,9 @@ export const DealChatPage: React.FC = () => {
           <p className="deal-new-hint" style={{ marginTop: 12 }}>
             Cryptomus — оплата картой или криптовалютой через платёжную страницу.
             Прямой перевод — USDT в сети Polygon с любого кошелька или биржи сразу
-            на адрес смарт-контракта сделки. TON — USDT из кошелька @wallet прямо
-            в Telegram (укажите код сделки в комментарии к переводу).
+            на адрес смарт-контракта сделки. TON — USDT или Toncoin из кошелька
+            @wallet прямо в Telegram (укажите код сделки в комментарии к переводу);
+            для Toncoin курс фиксируется на 30 минут.
           </p>
         )}
         {payStep === 'hosted' && (
@@ -651,6 +660,12 @@ export const DealChatPage: React.FC = () => {
               Отправьте <strong>ровно {deposit.requiredAmount} {deposit.asset}</strong> (сумма сделки +
               комиссия покупателя) на {deposit.network === 'ton' ? 'TON-адрес платформы' : 'адрес смарт-контракта'}:
             </p>
+            {deposit.lockedRate != null && (
+              <p className="deal-new-hint" style={{ marginBottom: 8 }}>
+                ≈ {deposit.usdtEquivalent ?? '—'} USDT по курсу {deposit.lockedRate} $/TON.
+                Курс зафиксирован на 30 минут — после истечения создайте платёж заново.
+              </p>
+            )}
             {tonLinks && (
               <>
                 <Button variant="primary" fullWidth onClick={handleOpenTonWallet}>
@@ -740,8 +755,9 @@ export const DealChatPage: React.FC = () => {
             )}
             {deposit.network === 'ton' ? (
               <p className="deal-new-hint" style={{ marginTop: 12 }}>
-                ⚠️ Только <strong>USDT</strong> в сети <strong>TON</strong> и обязательно
-                с комментарием выше. В @wallet: Отправить → вставьте адрес → выберите USDT →
+                ⚠️ Только <strong>{deposit.asset === 'TON' ? 'Toncoin (TON)' : 'USDT'}</strong> в
+                сети <strong>TON</strong> и обязательно с комментарием выше. В @wallet:
+                Отправить → вставьте адрес → выберите {deposit.asset === 'TON' ? 'TON' : 'USDT'} →
                 сумма → добавьте комментарий. Эскроу на Polygon будет профинансирован
                 автоматически в течение 1–2 минут после поступления.
               </p>

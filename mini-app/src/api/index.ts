@@ -366,8 +366,8 @@ export const paymentsApi = {
     amount: number;
     currency?: string;
     description?: string;
-    /** 'cryptomus' (hosted, default) | 'crypto' (direct USDT to escrow). */
-    method?: 'cryptomus' | 'crypto' | 'crypto_ton';
+    /** 'cryptomus' (hosted, default) | 'crypto' | 'crypto_ton' | 'crypto_toncoin'. */
+    method?: 'cryptomus' | 'crypto' | 'crypto_ton' | 'crypto_toncoin';
   }): Promise<CreatePaymentResponse> => {
     try {
       return await api.post<CreatePaymentResponse>('/payments', data);
@@ -413,7 +413,17 @@ export const paymentsApi = {
                     memo: 'TG-MOCK1234',
                     jettonMaster: 'EQCxE6mUtQJKFnGfaROTKOt1lZbDiiX1kCixRv7Nw2Id_sDs',
                   }
-                : undefined,
+                : data.method === 'crypto_toncoin'
+                  ? {
+                      address: 'EQCxE6mUtQJKFnGfaROTKOt1lZbDiiX1kCixRv7Nw2Id_sDs',
+                      network: 'ton',
+                      asset: 'TON',
+                      requiredAmount: '20.1234',
+                      memo: 'TG-MOCK1234',
+                      lockedRate: 5.25,
+                      usdtEquivalent: data.amount,
+                    }
+                  : undefined,
         };
       }
       throw new Error('Failed to create payment');

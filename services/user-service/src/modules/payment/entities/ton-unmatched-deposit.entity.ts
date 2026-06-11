@@ -19,8 +19,8 @@ import {
 export type UnmatchedDepositStatus = 'unmatched' | 'matched' | 'ignored';
 
 /**
- * Ledger of incoming USDT-TON transfers to the platform wallet that the
- * watcher could NOT attribute to any payment. For an escrow service this
+ * Ledger of incoming transfers (USDT jetton or native TON) to the platform
+ * wallet that the watcher could NOT attribute to any payment. For an escrow service this
  * is real customer money in limbo — it must never be silently dropped.
  *
  * Rows are written by `TonUnmatchedScanner` (idempotent by
@@ -38,9 +38,13 @@ export class TonUnmatchedDeposit {
   @Column({ type: 'varchar', length: 100 })
   eventId: string;
 
-  /** Index of the JettonTransfer action inside the event. */
+  /** Index of the transfer action inside the event. */
   @Column({ type: 'int', default: 0 })
   actionIndex: number;
+
+  /** What arrived: 'USDT' (jetton, 6 dp units) or 'TON' (nanotons). */
+  @Column({ type: 'varchar', length: 8, default: 'USDT' })
+  asset: 'USDT' | 'TON';
 
   /** On-chain timestamp of the transfer (unix seconds). */
   @Column({ type: 'bigint' })
@@ -50,7 +54,7 @@ export class TonUnmatchedDeposit {
   @Column({ type: 'varchar', length: 100 })
   senderAddress: string;
 
-  /** Amount in raw jetton units (6 dp), stored as string — bigint-safe. */
+  /** Amount in raw units of `asset`, stored as string — bigint-safe. */
   @Column({ type: 'varchar', length: 40 })
   amountUnits: string;
 

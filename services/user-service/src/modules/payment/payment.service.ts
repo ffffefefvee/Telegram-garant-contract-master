@@ -24,6 +24,10 @@ export interface CreatedPaymentResult {
     memo?: string;
     /** Jetton master contract for token deeplinks (TON rail). */
     jettonMaster?: string;
+    /** Locked TON/USD rate (Toncoin rail) — for UI display. */
+    lockedRate?: number;
+    /** USDT value of the required amount at the locked rate (Toncoin rail). */
+    usdtEquivalent?: number;
   };
   expiresAt: Date;
 }
@@ -65,7 +69,9 @@ export class PaymentService {
     const method = options?.method ?? PaymentMethod.CRYPTOMUS;
     const rail = this.rails.get(method);
     const isDirectCrypto =
-      method === PaymentMethod.CRYPTO || method === PaymentMethod.CRYPTO_TON;
+      method === PaymentMethod.CRYPTO ||
+      method === PaymentMethod.CRYPTO_TON ||
+      method === PaymentMethod.CRYPTO_TONCOIN;
     const currency = options?.currency || (isDirectCrypto ? 'USDT' : 'USD');
     const orderId = `DEAL_${dealId}_${Date.now()}`;
 
@@ -175,7 +181,8 @@ export class PaymentService {
     }
     const isDirect =
       payment.paymentMethod === PaymentMethod.CRYPTO ||
-      payment.paymentMethod === PaymentMethod.CRYPTO_TON;
+      payment.paymentMethod === PaymentMethod.CRYPTO_TON ||
+      payment.paymentMethod === PaymentMethod.CRYPTO_TONCOIN;
     if (isDirect && payment.walletAddress) {
       result.deposit = {
         address: payment.walletAddress,
@@ -192,6 +199,13 @@ export class PaymentService {
       const jettonMaster = payment.metadata?.jettonMaster as string | undefined;
       if (jettonMaster) {
         result.deposit.jettonMaster = jettonMaster;
+      }
+      const lockedRate = payment.metadata?.lockedRate as number | undefined;
+      if (lockedRate) {
+        result.deposit.lockedRate = lockedRate;
+        result.deposit.usdtEquivalent = payment.metadata?.usdtEquivalent as
+          | number
+          | undefined;
       }
     }
     return result;
@@ -311,7 +325,11 @@ export class PaymentService {
     return this.paymentRepository
       .createQueryBuilder('payment')
       .where('payment.paymentMethod IN (:...methods)', {
-        methods: [PaymentMethod.CRYPTO, PaymentMethod.CRYPTO_TON],
+        methods: [
+          PaymentMethod.CRYPTO,
+          PaymentMethod.CRYPTO_TON,
+          PaymentMethod.CRYPTO_TONCOIN,
+        ],
       })
       .andWhere('payment.status IN (:...statuses)', {
         statuses: [PaymentStatus.PENDING, PaymentStatus.PROCESSING],

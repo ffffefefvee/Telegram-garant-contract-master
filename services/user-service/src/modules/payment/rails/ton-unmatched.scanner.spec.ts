@@ -10,6 +10,7 @@ import { PaymentMethod, PaymentStatus } from '../enums/payment.enum';
 
 function transfer(overrides: Partial<TonIncomingTransfer> = {}): TonIncomingTransfer {
   return {
+    asset: 'USDT',
     eventId: 'event-1',
     actionIndex: 0,
     timestamp: Math.floor(Date.now() / 1000),
@@ -36,14 +37,14 @@ function tonPayment(
 
 describe('TonUnmatchedScanner', () => {
   let scanner: TonUnmatchedScanner;
-  let tonApi: { isEnabled: jest.Mock; listIncomingUsdtTransfers: jest.Mock };
+  let tonApi: { isEnabled: jest.Mock; listIncomingTransfers: jest.Mock };
   let paymentRepo: { find: jest.Mock };
   let unmatchedRepo: { findOne: jest.Mock; save: jest.Mock };
 
   async function setup() {
     tonApi = {
       isEnabled: jest.fn(() => true),
-      listIncomingUsdtTransfers: jest.fn(async () => []),
+      listIncomingTransfers: jest.fn(async () => []),
     };
     paymentRepo = { find: jest.fn(async () => []) };
     unmatchedRepo = {
@@ -75,7 +76,7 @@ describe('TonUnmatchedScanner', () => {
 
   it('does not record transfers whose memo matches a live payment', async () => {
     await setup();
-    tonApi.listIncomingUsdtTransfers.mockResolvedValue([
+    tonApi.listIncomingTransfers.mockResolvedValue([
       transfer({ comment: 'TG-LIVE0001' }),
     ]);
     paymentRepo.find.mockResolvedValue([
@@ -91,7 +92,7 @@ describe('TonUnmatchedScanner', () => {
 
   it('records a transfer with no/unknown memo as unmatched', async () => {
     await setup();
-    tonApi.listIncomingUsdtTransfers.mockResolvedValue([
+    tonApi.listIncomingTransfers.mockResolvedValue([
       transfer({ comment: '' }),
       transfer({ eventId: 'event-2', comment: 'TG-TYPO9999' }),
     ]);
@@ -112,7 +113,7 @@ describe('TonUnmatchedScanner', () => {
 
   it('records a transfer matching an EXPIRED payment memo with a hint', async () => {
     await setup();
-    tonApi.listIncomingUsdtTransfers.mockResolvedValue([
+    tonApi.listIncomingTransfers.mockResolvedValue([
       transfer({ comment: 'TG-LATE0001' }),
     ]);
     paymentRepo.find.mockResolvedValue([
@@ -129,7 +130,7 @@ describe('TonUnmatchedScanner', () => {
 
   it('is idempotent: already-recorded events are not saved twice', async () => {
     await setup();
-    tonApi.listIncomingUsdtTransfers.mockResolvedValue([transfer()]);
+    tonApi.listIncomingTransfers.mockResolvedValue([transfer()]);
     unmatchedRepo.findOne.mockResolvedValue({ id: 'existing-row' });
 
     const report = await scanner.runOnce();
@@ -139,9 +140,47 @@ describe('TonUnmatchedScanner', () => {
     expect(unmatchedRepo.save).not.toHaveBeenCalled();
   });
 
+  it('matches native TON transfers against Toncoin payments', async () => {
+    await setup();
+    tonApi.listIncomingTransfers.mockResolvedValue([
+      transfer({ asset: 'TON', comment: 'TG-NATIVE01', amountUnits: 20_500_000_000n }),
+    ]);
+    paymentRepo.find.mockResolvedValue([
+      {
+        id: 'payment-toncoin',
+        paymentMethod: PaymentMethod.CRYPTO_TONCOIN,
+        status: PaymentStatus.PENDING,
+        metadata: { memo: 'TG-NATIVE01' },
+        createdAt: new Date(),
+      } as unknown as Payment,
+    ]);
+
+    const report = await scanner.runOnce();
+
+    expect(report.matched).toBe(1);
+    expect(unmatchedRepo.save).not.toHaveBeenCalled();
+  });
+
+  it('records an asset mix-up (TON sent for a USDT payment) with a hint', async () => {
+    await setup();
+    tonApi.listIncomingTransfers.mockResolvedValue([
+      transfer({ asset: 'TON', comment: 'TG-USDT0001' }),
+    ]);
+    paymentRepo.find.mockResolvedValue([
+      tonPayment('TG-USDT0001', PaymentStatus.PENDING, 'payment-usdt'),
+    ]);
+
+    const report = await scanner.runOnce();
+
+    expect(report.newUnmatched).toBe(1);
+    expect(unmatchedRepo.save).toHaveBeenCalledWith(
+      expect.objectContaining({ asset: 'TON', paymentHintId: 'payment-usdt' }),
+    );
+  });
+
   it('prefers a live payment over an expired one for the same memo', async () => {
     await setup();
-    tonApi.listIncomingUsdtTransfers.mockResolvedValue([
+    tonApi.listIncomingTransfers.mockResolvedValue([
       transfer({ comment: 'TG-RETRY001' }),
     ]);
     paymentRepo.find.mockResolvedValue([

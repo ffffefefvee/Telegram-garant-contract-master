@@ -6,7 +6,11 @@ import { MoreThan, Repository } from 'typeorm';
 import { Payment } from '../entities/payment.entity';
 import { TonUnmatchedDeposit } from '../entities/ton-unmatched-deposit.entity';
 import { PaymentMethod, PaymentStatus } from '../enums/payment.enum';
-import { TonApiService, TonIncomingTransfer } from './ton-api.service';
+import {
+  TonApiService,
+  TonIncomingAsset,
+  TonIncomingTransfer,
+} from './ton-api.service';
 
 /** Payment statuses that legitimately consume an incoming transfer. */
 const ACCEPTING_STATUSES: ReadonlySet<PaymentStatus> = new Set([
@@ -23,12 +27,13 @@ export interface ScanReport {
 }
 
 /**
- * Safety net for the TON rail: every incoming USDT-TON transfer to the
- * platform wallet must be attributable to a payment. Transfers whose
- * comment matches no live memo (forgotten memo, typo, or a memo of an
- * already-expired payment) are recorded in the `ton_unmatched_deposits`
- * ledger instead of being silently ignored — for an escrow service this
- * is customer money in limbo.
+ * Safety net for the TON rails: every incoming transfer (USDT jetton or
+ * native TON) to the platform wallet must be attributable to a payment.
+ * Transfers whose comment matches no live memo of the SAME asset
+ * (forgotten memo, typo, asset mix-up, or a memo of an already-expired
+ * payment) are recorded in the `ton_unmatched_deposits` ledger instead of
+ * being silently ignored — for an escrow service this is customer money
+ * in limbo.
  *
  * Runs every 5 minutes over a sliding lookback window (default 24h);
  * idempotent via the (eventId, actionIndex) unique key. Recorded rows are
@@ -99,7 +104,7 @@ export class TonUnmatchedScanner implements OnModuleInit {
   async runOnce(): Promise<ScanReport> {
     const sinceUnix =
       Math.floor(Date.now() / 1000) - this.lookbackHours * 3600;
-    const transfers = await this.tonApi.listIncomingUsdtTransfers(sinceUnix);
+    const transfers = await this.tonApi.listIncomingTransfers(sinceUnix);
     if (transfers.length === 0) {
       return { scanned: 0, matched: 0, newUnmatched: 0, alreadyKnown: 0 };
     }
@@ -111,7 +116,15 @@ export class TonUnmatchedScanner implements OnModuleInit {
 
     for (const transfer of transfers) {
       const claim = transfer.comment ? memoMap.get(transfer.comment) : undefined;
-      if (claim && ACCEPTING_STATUSES.has(claim.status)) {
+      // A claim only counts when the asset matches too — a TON transfer
+      // with the memo of a USDT payment is NOT consumed by that rail (it
+      // matches by asset-specific lookups), so it must hit the ledger
+      // with the payment as a hint.
+      if (
+        claim &&
+        claim.asset === transfer.asset &&
+        ACCEPTING_STATUSES.has(claim.status)
+      ) {
         matched += 1; // the rail's own memo matching handles/handled it
         continue;
       }
@@ -128,7 +141,8 @@ export class TonUnmatchedScanner implements OnModuleInit {
       newUnmatched += 1;
       this.logger.warn(
         `Unmatched TON deposit recorded: event=${transfer.eventId} ` +
-          `amountUnits=${transfer.amountUnits} comment="${transfer.comment}"` +
+          `asset=${transfer.asset} amountUnits=${transfer.amountUnits} ` +
+          `comment="${transfer.comment}"` +
           (claim ? ` (memo of non-accepting payment ${claim.paymentId})` : ''),
       );
     }
@@ -142,26 +156,45 @@ export class TonUnmatchedScanner implements OnModuleInit {
    * postgres and the sqlite dev mode); recent TON payment volume is small.
    */
   private async loadMemoMap(): Promise<
-    Map<string, { paymentId: string; status: PaymentStatus }>
+    Map<
+      string,
+      { paymentId: string; status: PaymentStatus; asset: TonIncomingAsset }
+    >
   > {
     const horizon = new Date(Date.now() - 30 * 24 * 3600 * 1000);
     const payments = await this.paymentRepo.find({
-      where: {
-        paymentMethod: PaymentMethod.CRYPTO_TON,
-        createdAt: MoreThan(horizon),
-      },
+      where: [
+        {
+          paymentMethod: PaymentMethod.CRYPTO_TON,
+          createdAt: MoreThan(horizon),
+        },
+        {
+          paymentMethod: PaymentMethod.CRYPTO_TONCOIN,
+          createdAt: MoreThan(horizon),
+        },
+      ],
       order: { createdAt: 'DESC' },
       take: 1000,
     });
 
-    const map = new Map<string, { paymentId: string; status: PaymentStatus }>();
+    const map = new Map<
+      string,
+      { paymentId: string; status: PaymentStatus; asset: TonIncomingAsset }
+    >();
     for (const payment of payments) {
       const memo = (payment.metadata?.memo as string) ?? '';
       if (!memo) continue;
       const known = map.get(memo);
       // Prefer a payment that can still accept funds over an expired one.
       if (!known || ACCEPTING_STATUSES.has(payment.status)) {
-        map.set(memo, { paymentId: payment.id, status: payment.status });
+        map.set(memo, {
+          paymentId: payment.id,
+          status: payment.status,
+          asset:
+            payment.paymentMethod === PaymentMethod.CRYPTO_TONCOIN
+              ? 'TON'
+              : 'USDT',
+        });
       }
     }
     return map;
@@ -174,6 +207,7 @@ export class TonUnmatchedScanner implements OnModuleInit {
     return {
       eventId: transfer.eventId,
       actionIndex: transfer.actionIndex,
+      asset: transfer.asset,
       txTimestamp: transfer.timestamp,
       senderAddress: transfer.sender,
       amountUnits: transfer.amountUnits.toString(),
