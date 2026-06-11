@@ -22,6 +22,8 @@ export interface CreatedPaymentResult {
     requiredAmount: string;
     /** Transfer comment the buyer MUST attach (TON rail). */
     memo?: string;
+    /** Jetton master contract for token deeplinks (TON rail). */
+    jettonMaster?: string;
   };
   expiresAt: Date;
 }
@@ -186,6 +188,10 @@ export class PaymentService {
       const memo = payment.metadata?.memo as string | undefined;
       if (memo) {
         result.deposit.memo = memo;
+      }
+      const jettonMaster = payment.metadata?.jettonMaster as string | undefined;
+      if (jettonMaster) {
+        result.deposit.jettonMaster = jettonMaster;
       }
     }
     return result;

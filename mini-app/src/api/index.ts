@@ -411,6 +411,7 @@ export const paymentsApi = {
                     asset: 'USDT',
                     requiredAmount: String(data.amount),
                     memo: 'TG-MOCK1234',
+                    jettonMaster: 'EQCxE6mUtQJKFnGfaROTKOt1lZbDiiX1kCixRv7Nw2Id_sDs',
                   }
                 : undefined,
         };
