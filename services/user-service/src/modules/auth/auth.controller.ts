@@ -6,6 +6,7 @@ import {
   Post,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { Throttle } from '@nestjs/throttler';
 import { AuthService, AuthSession } from './auth.service';
 
 // NOTE: Defined as `interface` (not `class`) on purpose. The global
@@ -44,6 +45,11 @@ export class AuthController {
    * Telegram ID, and returns a signed JWT to use as the Bearer token for
    * subsequent requests.
    */
+  // Stricter than the global limit: login is the brute-force surface
+  // (forged initData / JWT fishing). 30/min per IP — strict enough against
+  // scripted abuse, loose enough for mobile users behind carrier NAT who
+  // share an exit IP.
+  @Throttle({ default: { ttl: 60_000, limit: 30 } })
   @Post('telegram')
   @HttpCode(200)
   async telegramLogin(@Body() body: TelegramLoginDto): Promise<AuthSession> {
@@ -59,6 +65,7 @@ export class AuthController {
    *
    * Body: { telegramId, username?, firstName?, lastName?, languageCode? }
    */
+  @Throttle({ default: { ttl: 60_000, limit: 30 } })
   @Post('dev-login')
   @HttpCode(200)
   async devLogin(@Body() body: DevLoginDto): Promise<AuthSession> {

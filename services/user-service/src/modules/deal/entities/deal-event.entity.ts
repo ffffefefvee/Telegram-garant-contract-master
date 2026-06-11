@@ -9,7 +9,7 @@ import {
 } from 'typeorm';
 import { Deal } from './deal.entity';
 import { User } from '../../user/entities/user.entity';
-import { DealEventType, DealStatus } from '../enums/deal.enum';
+import { DealEventType } from '../enums/deal.enum';
 
 @Entity('deal_events')
 @Index(['dealId'])

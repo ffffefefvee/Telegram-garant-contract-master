@@ -9,7 +9,7 @@ import {
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
-import { DataSource, Repository, Brackets, IsNull } from 'typeorm';
+import { DataSource, Repository, Brackets } from 'typeorm';
 import { Deal } from './entities/deal.entity';
 import { DealMessage, MessageType } from './entities/deal-message.entity';
 import { DealAttachment } from './entities/deal-attachment.entity';

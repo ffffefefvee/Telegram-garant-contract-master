@@ -1,4 +1,5 @@
 import { Controller, Get, ServiceUnavailableException } from '@nestjs/common';
+import { SkipThrottle } from '@nestjs/throttler';
 import { InjectDataSource } from '@nestjs/typeorm';
 import { DataSource } from 'typeorm';
 
@@ -10,6 +11,7 @@ import { DataSource } from 'typeorm';
  *   GET /api/ping   — pure liveness, no dependencies.
  *   GET /api/health — readiness: verifies the database connection.
  */
+@SkipThrottle()
 @Controller()
 export class HealthController {
   constructor(@InjectDataSource() private readonly dataSource: DataSource) {}

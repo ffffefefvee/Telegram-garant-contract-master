@@ -225,6 +225,8 @@ contract EscrowImplementation is Initializable, ReentrancyGuard {
     ///         уходит в Treasury; admin признаёт его через reconcile().
     function rescue() external nonReentrant {
         Status s = status;
+        // `to` is assigned on every non-reverting path below.
+        // slither-disable-next-line uninitialized-local
         address to;
         if (s == Status.CANCELLED || s == Status.EXPIRED) {
             to = buyer;
@@ -234,6 +236,8 @@ contract EscrowImplementation is Initializable, ReentrancyGuard {
             revert WrongStatus();
         }
         uint256 bal = token.balanceOf(address(this));
+        // Benign zero-check guard, not balance-based state logic.
+        // slither-disable-next-line incorrect-equality
         if (bal == 0) revert NothingToRescue();
         token.safeTransfer(to, bal);
         emit Rescued(to, bal);

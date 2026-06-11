@@ -1,5 +1,7 @@
 import { Module } from '@nestjs/common';
+import { APP_GUARD } from '@nestjs/core';
 import { ConfigModule, ConfigService } from '@nestjs/config';
+import { ThrottlerGuard, ThrottlerModule } from '@nestjs/throttler';
 import { TypeOrmModule } from '@nestjs/typeorm';
 import { RedisModule } from '@nestjs-modules/ioredis';
 import { UserModule } from './modules/user/user.module';
@@ -38,8 +40,6 @@ import {
   ArbitrationSettings,
   ArbitratorProfile,
 } from './modules/arbitration/entities';
-import { StoreModule } from './modules/store/store.module';
-import { Store, StoreBot, StoreSettings, StoreTemplate } from './modules/store/entities/store.entity';
 import { MonitoringModule } from './modules/monitoring/monitoring.module';
 import { OpsModule } from './modules/ops/ops.module';
 import { OutboxEvent } from './modules/ops/entities/outbox-event.entity';
@@ -61,6 +61,25 @@ import {
     ConfigModule.forRoot({
       isGlobal: true,
       envFilePath: ['.env.local', '.env'],
+    }),
+
+    // Global API rate limiting (per client IP, in-memory). Protects auth and
+    // payment-creation endpoints from brute force / invoice spam. The
+    // Cryptomus webhook keeps its own dedicated WebhookRateLimitGuard and is
+    // excluded via @SkipThrottle. `trust proxy` is set in main.ts so req.ip
+    // is the real client IP behind nginx/Railway. Tune via THROTTLE_TTL_MS /
+    // THROTTLE_LIMIT (e.g. raise the limit for local e2e runs).
+    ThrottlerModule.forRootAsync({
+      imports: [ConfigModule],
+      useFactory: (configService: ConfigService) => ({
+        throttlers: [
+          {
+            ttl: parseInt(configService.get('THROTTLE_TTL_MS', '60000'), 10),
+            limit: parseInt(configService.get('THROTTLE_LIMIT', '120'), 10),
+          },
+        ],
+      }),
+      inject: [ConfigService],
     }),
 
     TypeOrmModule.forRootAsync({
@@ -96,10 +115,6 @@ import {
               DealTerms,
               ArbitrationSettings,
               ArbitratorProfile,
-              Store,
-              StoreBot,
-              StoreSettings,
-              StoreTemplate,
               SystemAlert,
               HealthCheck,
               SystemMetrics,
@@ -147,10 +162,6 @@ synchronize: true,
             DealTerms,
             ArbitrationSettings,
             ArbitratorProfile,
-            Store,
-            StoreBot,
-            StoreSettings,
-            StoreTemplate,
             SystemAlert,
             HealthCheck,
             SystemMetrics,
@@ -217,10 +228,15 @@ synchronize: true,
     EscrowModule,
     BlockchainModule,
     AdminModule,
-    StoreModule,
     MonitoringModule,
     OpsModule,
     NotificationsModule,
+  ],
+  providers: [
+    {
+      provide: APP_GUARD,
+      useClass: ThrottlerGuard,
+    },
   ],
   exports: [
     AdminModule,

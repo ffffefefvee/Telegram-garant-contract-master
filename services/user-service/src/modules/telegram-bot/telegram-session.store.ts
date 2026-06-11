@@ -21,6 +21,9 @@ export class TelegramSessionStore implements OnModuleDestroy {
     config: ConfigService,
   ) {
     this.useRedis = config.get('TELEGRAM_SESSION_REDIS', 'true') !== 'false';
+    // Intentional module-level singleton: Telegraf session middleware is
+    // constructed outside Nest DI and reaches the store through this handle.
+    // eslint-disable-next-line @typescript-eslint/no-this-alias
     sessionStoreInstance = this;
   }
 

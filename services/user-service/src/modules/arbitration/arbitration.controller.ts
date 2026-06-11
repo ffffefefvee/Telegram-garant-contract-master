@@ -13,7 +13,6 @@ import {
   HttpStatus,
   ParseUUIDPipe,
   ParseIntPipe,
-  ParseEnumPipe,
   UploadedFile,
   UseInterceptors,
 } from '@nestjs/common';

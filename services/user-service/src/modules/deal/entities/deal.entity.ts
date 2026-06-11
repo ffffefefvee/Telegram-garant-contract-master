@@ -8,7 +8,6 @@ import {
   OneToMany,
   Index,
   JoinColumn,
-  Unique,
 } from 'typeorm';
 import { User } from '../../user/entities/user.entity';
 import { DealType, DealStatus, DealSide, Currency, DealSubcategory, FeeModel } from '../enums/deal.enum';

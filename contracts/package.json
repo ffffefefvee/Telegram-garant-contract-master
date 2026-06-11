@@ -10,7 +10,8 @@
     "deploy:amoy": "hardhat run scripts/deploy.ts --network amoy",
     "deploy:local": "hardhat run scripts/deploy.ts --network localhost",
     "verify": "hardhat verify",
-    "lint": "solhint 'contracts/**/*.sol'"
+    "lint": "solhint 'contracts/**/*.sol'",
+    "coverage:check": "hardhat coverage && node scripts/check-coverage.js"
   },
   "devDependencies": {
     "@nomicfoundation/hardhat-toolbox": "^4.0.0",

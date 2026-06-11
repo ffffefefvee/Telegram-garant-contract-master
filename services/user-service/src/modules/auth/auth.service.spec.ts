@@ -1,3 +1,4 @@
+import * as jsonwebtoken from 'jsonwebtoken';
 import { Test, TestingModule } from '@nestjs/testing';
 import { ConfigModule } from '@nestjs/config';
 import { JwtModule } from '@nestjs/jwt';
@@ -118,7 +119,7 @@ describe('AuthService', () => {
 
     it('rejects tokens signed with a different secret', () => {
       // Manually craft a token with a wrong secret
-      const wrongJwt = require('jsonwebtoken').sign(
+      const wrongJwt = jsonwebtoken.sign(
         { sub: 'user-x', tg: 1 },
         'different-secret',
         { expiresIn: '1h' },

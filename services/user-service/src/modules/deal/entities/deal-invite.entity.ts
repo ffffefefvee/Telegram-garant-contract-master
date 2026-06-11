@@ -1,3 +1,4 @@
+import { randomBytes } from 'crypto';
 import {
   Entity,
   PrimaryGeneratedColumn,
@@ -150,8 +151,7 @@ export class DealInvite {
 
   // Статические методы
   static generateToken(): string {
-    const crypto = require('crypto');
-    return crypto.randomBytes(32).toString('hex');
+    return randomBytes(32).toString('hex');
   }
 
   static generateInviteUrl(baseUrl: string, token: string): string {
