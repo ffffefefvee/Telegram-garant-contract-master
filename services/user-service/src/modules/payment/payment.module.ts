@@ -20,12 +20,21 @@ import { CryptomusRail } from './rails/cryptomus.rail';
 import { DirectUsdtRail } from './rails/direct-usdt.rail';
 import { TonApiService } from './rails/ton-api.service';
 import { TonUsdtRail } from './rails/ton-usdt.rail';
+import { TonUnmatchedScanner } from './rails/ton-unmatched.scanner';
+import { TonRecoveryService } from './rails/ton-recovery.service';
+import { TonUnmatchedDeposit } from './entities/ton-unmatched-deposit.entity';
 import { RailRegistryService } from './rails/rail-registry.service';
 import { DirectDepositWatcher } from './direct-deposit.watcher';
 
 @Module({
   imports: [
-    TypeOrmModule.forFeature([Payment, CommissionRate, CurrencyRate, Deal]),
+    TypeOrmModule.forFeature([
+      Payment,
+      CommissionRate,
+      CurrencyRate,
+      Deal,
+      TonUnmatchedDeposit,
+    ]),
     forwardRef(() => DealModule),
     forwardRef(() => UserModule),
     EscrowModule,
@@ -45,6 +54,8 @@ import { DirectDepositWatcher } from './direct-deposit.watcher';
     TonUsdtRail,
     RailRegistryService,
     DirectDepositWatcher,
+    TonUnmatchedScanner,
+    TonRecoveryService,
   ],
   exports: [
     PaymentService,
@@ -52,6 +63,7 @@ import { DirectDepositWatcher } from './direct-deposit.watcher';
     PaymentWebhookService,
     CommissionConfigService,
     RailRegistryService,
+    TonRecoveryService,
     TypeOrmModule,
   ],
 })
