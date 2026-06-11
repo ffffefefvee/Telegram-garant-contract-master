@@ -32,6 +32,7 @@ import {
 import { PaymentVerifyModal } from '../components/shared';
 import { getStatusLabel, getStatusVariant, getDealSystemMessages } from '../constants/dealStatus';
 import { fiatToUsdt } from '../mocks/users';
+import { buildTonDeeplink, buildTonkeeperLink } from '../utils/tonLinks';
 import './DealChatPage.css';
 
 export const DealChatPage: React.FC = () => {
@@ -162,6 +163,52 @@ export const DealChatPage: React.FC = () => {
       window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred('error');
     } finally {
       setActionLoading(false);
+    }
+  };
+
+  /**
+   * One-tap payment links for the TON rail: recipient, USDT jetton, amount
+   * and the mandatory memo are prefilled — the buyer only confirms.
+   * Null when not a TON deposit or when link building fails (then the
+   * copy-paste flow below remains the only path).
+   */
+  const tonLinks = React.useMemo(() => {
+    if (!deposit || deposit.network !== 'ton' || !deposit.memo || !deposit.jettonMaster) {
+      return null;
+    }
+    try {
+      const params = {
+        address: deposit.address,
+        requiredAmount: deposit.requiredAmount,
+        memo: deposit.memo,
+        jettonMaster: deposit.jettonMaster,
+      };
+      return {
+        deeplink: buildTonDeeplink(params),
+        tonkeeper: buildTonkeeperLink(params),
+      };
+    } catch {
+      return null;
+    }
+  }, [deposit]);
+
+  const handleOpenTonWallet = () => {
+    if (!tonLinks) return;
+    window.Telegram?.WebApp?.HapticFeedback?.impactOccurred('light');
+    // OS-level deeplink: opens the installed TON wallet (Tonkeeper,
+    // MyTonWallet, Tonhub, …). Ignored silently when no handler exists —
+    // the Tonkeeper button and the manual flow remain available.
+    window.location.href = tonLinks.deeplink;
+  };
+
+  const handleOpenTonkeeper = () => {
+    if (!tonLinks) return;
+    window.Telegram?.WebApp?.HapticFeedback?.impactOccurred('light');
+    const webApp = window.Telegram?.WebApp;
+    if (webApp?.openLink) {
+      webApp.openLink(tonLinks.tonkeeper);
+    } else {
+      window.open(tonLinks.tonkeeper, '_blank');
     }
   };
 
@@ -604,6 +651,40 @@ export const DealChatPage: React.FC = () => {
               Отправьте <strong>ровно {deposit.requiredAmount} {deposit.asset}</strong> (сумма сделки +
               комиссия покупателя) на {deposit.network === 'ton' ? 'TON-адрес платформы' : 'адрес смарт-контракта'}:
             </p>
+            {tonLinks && (
+              <>
+                <Button variant="primary" fullWidth onClick={handleOpenTonWallet}>
+                  Оплатить в TON-кошельке
+                </Button>
+                <Button
+                  variant="secondary"
+                  fullWidth
+                  onClick={handleOpenTonkeeper}
+                  style={{ marginTop: 8 }}
+                >
+                  Открыть в Tonkeeper
+                </Button>
+                <p className="deal-new-hint" style={{ marginTop: 8, textAlign: 'center' }}>
+                  Адрес, сумма и комментарий подставятся автоматически — останется
+                  только подтвердить перевод.
+                </p>
+                <div style={{ display: 'flex', justifyContent: 'center', marginTop: 8 }}>
+                  <img
+                    src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(tonLinks.deeplink)}`}
+                    alt="QR-код для оплаты из TON-кошелька"
+                    width={160}
+                    height={160}
+                    style={{ borderRadius: 8, background: '#fff', padding: 6 }}
+                  />
+                </div>
+                <p className="deal-new-hint" style={{ marginTop: 4, textAlign: 'center' }}>
+                  QR — для кошелька на другом устройстве
+                </p>
+                <p style={{ marginTop: 12, marginBottom: 8 }}>
+                  Или вручную (например, из @wallet в Telegram):
+                </p>
+              </>
+            )}
             <div
               onClick={() => void handleCopyAddress()}
               style={{

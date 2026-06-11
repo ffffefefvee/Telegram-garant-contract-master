@@ -114,6 +114,8 @@ export interface CreatePaymentResponse {
     requiredAmount: string;
     /** Transfer comment the buyer MUST attach (TON rail). */
     memo?: string;
+    /** Jetton master contract for token deeplinks (TON rail). */
+    jettonMaster?: string;
   };
   expiresAt?: string;
 }
@@ -173,6 +175,8 @@ export interface TelegramWebApp {
   setBackgroundColor: (color: string) => void;
   onEvent: (eventType: string, handler: () => void) => void;
   offEvent: (eventType: string, handler: () => void) => void;
+  /** Opens an https link in the external browser (used for wallet universal links). */
+  openLink?: (url: string, options?: { try_instant_view?: boolean }) => void;
   HapticFeedback?: {
     impactOccurred: (style: string) => void;
     notificationOccurred: (type: string) => void;
