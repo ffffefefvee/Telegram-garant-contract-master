@@ -30,6 +30,11 @@ import { ConfigService } from '@nestjs/config';
 import { TreasuryClient } from '../blockchain/treasury.client';
 import { RelayService } from '../blockchain/relay.service';
 import { TonUnmatchedDeposit } from '../payment/entities/ton-unmatched-deposit.entity';
+import {
+  TonApiService,
+  TON_DECIMALS,
+  TON_USDT_DECIMALS,
+} from '../payment/rails/ton-api.service';
 import { ethers } from 'ethers';
 import { BlockchainProvider } from '../blockchain/blockchain.provider';
 
@@ -67,6 +72,8 @@ export class MonitoringService implements OnModuleInit {
     private readonly treasury: TreasuryClient,
     private readonly relay: RelayService,
     private readonly blockchainProvider: BlockchainProvider,
+    @Inject(forwardRef(() => TonApiService))
+    private readonly tonApi: TonApiService,
   ) {}
 
   async onModuleInit() {
@@ -291,6 +298,10 @@ export class MonitoringService implements OnModuleInit {
    *     (default 2× min) it is time to rebalance TON→Polygon (WARNING).
    *  2. Unmatched TON deposits — customer money the watcher could not
    *     attribute (ERROR: needs manual matching in the admin panel).
+   *  3. Accumulated balance on the platform TON wallet — funds sitting
+   *     there are only covered by the rate-lock buffer against TON/USD
+   *     movement; above TON_REBALANCE_ALERT_USD it is time to rebalance
+   *     TON→Polygon (WARNING).
    */
   async checkTonOps(): Promise<void> {
     try {
@@ -340,6 +351,43 @@ export class MonitoringService implements OnModuleInit {
       }
     } catch (error) {
       this.logger.error(`TON float check failed: ${(error as Error).message}`);
+    }
+
+    try {
+      const balances = await this.tonApi.getWalletBalances();
+      if (balances) {
+        const rate = await this.tonApi.getTonUsdRate().catch(() => 0);
+        const tonValue =
+          rate > 0
+            ? Number(ethers.formatUnits(balances.tonNano, TON_DECIMALS)) * rate
+            : 0;
+        const usdtValue = Number(
+          ethers.formatUnits(balances.usdtUnits, TON_USDT_DECIMALS),
+        );
+        const totalUsd = tonValue + usdtValue;
+        await this.recordMetric('ton.wallet_balance_usd', totalUsd, 'USD');
+
+        const minFloat = Number(this.config.get<string>('TON_MIN_FLOAT_USDT', '500'));
+        const rebalanceAt = Number(
+          this.config.get<string>('TON_REBALANCE_ALERT_USD', String(minFloat * 2)),
+        );
+        if (rebalanceAt > 0 && totalUsd >= rebalanceAt) {
+          await this.createAlertOnce(
+            AlertType.SYSTEM_ERROR,
+            AlertSeverity.WARNING,
+            'TON wallet balance awaiting rebalance',
+            `Platform TON wallet holds ≈$${totalUsd.toFixed(2)} ` +
+              `(${Number(ethers.formatUnits(balances.tonNano, TON_DECIMALS)).toFixed(2)} TON + ` +
+              `${usdtValue.toFixed(2)} USDT) ≥ TON_REBALANCE_ALERT_USD (${rebalanceAt}). ` +
+              'Only the rate-lock buffer covers TON/USD movement on these funds — rebalance TON→Polygon.',
+            { totalUsd, tonValue, usdtValue, rebalanceAt },
+          );
+        }
+      }
+    } catch (error) {
+      this.logger.error(
+        `TON wallet balance check failed: ${(error as Error).message}`,
+      );
     }
   }
 

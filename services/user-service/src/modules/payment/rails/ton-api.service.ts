@@ -213,6 +213,51 @@ export class TonApiService {
     return this.extractIncomingTransfers(events);
   }
 
+  /**
+   * Current balances of the platform TON wallet: native TON (nanotons) and
+   * the accepted USDT jetton (6 dp units). Used by ops monitoring to warn
+   * when accumulated funds await a TON→Polygon rebalance.
+   */
+  async getWalletBalances(): Promise<{
+    tonNano: bigint;
+    usdtUnits: bigint;
+  } | null> {
+    if (!this.isEnabled()) return null;
+
+    const headers: Record<string, string> = { Accept: 'application/json' };
+    if (this.apiKey) headers['Authorization'] = `Bearer ${this.apiKey}`;
+    const account = encodeURIComponent(this.walletAddress);
+
+    const accountResponse = await fetch(
+      `${this.baseUrl}/v2/accounts/${account}`,
+      { headers },
+    );
+    if (!accountResponse.ok) {
+      throw new Error(
+        `tonapi account request failed: ${accountResponse.status} ${accountResponse.statusText}`,
+      );
+    }
+    const accountBody = (await accountResponse.json()) as { balance?: number | string };
+    const tonNano = BigInt(accountBody.balance ?? 0);
+
+    // Jetton wallet may simply not exist yet — that's a zero balance.
+    let usdtUnits = 0n;
+    const jettonResponse = await fetch(
+      `${this.baseUrl}/v2/accounts/${account}/jettons/${encodeURIComponent(this.jettonMaster)}`,
+      { headers },
+    );
+    if (jettonResponse.ok) {
+      const jettonBody = (await jettonResponse.json()) as { balance?: string };
+      usdtUnits = BigInt(jettonBody.balance ?? '0');
+    } else if (jettonResponse.status !== 404) {
+      throw new Error(
+        `tonapi jetton balance request failed: ${jettonResponse.status} ${jettonResponse.statusText}`,
+      );
+    }
+
+    return { tonNano, usdtUnits };
+  }
+
   private async fetchEvents(sinceUnix: number): Promise<TonapiEvent[]> {
     const url =
       `${this.baseUrl}/v2/accounts/${encodeURIComponent(this.walletAddress)}` +

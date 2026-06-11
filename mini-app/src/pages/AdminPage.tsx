@@ -2,6 +2,7 @@ import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   adminApi,
   AdminPaymentRow,
+  TonUnmatchedDepositRow,
   AdminDealRow,
   AdminDisputeRow,
   AdminUserRow,
@@ -12,7 +13,15 @@ import {
 } from '../api';
 import './AdminPage.css';
 
-type Tab = 'treasury' | 'payments' | 'audit' | 'deals' | 'disputes' | 'users' | 'arbitrators';
+type Tab =
+  | 'treasury'
+  | 'payments'
+  | 'tonDeposits'
+  | 'audit'
+  | 'deals'
+  | 'disputes'
+  | 'users'
+  | 'arbitrators';
 
 const formatToken = (raw: string, decimals: number): string => {
   // raw is a decimal string of base units (e.g. "12345600" with decimals=6 → "12.3456").
@@ -53,6 +62,12 @@ export const AdminPage: React.FC = () => {
           Платежи
         </button>
         <button
+          className={`admin-tab ${tab === 'tonDeposits' ? 'active' : ''}`}
+          onClick={() => setTab('tonDeposits')}
+        >
+          TON-депозиты
+        </button>
+        <button
           className={`admin-tab ${tab === 'deals' ? 'active' : ''}`}
           onClick={() => setTab('deals')}
         >
@@ -86,6 +101,7 @@ export const AdminPage: React.FC = () => {
 
       {tab === 'treasury' && <TreasurySection />}
       {tab === 'payments' && <PaymentsSection />}
+      {tab === 'tonDeposits' && <TonDepositsSection />}
       {tab === 'deals' && <DealsSection />}
       {tab === 'disputes' && <DisputesSection />}
       {tab === 'users' && <UsersSection />}
@@ -343,6 +359,353 @@ const PaymentsSection: React.FC = () => {
         </button>
       </div>
     </div>
+  );
+};
+
+
+// === TON DEPOSITS: unmatched-ledger recovery flow ===
+
+const DEPOSIT_STATUS_OPTIONS = [
+  { value: 'unmatched', label: 'Не привязанные' },
+  { value: 'matched', label: 'Привязанные' },
+  { value: 'ignored', label: 'Игнорированные' },
+  { value: '', label: 'Все' },
+];
+
+const DEPOSIT_STATUS_LABELS: Record<TonUnmatchedDepositRow['status'], string> = {
+  unmatched: 'не привязан',
+  matched: 'привязан',
+  ignored: 'игнорирован',
+};
+
+const ASSET_DECIMALS: Record<TonUnmatchedDepositRow['asset'], number> = {
+  USDT: 6,
+  TON: 9,
+};
+
+const extractApiError = (err: unknown, fallback: string): string =>
+  (err as { response?: { data?: { message?: string } } })?.response?.data?.message ??
+  (err as Error)?.message ??
+  fallback;
+
+type DepositAction = 'match' | 'extend' | 'ignore';
+
+const TonDepositsSection: React.FC = () => {
+  const [statusFilter, setStatusFilter] = useState('unmatched');
+  const [rows, setRows] = useState<TonUnmatchedDepositRow[]>([]);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const load = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const data = await adminApi.getTonUnmatched(
+        (statusFilter || undefined) as TonUnmatchedDepositRow['status'] | undefined,
+        100,
+      );
+      setRows(data);
+    } catch (err: unknown) {
+      setError(extractApiError(err, 'Не удалось загрузить депозиты'));
+    } finally {
+      setLoading(false);
+    }
+  }, [statusFilter]);
+
+  useEffect(() => {
+    void load();
+  }, [load]);
+
+  return (
+    <div className="admin-ton-deposits">
+      <p className="admin-stuck-hint">
+        Входящие переводы на TON-кошелёк платформы без memo или с неверным memo.
+        Привяжите депозит к платежу — эскроу будет профондирован штатным путём.
+        Если дедлайн фондирования уже прошёл — сначала продлите его.
+      </p>
+
+      <div className="admin-filters">
+        <select
+          className="admin-filter-input"
+          value={statusFilter}
+          onChange={(e) => setStatusFilter(e.target.value)}
+        >
+          {DEPOSIT_STATUS_OPTIONS.map((opt) => (
+            <option key={opt.value || 'all'} value={opt.value}>
+              {opt.label}
+            </option>
+          ))}
+        </select>
+        <button className="admin-link-button" onClick={load} disabled={loading}>
+          Обновить
+        </button>
+      </div>
+
+      {error && (
+        <div className="admin-placeholder">
+          <p className="admin-error">{error}</p>
+        </div>
+      )}
+
+      {loading ? (
+        <div className="admin-placeholder"><p>Загрузка…</p></div>
+      ) : rows.length === 0 ? (
+        <div className="admin-placeholder">
+          <p>
+            {statusFilter === 'unmatched'
+              ? 'Зависших депозитов нет — все входящие переводы привязаны 🎉'
+              : 'Депозитов с таким статусом нет.'}
+          </p>
+        </div>
+      ) : (
+        <ul className="admin-audit-list">
+          {rows.map((row) => (
+            <TonDepositCard key={row.id} row={row} onChanged={load} />
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+};
+
+const TonDepositCard: React.FC<{
+  row: TonUnmatchedDepositRow;
+  onChanged: () => void;
+}> = ({ row, onChanged }) => {
+  const [action, setAction] = useState<DepositAction | null>(null);
+  const [paymentId, setPaymentId] = useState(row.paymentHintId ?? '');
+  const [note, setNote] = useState('');
+  const [hours, setHours] = useState('24');
+  const [extendRateLock, setExtendRateLock] = useState(false);
+  const [busy, setBusy] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
+  const [successMsg, setSuccessMsg] = useState<string | null>(null);
+
+  const isOpen = row.status === 'unmatched';
+  const amount = formatToken(row.amountUnits, ASSET_DECIMALS[row.asset]);
+  const txDate = new Date(Number(row.txTimestamp) * 1000);
+
+  const toggleAction = (next: DepositAction) => {
+    setActionError(null);
+    setAction((a) => (a === next ? null : next));
+  };
+
+  const runMatch = async () => {
+    if (!paymentId.trim()) {
+      setActionError('Укажите ID платежа');
+      return;
+    }
+    setBusy(true);
+    setActionError(null);
+    try {
+      await adminApi.matchTonDeposit(row.id, paymentId.trim(), note.trim() || undefined);
+      setSuccessMsg('Депозит зачислен платежу — эскроу будет профондирован штатным путём.');
+      onChanged();
+    } catch (err: unknown) {
+      setActionError(extractApiError(err, 'Не удалось привязать депозит'));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const runExtend = async () => {
+    const h = Number(hours);
+    if (!paymentId.trim()) {
+      setActionError('Укажите ID платежа');
+      return;
+    }
+    if (!Number.isFinite(h) || h < 1 || h > 168) {
+      setActionError('Часы: от 1 до 168 (7 дней)');
+      return;
+    }
+    setBusy(true);
+    setActionError(null);
+    try {
+      const result = await adminApi.extendPaymentDeadline(paymentId.trim(), h, {
+        extendRateLock,
+        note: note.trim() || undefined,
+      });
+      setSuccessMsg(
+        `Дедлайн продлён до ${new Date(result.newDeadlineUnix * 1000).toLocaleString()}` +
+          (result.rateLockExtended ? ' (курс зафиксирован по исходному rate-lock)' : '') +
+          `. Теперь нажмите «Привязать». tx: ${result.txHash.slice(0, 14)}…`,
+      );
+      setAction('match');
+    } catch (err: unknown) {
+      setActionError(extractApiError(err, 'Не удалось продлить дедлайн'));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  const runIgnore = async () => {
+    if (!note.trim()) {
+      setActionError('Укажите причину — она попадёт в журнал аудита');
+      return;
+    }
+    setBusy(true);
+    setActionError(null);
+    try {
+      await adminApi.ignoreTonDeposit(row.id, note.trim());
+      setSuccessMsg('Депозит помечен как обработанный вне системы.');
+      onChanged();
+    } catch (err: unknown) {
+      setActionError(extractApiError(err, 'Не удалось пометить депозит'));
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <li className="admin-audit-item admin-deposit-item">
+      <div className="admin-audit-row">
+        <span className="admin-audit-action">
+          {amount} {row.asset}
+        </span>
+        <span className={`admin-deposit-status deposit-${row.status}`}>
+          {DEPOSIT_STATUS_LABELS[row.status]}
+        </span>
+      </div>
+      <div className="admin-audit-meta">
+        <span>{txDate.toLocaleString()}</span>
+        <span className="admin-card-mono" title={row.senderAddress}>
+          от {shortAddr(row.senderAddress)}
+        </span>
+      </div>
+      <div className="admin-audit-meta">
+        <span>
+          memo:{' '}
+          {row.comment ? (
+            <code className="admin-card-mono">{row.comment}</code>
+          ) : (
+            <em>нет</em>
+          )}
+        </span>
+        {row.paymentHintId && (
+          <span className="admin-deposit-hint" title={row.paymentHintId}>
+            похоже на платёж {row.paymentHintId.slice(0, 8)}…
+          </span>
+        )}
+      </div>
+
+      {row.status === 'matched' && row.matchedPaymentId && (
+        <div className="admin-audit-meta">
+          <span title={row.matchedPaymentId}>
+            зачислен платежу {row.matchedPaymentId.slice(0, 8)}…
+          </span>
+          {row.resolvedAt && <span>{new Date(row.resolvedAt).toLocaleString()}</span>}
+        </div>
+      )}
+      {row.status === 'ignored' && row.resolutionNote && (
+        <div className="admin-audit-meta">
+          <span>причина: {row.resolutionNote}</span>
+        </div>
+      )}
+
+      {successMsg && <p className="admin-deposit-success">{successMsg}</p>}
+
+      {isOpen && (
+        <>
+          <div className="admin-deposit-actions">
+            <button
+              className={`admin-link-button ${action === 'match' ? 'active' : ''}`}
+              onClick={() => toggleAction('match')}
+              disabled={busy}
+            >
+              Привязать
+            </button>
+            <button
+              className={`admin-link-button ${action === 'extend' ? 'active' : ''}`}
+              onClick={() => toggleAction('extend')}
+              disabled={busy}
+            >
+              Продлить дедлайн
+            </button>
+            <button
+              className={`admin-link-button ${action === 'ignore' ? 'active' : ''}`}
+              onClick={() => toggleAction('ignore')}
+              disabled={busy}
+            >
+              Игнорировать
+            </button>
+          </div>
+
+          {action === 'match' && (
+            <div className="admin-deposit-form">
+              <input
+                className="admin-filter-input"
+                placeholder="ID платежа (uuid)"
+                value={paymentId}
+                onChange={(e) => setPaymentId(e.target.value)}
+              />
+              <input
+                className="admin-filter-input"
+                placeholder="Заметка (необязательно)"
+                value={note}
+                onChange={(e) => setNote(e.target.value)}
+              />
+              <button className="admin-link-button" onClick={runMatch} disabled={busy}>
+                {busy ? 'Привязываю…' : 'Зачислить депозит платежу'}
+              </button>
+            </div>
+          )}
+
+          {action === 'extend' && (
+            <div className="admin-deposit-form">
+              <input
+                className="admin-filter-input"
+                placeholder="ID платежа (uuid)"
+                value={paymentId}
+                onChange={(e) => setPaymentId(e.target.value)}
+              />
+              <input
+                className="admin-filter-input"
+                type="number"
+                min={1}
+                max={168}
+                placeholder="Часы (1–168)"
+                value={hours}
+                onChange={(e) => setHours(e.target.value)}
+              />
+              <label className="admin-deposit-checkbox">
+                <input
+                  type="checkbox"
+                  checked={extendRateLock}
+                  onChange={(e) => setExtendRateLock(e.target.checked)}
+                />
+                Продлить истёкший rate-lock (Toncoin): зачесть по изначально
+                зафиксированному курсу — движение TON/USD берёт на себя платформа
+              </label>
+              <input
+                className="admin-filter-input"
+                placeholder="Заметка (необязательно)"
+                value={note}
+                onChange={(e) => setNote(e.target.value)}
+              />
+              <button className="admin-link-button" onClick={runExtend} disabled={busy}>
+                {busy ? 'Продлеваю…' : 'Продлить дедлайн эскроу'}
+              </button>
+            </div>
+          )}
+
+          {action === 'ignore' && (
+            <div className="admin-deposit-form">
+              <input
+                className="admin-filter-input"
+                placeholder="Причина (обязательно, попадёт в аудит)"
+                value={note}
+                onChange={(e) => setNote(e.target.value)}
+              />
+              <button className="admin-link-button" onClick={runIgnore} disabled={busy}>
+                {busy ? 'Сохраняю…' : 'Пометить обработанным вне системы'}
+              </button>
+            </div>
+          )}
+
+          {actionError && <p className="admin-error">{actionError}</p>}
+        </>
+      )}
+    </li>
   );
 };
 
