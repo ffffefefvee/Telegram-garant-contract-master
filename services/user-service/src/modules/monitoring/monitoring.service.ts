@@ -6,7 +6,7 @@ import {
   forwardRef,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, MoreThan, LessThan, In } from 'typeorm';
+import { Repository, LessThan, Between, In } from 'typeorm';
 import { InjectRedis } from '@nestjs-modules/ioredis';
 import Redis from 'ioredis';
 import {
@@ -513,7 +513,8 @@ export class MonitoringService implements OnModuleInit {
     return this.metricsRepository.find({
       where: {
         metric,
-        timestamp: MoreThan(from),
+        // Between (was MoreThan(from)): `to` used to be silently ignored.
+        timestamp: Between(from, to),
       },
       order: { timestamp: 'ASC' },
     });

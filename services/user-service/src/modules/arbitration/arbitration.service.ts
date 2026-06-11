@@ -6,7 +6,6 @@ import { Appeal } from './entities/appeal.entity';
 import { ArbitrationChatMessage } from './entities/arbitration-chat-message.entity';
 import { DealTerms } from './entities/deal-terms.entity';
 import { Dispute } from './entities/dispute.entity';
-import { ArbitrationDecisionType } from './entities/enums/arbitration.enum';
 import {
   MakeDecisionDto,
   FileAppealDto,
@@ -182,7 +181,7 @@ export class ArbitrationService {
   async enforceDecision(
     decisionId: string,
     userId: string,
-    dto?: EnforceDecisionDto,
+    _dto?: EnforceDecisionDto,
   ): Promise<ArbitrationDecision> {
     const decision = await this.decisionRepository.findOne({
       where: { id: decisionId },
@@ -405,7 +404,7 @@ export class ArbitrationService {
   /**
    * Отметить сообщения как прочитанные
    */
-  async markChatAsRead(chatId: string, userId: string, role: 'buyer' | 'seller' | 'arbitrator'): Promise<void> {
+  async markChatAsRead(_chatId: string, _userId: string, _role: 'buyer' | 'seller' | 'arbitrator'): Promise<void> {
     // Реализация через chatRepository
   }
 }

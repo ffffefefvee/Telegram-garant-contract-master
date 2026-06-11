@@ -2,7 +2,6 @@ import {
   Injectable,
   NotFoundException,
   ForbiddenException,
-  BadRequestException,
   ConflictException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
@@ -14,11 +13,9 @@ import { Deal } from '../deal/entities/deal.entity';
 import { User } from '../user/entities/user.entity';
 import {
   DisputeStatus,
-  DisputeType,
-  DisputeSide,
   ArbitrationEventType,
 } from './entities/enums/arbitration.enum';
-import { OpenDisputeDto, AssignArbitratorDto, UpdateDisputeStatusDto } from './dto';
+import { OpenDisputeDto, UpdateDisputeStatusDto } from './dto';
 import { ArbitrationSettingsService } from './arbitration-settings.service';
 import { OutboxService } from '../ops/outbox.service';
 
@@ -204,7 +201,6 @@ export class DisputeService {
       throw new NotFoundException('Arbitrator not found');
     }
 
-    const assignmentTimeout = await this.settingsService.getArbitratorAssignmentTimeoutHours();
     const decisionHours = await this.settingsService.getDecisionDeadlineHours();
 
     dispute.arbitratorId = arbitratorUserId;

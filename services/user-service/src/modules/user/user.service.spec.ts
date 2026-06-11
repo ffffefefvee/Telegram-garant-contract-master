@@ -30,7 +30,6 @@ describe('UserService', () => {
   let service: UserService;
   let userRepository: Repository<User>;
   let sessionRepository: Repository<UserSession>;
-  let languageRepository: Repository<LanguagePreference>;
   let mockUser: Partial<User>;
 
   const mockUserRepository = {
@@ -79,10 +78,6 @@ describe('UserService', () => {
     service = module.get<UserService>(UserService);
     userRepository = module.get<Repository<User>>(getRepositoryToken(User));
     sessionRepository = module.get<Repository<UserSession>>(getRepositoryToken(UserSession));
-    languageRepository = module.get<Repository<LanguagePreference>>(
-      getRepositoryToken(LanguagePreference),
-    );
-
     jest.clearAllMocks();
   });
 
@@ -170,7 +165,7 @@ describe('UserService', () => {
       mockUserRepository.save.mockResolvedValue(mockUser);
       mockLanguageRepository.save.mockResolvedValue({});
 
-      const result = await service.updateTelegramUser(
+      await service.updateTelegramUser(
         999999999,
         'newuser',
         'New',
@@ -199,7 +194,7 @@ describe('UserService', () => {
       });
       mockSessionRepository.save.mockResolvedValue({ token: 'test-token' });
 
-      const result = await service.createSession({
+      await service.createSession({
         userId: sessionData.userId,
         type: 'telegram' as any,
         ipAddress: sessionData.ipAddress,

@@ -10,7 +10,6 @@ import {
   HttpStatus,
   ParseUUIDPipe,
   ParseIntPipe,
-  ParseEnumPipe,
 } from '@nestjs/common';
 import { ReviewService, CreateReviewDto, ReviewFilterDto } from './review.service';
 import { Review } from './entities/review.entity';

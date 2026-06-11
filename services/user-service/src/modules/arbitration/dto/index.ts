@@ -1,5 +1,4 @@
-import { IsEnum, IsString, IsOptional, IsNumber, Min, Max, IsBoolean, IsArray, ValidateNested, IsInt } from 'class-validator';
-import { Type } from 'class-transformer';
+import { IsEnum, IsString, IsOptional, IsNumber, Min, Max, IsBoolean, IsArray, IsInt } from 'class-validator';
 import { DisputeType, DisputeSide, EvidenceType, ArbitrationDecisionType, DisputeStatus } from '../entities';
 
 /**

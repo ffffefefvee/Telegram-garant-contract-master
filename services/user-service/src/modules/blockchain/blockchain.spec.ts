@@ -1,5 +1,5 @@
 import { Test, TestingModule } from '@nestjs/testing';
-import { ConfigModule, ConfigService } from '@nestjs/config';
+import { ConfigModule } from '@nestjs/config';
 import { ethers } from 'ethers';
 import { BlockchainModule } from './blockchain.module';
 import { BlockchainConfig } from './blockchain.config';

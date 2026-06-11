@@ -1,3 +1,4 @@
+import { createHash } from 'crypto';
 import {
   Entity,
   PrimaryGeneratedColumn,
@@ -119,7 +120,6 @@ export class Evidence {
   }
 
   static generateFileHash(buffer: Buffer): string {
-    const crypto = require('crypto');
-    return crypto.createHash('sha256').update(buffer).digest('hex');
+    return createHash('sha256').update(buffer).digest('hex');
   }
 }

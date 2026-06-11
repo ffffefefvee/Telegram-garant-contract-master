@@ -9,7 +9,6 @@ import {
   OneToOne,
   Index,
   JoinColumn,
-  Unique,
 } from 'typeorm';
 import { User } from '../../user/entities/user.entity';
 import { Deal } from '../../deal/entities/deal.entity';
@@ -17,7 +16,6 @@ import {
   DisputeStatus,
   DisputeType,
   DisputeSide,
-  ArbitrationDecisionType,
 } from './enums/arbitration.enum';
 import { Evidence } from './evidence.entity';
 import { ArbitrationChat } from './arbitration-chat.entity';

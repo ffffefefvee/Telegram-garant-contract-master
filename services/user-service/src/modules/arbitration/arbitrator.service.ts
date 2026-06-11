@@ -1,6 +1,6 @@
 import { Injectable, NotFoundException, ForbiddenException, BadRequestException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, Between } from 'typeorm';
+import { Repository } from 'typeorm';
 import { ArbitratorProfile } from './entities/arbitrator-profile.entity';
 import { User } from '../user/entities/user.entity';
 import { ArbitratorAvailability, ArbitratorStatus } from './entities/enums/arbitration.enum';
@@ -273,7 +273,7 @@ export class ArbitratorService {
   /**
    * Назначить арбитра на спор (auto или manual)
    */
-  async assignArbitrator(arbitratorUserId: string, disputeId: string): Promise<void> {
+  async assignArbitrator(arbitratorUserId: string, _disputeId: string): Promise<void> {
     const profile = await this.getProfile(arbitratorUserId);
 
     if (!profile.canAcceptCases) {

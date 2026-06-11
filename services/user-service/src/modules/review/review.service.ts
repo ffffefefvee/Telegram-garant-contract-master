@@ -7,7 +7,7 @@ import {
   BadRequestException,
 } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, Brackets } from 'typeorm';
+import { Repository } from 'typeorm';
 import { Review } from './entities/review.entity';
 import { ReputationScore } from './entities/reputation-score.entity';
 import { User } from '../user/entities/user.entity';

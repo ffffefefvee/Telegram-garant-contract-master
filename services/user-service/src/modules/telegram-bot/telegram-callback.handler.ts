@@ -179,7 +179,7 @@ export class TelegramCallbackHandler {
   }
 
   /** Public — called from Reply keyboard hears-handler in TelegramBotService. */
-  async openDealsList(ctx: any, lang: string): Promise<void> {
+  async openDealsList(ctx: any, _lang: string): Promise<void> {
     await this.lifecycleHandler.openDealsMenu(ctx, 'all');
   }
 

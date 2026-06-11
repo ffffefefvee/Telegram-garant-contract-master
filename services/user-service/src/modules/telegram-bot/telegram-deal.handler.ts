@@ -273,36 +273,4 @@ ${t('deal.details.description')}
 ${deal.description}
     `.trim();
   }
-
-  async sendDealNotification(
-    userId: string,
-    dealId: string,
-    notificationType: 'created' | 'accepted' | 'payment' | 'completed' | 'dispute',
-  ): Promise<void> {
-    try {
-      const user = await this.userService.findById(userId);
-
-      if (!user?.telegramId) {
-        return;
-      }
-
-      const lang = await this.userService.getUserLanguage(userId);
-      const t = this.i18nService.t(lang);
-
-      const deal = await this.dealService.findById(dealId);
-
-      const messages: Record<typeof notificationType, string> = {
-        created: `📬 ${t('notifications.new_deal')}\n${t('deal.details.number')} ${deal.dealNumber}`,
-        accepted: `✅ ${t('notifications.deal_accepted')}\n${t('deal.details.number')} ${deal.dealNumber}`,
-        payment: `💰 ${t('notifications.payment_received')}\n${t('deal.details.number')} ${deal.dealNumber}`,
-        completed: `✅ ${t('notifications.deal_completed')}\n${t('deal.details.number')} ${deal.dealNumber}`,
-        dispute: `⚖️ ${t('notifications.dispute_opened')}\n${t('deal.details.number')} ${deal.dealNumber}`,
-      };
-
-      // Отправка через bot будет реализована в TelegramBotService
-      this.logger.log(`Notification ${notificationType} for deal ${dealId}`);
-    } catch (error) {
-      this.logger.error('sendDealNotification error', error);
-    }
-  }
 }

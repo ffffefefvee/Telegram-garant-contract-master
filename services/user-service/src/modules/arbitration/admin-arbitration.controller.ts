@@ -3,14 +3,12 @@ import {
   Get,
   Post,
   Put,
-  Delete,
   Body,
   Param,
   Query,
   HttpCode,
   HttpStatus,
   ParseUUIDPipe,
-  ParseEnumPipe,
 } from '@nestjs/common';
 import { ArbitratorService } from './arbitrator.service';
 import { ArbitrationSettingsService } from './arbitration-settings.service';
@@ -89,8 +87,8 @@ export class AdminArbitrationController {
 
   @Get('disputes')
   async getAllDisputes(
-    @Query('status') status?: DisputeStatus,
-    @Query('limit', ParseUUIDPipe) limit?: number,
+    @Query('status') _status?: DisputeStatus,
+    @Query('limit') _limit?: number,
   ) {
     // Реализация получения всех споров с пагинацией
     return this.disputeService.getUserDisputes(''); // Нужно доработать

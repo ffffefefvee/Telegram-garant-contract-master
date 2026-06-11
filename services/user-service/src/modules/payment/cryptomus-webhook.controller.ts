@@ -9,6 +9,7 @@ import {
   Req,
   UseGuards,
 } from '@nestjs/common';
+import { SkipThrottle } from '@nestjs/throttler';
 import { RawBodyRequest } from '@nestjs/common';
 import { Request } from 'express';
 import { WebhookRateLimitGuard } from './webhook-rate-limit.guard';
@@ -29,6 +30,10 @@ import { PaymentWebhookService } from './payment-webhook.service';
  * Mounted at `/api/webhook/cryptomus`. Excluded from `RequireAuthMiddleware`
  * (see AuthModule).
  */
+// Excluded from the global ThrottlerGuard: Cryptomus retries can burst and
+// the endpoint already has a dedicated WebhookRateLimitGuard keyed off the
+// merchant signature.
+@SkipThrottle()
 @Controller('webhook/cryptomus')
 @UseGuards(WebhookRateLimitGuard)
 export class CryptomusWebhookController {
