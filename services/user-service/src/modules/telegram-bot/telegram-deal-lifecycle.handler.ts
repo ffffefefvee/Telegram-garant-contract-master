@@ -292,6 +292,9 @@ export class TelegramDealLifecycleHandler {
         user.id,
         { description: deal.title ?? deal.dealNumber },
       );
+      if (!paymentUrl) {
+        throw new ConflictException('Payment URL is unavailable');
+      }
       const qrUrl = `https://api.qrserver.com/v1/create-qr-code/?size=300x300&data=${encodeURIComponent(paymentUrl)}`;
       await ctx.reply(this.i18nService.translate('payment.open_link', { lang }), {
         reply_markup: Markup.inlineKeyboard([

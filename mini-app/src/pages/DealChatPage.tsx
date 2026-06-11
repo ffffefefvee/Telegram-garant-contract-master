@@ -5,7 +5,7 @@ import { dealsApi, paymentsApi } from '../api';
 import { useAppStore } from '../store/appStore';
 import { ChatWindow } from '../components/ChatWindow';
 import { EscrowReleasePanel } from '../components/EscrowReleasePanel';
-import { Deal } from '../types';
+import { Deal, PaymentMethodInfo, CreatePaymentResponse } from '../types';
 import {
   PageHeader,
   Button,
@@ -44,6 +44,10 @@ export const DealChatPage: React.FC = () => {
   const [isLoading, setIsLoading] = useState(true);
   const [loadError, setLoadError] = useState(false);
   const [paymentUrl, setPaymentUrl] = useState<string | null>(null);
+  const [payMethods, setPayMethods] = useState<PaymentMethodInfo[] | null>(null);
+  const [payStep, setPayStep] = useState<'choose' | 'hosted' | 'direct'>('choose');
+  const [deposit, setDeposit] = useState<CreatePaymentResponse['deposit'] | null>(null);
+  const [addressCopied, setAddressCopied] = useState(false);
   const [showPaymentSheet, setShowPaymentSheet] = useState(false);
   const [showPaymentVerify, setShowPaymentVerify] = useState(false);
   const [showCancelSheet, setShowCancelSheet] = useState(false);
@@ -112,21 +116,44 @@ export const DealChatPage: React.FC = () => {
   const handlePay = async () => {
     if (!deal) return;
     setActionError(null);
+    setPayStep('choose');
+    setPaymentUrl(null);
+    setDeposit(null);
+    setShowPaymentSheet(true);
+    if (!payMethods) {
+      const methods = await paymentsApi.getMethods();
+      setPayMethods(methods.filter((m) => m.available));
+    }
+  };
+
+  const handleSelectMethod = async (method: 'cryptomus' | 'crypto') => {
+    if (!deal) return;
+    setActionError(null);
     setActionLoading(true);
     try {
       const result = await paymentsApi.create({
         dealId: deal.id,
         amount: deal.amount,
         currency: deal.currency,
+        method,
         description: `Оплата сделки #${deal.dealNumber}`,
       });
-      const url = result.paymentUrl;
-      if (!url) {
-        setActionError('Не удалось получить ссылку на оплату');
-        return;
+      if (method === 'crypto') {
+        if (!result.deposit) {
+          setActionError('Не удалось получить адрес для перевода');
+          return;
+        }
+        setDeposit(result.deposit);
+        setPayStep('direct');
+      } else {
+        const url = result.paymentUrl;
+        if (!url) {
+          setActionError('Не удалось получить ссылку на оплату');
+          return;
+        }
+        setPaymentUrl(url);
+        setPayStep('hosted');
       }
-      setPaymentUrl(url);
-      setShowPaymentSheet(true);
       window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred('success');
     } catch (error) {
       console.error('Payment error:', error);
@@ -134,6 +161,18 @@ export const DealChatPage: React.FC = () => {
       window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred('error');
     } finally {
       setActionLoading(false);
+    }
+  };
+
+  const handleCopyAddress = async () => {
+    if (!deposit) return;
+    try {
+      await navigator.clipboard.writeText(deposit.address);
+      setAddressCopied(true);
+      window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred('success');
+      setTimeout(() => setAddressCopied(false), 2000);
+    } catch {
+      // clipboard unavailable in some webviews — user can long-press the text
     }
   };
 
@@ -487,25 +526,103 @@ export const DealChatPage: React.FC = () => {
         title="Отправка средств"
         footer={
           <div className="deal-actions-block">
-            {paymentUrl && (
-              <Button variant="primary" fullWidth onClick={() => window.open(paymentUrl, '_blank')}>
-                Перейти к оплате (Cryptomus)
+            {payStep === 'choose' && (
+              <>
+                {(payMethods ?? [{ method: 'cryptomus', label: 'Cryptomus', available: true, kind: 'hosted' } as PaymentMethodInfo]).map(
+                  (m) => (
+                    <Button
+                      key={m.method}
+                      variant={m.kind === 'direct' ? 'secondary' : 'primary'}
+                      fullWidth
+                      loading={actionLoading}
+                      onClick={() => void handleSelectMethod(m.method)}
+                    >
+                      {m.kind === 'direct'
+                        ? 'Перевести USDT напрямую (Polygon)'
+                        : 'Оплатить через Cryptomus'}
+                    </Button>
+                  ),
+                )}
+              </>
+            )}
+            {payStep === 'hosted' && paymentUrl && (
+              <>
+                <Button variant="primary" fullWidth onClick={() => window.open(paymentUrl, '_blank')}>
+                  Перейти к оплате (Cryptomus)
+                </Button>
+                <Button variant="secondary" fullWidth onClick={() => void handlePaymentSent()}>
+                  Я отправил средства
+                </Button>
+              </>
+            )}
+            {payStep === 'direct' && deposit && (
+              <Button variant="primary" fullWidth onClick={() => void handlePaymentSent()}>
+                Я отправил средства
               </Button>
             )}
-            <Button variant="secondary" fullWidth onClick={() => void handlePaymentSent()}>
-              Я отправил средства
-            </Button>
           </div>
         }
       >
-        <FeeBreakdown
-          amount={deal.amount}
-          currency={deal.currency}
-          commissionModel={dealMeta?.commissionModel}
-        />
-        <p className="deal-new-hint" style={{ marginTop: 12 }}>
-          Cryptomus конвертирует оплату в USDT и направляет на адрес смарт-контракта сделки.
-        </p>
+        {payStep !== 'direct' && (
+          <FeeBreakdown
+            amount={deal.amount}
+            currency={deal.currency}
+            commissionModel={dealMeta?.commissionModel}
+          />
+        )}
+        {payStep === 'choose' && (
+          <p className="deal-new-hint" style={{ marginTop: 12 }}>
+            Cryptomus — оплата картой или криптовалютой через платёжную страницу.
+            Прямой перевод — отправьте USDT в сети Polygon с любого кошелька или биржи
+            сразу на адрес смарт-контракта сделки, без посредников.
+          </p>
+        )}
+        {payStep === 'hosted' && (
+          <p className="deal-new-hint" style={{ marginTop: 12 }}>
+            Cryptomus конвертирует оплату в USDT и направляет на адрес смарт-контракта сделки.
+          </p>
+        )}
+        {payStep === 'direct' && deposit && (
+          <div className="deal-direct-deposit">
+            <p style={{ marginBottom: 8 }}>
+              Отправьте <strong>ровно {deposit.requiredAmount} {deposit.asset}</strong> (сумма сделки +
+              комиссия покупателя) на адрес смарт-контракта:
+            </p>
+            <div
+              onClick={() => void handleCopyAddress()}
+              style={{
+                fontFamily: 'monospace',
+                fontSize: 13,
+                wordBreak: 'break-all',
+                background: 'var(--color-bg-secondary, rgba(128,128,128,0.12))',
+                borderRadius: 8,
+                padding: '10px 12px',
+                cursor: 'pointer',
+              }}
+            >
+              {deposit.address}
+            </div>
+            <Button variant="secondary" fullWidth onClick={() => void handleCopyAddress()} style={{ marginTop: 8 }}>
+              {addressCopied ? 'Скопировано ✓' : 'Скопировать адрес'}
+            </Button>
+            <div style={{ display: 'flex', justifyContent: 'center', marginTop: 12 }}>
+              <img
+                src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(deposit.address)}`}
+                alt="QR-код адреса"
+                width={160}
+                height={160}
+                style={{ borderRadius: 8, background: '#fff', padding: 6 }}
+              />
+            </div>
+            <p className="deal-new-hint" style={{ marginTop: 12 }}>
+              ⚠️ Только <strong>{deposit.asset}</strong> в сети{' '}
+              <strong>{deposit.network === 'polygon' ? 'Polygon' : deposit.network}</strong>.
+              Перевод в другой сети приведёт к потере средств. Средства зачисляются
+              напрямую в эскроу-контракт — платформа их не хранит. Подтверждение
+              занимает 1–2 минуты после поступления.
+            </p>
+          </div>
+        )}
       </BottomSheet>
 
       <PaymentVerifyModal

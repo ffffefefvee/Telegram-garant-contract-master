@@ -1,4 +1,5 @@
-import { IsString, IsNumber, IsOptional, Min, IsEnum } from 'class-validator';
+import { IsString, IsNumber, IsOptional, Min, IsEnum, IsIn } from 'class-validator';
+import { PaymentMethod } from '../enums/payment.enum';
 
 export enum PaymentNetwork {
   POLYGON = 'polygon',
@@ -41,6 +42,14 @@ export class CreatePaymentDto {
   @IsOptional()
   @IsString()
   escrowAddress?: string;
+
+  /**
+   * Payment rail. Supported: 'cryptomus' (hosted checkout, default) and
+   * 'crypto' (direct USDT transfer to the deal's escrow address on Polygon).
+   */
+  @IsOptional()
+  @IsIn([PaymentMethod.CRYPTOMUS, PaymentMethod.CRYPTO])
+  method?: PaymentMethod;
 }
 
 export class CreatePayoutDto {

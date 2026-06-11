@@ -91,16 +91,4 @@ export class AdminDisputeController {
       description: `Закрыт. Причина: ${reason}`,
     });
   }
-
-  @Get('stats')
-  @Roles(Role.ADMIN, Role.SUPER_ADMIN)
-  async getDisputeStats() {
-    return this.disputeService.getAdminStats();
-  }
-
-  @Get('arbitrators/performance')
-  @Roles(Role.ADMIN, Role.SUPER_ADMIN)
-  async getArbitratorsPerformance() {
-    return this.arbitratorService.getAllPerformance();
-  }
 }

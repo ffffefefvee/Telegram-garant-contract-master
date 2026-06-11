@@ -10,9 +10,10 @@ import {
   ParseUUIDPipe,
   ParseIntPipe,
 } from '@nestjs/common';
-import { PaymentService } from './payment.service';
+import { PaymentService, CreatedPaymentResult } from './payment.service';
 import { Payment } from './entities/payment.entity';
 import { CreatePaymentDto } from './dto/create-payment.dto';
+import { RailDescriptor } from './rails/rail-registry.service';
 import { CurrentUser } from '../auth/current-user.decorator';
 import type { UserPayload } from '../auth/auth.middleware';
 
@@ -25,15 +26,19 @@ export class PaymentController {
   async createPayment(
     @Body() data: CreatePaymentDto,
     @CurrentUser() user: UserPayload,
-  ): Promise<{
-    payment: Payment;
-    paymentUrl?: string;
-    expiresAt?: Date;
-  }> {
+  ): Promise<CreatedPaymentResult> {
     return this.paymentService.createPayment(data.dealId, data.amount, user.id, {
       currency: data.currency,
       description: data.description,
+      method: data.method,
     });
+  }
+
+  /** Available payment rails for the method selector in the mini-app.
+   *  NOTE: static route — must stay above `@Get(':id')`. */
+  @Get('methods')
+  getMethods(): RailDescriptor[] {
+    return this.paymentService.listPaymentMethods();
   }
 
   @Get()

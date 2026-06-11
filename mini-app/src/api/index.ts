@@ -1,5 +1,13 @@
 import axios, { AxiosInstance } from 'axios';
-import type { AuthSession, Deal, Message, Payment, User } from '../types';
+import type {
+  AuthSession,
+  CreatePaymentResponse,
+  Deal,
+  Message,
+  Payment,
+  PaymentMethodInfo,
+  User,
+} from '../types';
 import {
   MOCK_DISPUTES,
   MOCK_DISPUTE_DETAILS,
@@ -358,9 +366,11 @@ export const paymentsApi = {
     amount: number;
     currency?: string;
     description?: string;
-  }) => {
+    /** 'cryptomus' (hosted, default) | 'crypto' (direct USDT to escrow). */
+    method?: 'cryptomus' | 'crypto';
+  }): Promise<CreatePaymentResponse> => {
     try {
-      return await api.post<Payment>('/payments', data);
+      return await api.post<CreatePaymentResponse>('/payments', data);
     } catch {
       if (isMockMode()) {
         const deal = mockDealsState.find((d) => d.id === data.dealId);
@@ -373,17 +383,43 @@ export const paymentsApi = {
             },
           });
         }
-        return {
+        const mockPayment: Payment = {
           id: `mock-pay-${Date.now()}`,
           dealId: data.dealId,
           amount: data.amount,
           currency: data.currency ?? 'USDT',
           status: 'pending' as const,
-          paymentUrl: 'https://pay.cryptomus.com/mock',
+          paymentUrl:
+            data.method === 'crypto' ? undefined : 'https://pay.cryptomus.com/mock',
           createdAt: new Date().toISOString(),
+        };
+        return {
+          payment: mockPayment,
+          paymentUrl: mockPayment.paymentUrl,
+          deposit:
+            data.method === 'crypto'
+              ? {
+                  address: '0x1111111111111111111111111111111111111111',
+                  network: 'polygon',
+                  asset: 'USDT',
+                  requiredAmount: String(data.amount),
+                }
+              : undefined,
         };
       }
       throw new Error('Failed to create payment');
+    }
+  },
+
+  /** Available payment rails (Cryptomus / direct USDT). */
+  getMethods: async (): Promise<PaymentMethodInfo[]> => {
+    try {
+      return await api.get<PaymentMethodInfo[]>('/payments/methods');
+    } catch {
+      // Fallback: hosted checkout only.
+      return [
+        { method: 'cryptomus', label: 'Cryptomus', available: true, kind: 'hosted' },
+      ];
     }
   },
 

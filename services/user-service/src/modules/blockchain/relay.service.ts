@@ -87,6 +87,21 @@ export class RelayService {
   }
 
   /**
+   * Call `notifyFunded()` on a clone WITHOUT forwarding from the hot-wallet.
+   * Used by the direct-deposit rail where the buyer transfers USDT straight
+   * to the escrow clone address — the relay only confirms on-chain that the
+   * balance covers amount + buyerFee. No custody is taken at any point.
+   */
+  async notifyFundedOnly(escrowAddress: string): Promise<string> {
+    if (!this.provider.isReady) {
+      throw new Error('Blockchain not ready');
+    }
+    const txHash = await this.escrow.notifyFunded(escrowAddress);
+    this.logger.log(`Escrow ${escrowAddress} direct-funded: notify=${txHash}`);
+    return txHash;
+  }
+
+  /**
    * Get the canonical on-chain state of an escrow. Used by reconciliation
    * jobs to detect drift between DB and chain.
    */
