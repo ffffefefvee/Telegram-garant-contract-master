@@ -246,3 +246,70 @@
 .admin-payment-status.status-refunded {
   color: #6366f1;
 }
+
+/* === TON deposits (unmatched-ledger recovery) === */
+.admin-deposit-status {
+  font-size: 12px;
+  padding: 2px 8px;
+  border-radius: 10px;
+  white-space: nowrap;
+}
+
+.deposit-unmatched {
+  background: #fef3c7;
+  color: #b45309;
+}
+
+.deposit-matched {
+  background: #d1fae5;
+  color: #047857;
+}
+
+.deposit-ignored {
+  background: var(--tg-theme-secondary-bg-color, #f3f4f6);
+  color: var(--tg-theme-hint-color, #6b7280);
+}
+
+.admin-deposit-hint {
+  color: var(--tg-theme-link-color, #2481cc);
+}
+
+.admin-deposit-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-top: 10px;
+}
+
+.admin-deposit-actions .admin-link-button.active {
+  background: var(--tg-theme-secondary-bg-color, #f3f4f6);
+}
+
+.admin-deposit-form {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 10px;
+  padding: 10px;
+  border: 1px solid var(--tg-theme-section-separator-color, #e5e7eb);
+  border-radius: 10px;
+}
+
+.admin-deposit-checkbox {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  font-size: 12px;
+  color: var(--tg-theme-hint-color, #6b7280);
+  line-height: 1.4;
+}
+
+.admin-deposit-checkbox input {
+  margin-top: 2px;
+}
+
+.admin-deposit-success {
+  margin: 8px 0 0;
+  font-size: 13px;
+  color: #047857;
+}

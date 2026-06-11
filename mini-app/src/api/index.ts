@@ -711,9 +711,79 @@ export const storeApi = {
   },
 };
 
+/** Incoming TON-wallet deposit no payment claims (missing/typo'd memo). */
+export interface TonUnmatchedDepositRow {
+  id: string;
+  eventId: string;
+  actionIndex: number;
+  /** 'USDT' (6 dp units) or 'TON' (nanotons, 9 dp). */
+  asset: 'USDT' | 'TON';
+  /** Unix seconds; bigint column → may arrive as string. */
+  txTimestamp: number | string;
+  senderAddress: string;
+  /** Raw units of `asset`, bigint-safe decimal string. */
+  amountUnits: string;
+  comment: string | null;
+  status: 'unmatched' | 'matched' | 'ignored';
+  /** Payment whose (expired) memo matches the comment — admin hint. */
+  paymentHintId: string | null;
+  matchedPaymentId: string | null;
+  resolvedBy: string | null;
+  resolvedAt: string | null;
+  resolutionNote: string | null;
+  createdAt: string;
+}
+
+export interface ExtendDeadlineResponse {
+  escrowAddress: string;
+  previousDeadlineUnix: number;
+  newDeadlineUnix: number;
+  txHash: string;
+  rateLockExtended: boolean;
+}
+
 export const adminApi = {
   /** On-chain treasury balances + token info. Read-only. */
   getTreasurySummary: () => api.get<TreasurySummary>('/admin/treasury/summary'),
+
+  /** Unmatched TON-wallet deposits ledger (filter by status). */
+  getTonUnmatched: (status?: TonUnmatchedDepositRow['status'], limit = 50) =>
+    api.get<TonUnmatchedDepositRow[]>('/admin/payments/ton/unmatched', {
+      limit,
+      ...(status ? { status } : {}),
+    }),
+
+  /** Credit an unmatched deposit to a payment → standard escrow funding. */
+  matchTonDeposit: (depositId: string, paymentId: string, note?: string) =>
+    api.post<{ deposit: TonUnmatchedDepositRow }>(
+      `/admin/payments/ton/unmatched/${depositId}/match`,
+      { paymentId, ...(note ? { note } : {}) },
+    ),
+
+  /** Mark an unmatched deposit as handled outside the system. */
+  ignoreTonDeposit: (depositId: string, reason: string) =>
+    api.post<TonUnmatchedDepositRow>(
+      `/admin/payments/ton/unmatched/${depositId}/ignore`,
+      { reason },
+    ),
+
+  /**
+   * Extend the on-chain funding deadline of a payment's escrow so a late
+   * deposit can be matched through the standard path.
+   */
+  extendPaymentDeadline: (
+    paymentId: string,
+    hours: number,
+    options?: { extendRateLock?: boolean; note?: string },
+  ) =>
+    api.post<ExtendDeadlineResponse>(
+      `/admin/payments/${paymentId}/extend-deadline`,
+      {
+        hours,
+        ...(options?.extendRateLock ? { extendRateLock: true } : {}),
+        ...(options?.note ? { note: options.note } : {}),
+      },
+    ),
 
   /** Paginated audit log; combine filters with AND. */
   getAuditLog: (query: AuditLogQuery = {}) =>

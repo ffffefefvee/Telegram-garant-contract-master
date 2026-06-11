@@ -69,6 +69,7 @@ import { DirectDepositWatcher } from './direct-deposit.watcher';
     RailRegistryService,
     TonRecoveryService,
     EscrowDeadlineService,
+    TonApiService,
     TypeOrmModule,
   ],
 })
