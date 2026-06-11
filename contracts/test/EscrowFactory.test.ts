@@ -118,13 +118,13 @@ describe("EscrowFactory + EscrowImplementation", () => {
   });
 
   describe("createEscrow", () => {
-    const deadline = () => Math.floor(Date.now() / 1000) + 3600;
+    const deadline = async () => (await time.latest()) + 3600;
 
     it("clones, initializes, and grants ESCROW_ROLE", async () => {
       const dealId = dealIdFor(1);
       const tx = await factory
         .connect(relay)
-        .createEscrow(dealId, buyer.address, seller.address, TWENTY_USDT, FeeModel.SPLIT_50_50, deadline());
+        .createEscrow(dealId, buyer.address, seller.address, TWENTY_USDT, FeeModel.SPLIT_50_50, await deadline());
       await tx.wait();
 
       const escrowAddr = await factory.escrowOf(dealId);
@@ -152,7 +152,7 @@ describe("EscrowFactory + EscrowImplementation", () => {
             seller.address,
             MIN_DEAL - 1n,
             FeeModel.SPLIT_50_50,
-            deadline(),
+            await deadline(),
           ),
       ).to.be.revertedWithCustomError(factory, "AmountBelowMinimum");
     });
@@ -161,11 +161,11 @@ describe("EscrowFactory + EscrowImplementation", () => {
       const dealId = dealIdFor(3);
       await factory
         .connect(relay)
-        .createEscrow(dealId, buyer.address, seller.address, TWENTY_USDT, FeeModel.SPLIT_50_50, deadline());
+        .createEscrow(dealId, buyer.address, seller.address, TWENTY_USDT, FeeModel.SPLIT_50_50, await deadline());
       await expect(
         factory
           .connect(relay)
-          .createEscrow(dealId, buyer.address, seller.address, TWENTY_USDT, FeeModel.SPLIT_50_50, deadline()),
+          .createEscrow(dealId, buyer.address, seller.address, TWENTY_USDT, FeeModel.SPLIT_50_50, await deadline()),
       ).to.be.revertedWithCustomError(factory, "EscrowAlreadyExists");
     });
 
@@ -174,7 +174,7 @@ describe("EscrowFactory + EscrowImplementation", () => {
       await expect(
         factory
           .connect(stranger)
-          .createEscrow(dealId, buyer.address, seller.address, TWENTY_USDT, FeeModel.SPLIT_50_50, deadline()),
+          .createEscrow(dealId, buyer.address, seller.address, TWENTY_USDT, FeeModel.SPLIT_50_50, await deadline()),
       ).to.be.reverted;
     });
   });
