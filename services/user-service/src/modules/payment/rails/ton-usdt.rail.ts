@@ -212,15 +212,19 @@ export class TonUsdtRail implements PaymentRail {
     const sinceUnix =
       Math.floor(new Date(payment.createdAt).getTime() / 1000) - 300;
     const incoming = await this.tonApi.findIncomingUsdtByMemo(memo, sinceUnix);
+    // Units an admin manually credited from the unmatched-deposit ledger
+    // (buyer forgot/mistyped the memo) — counted exactly like memo matches.
+    const manualUnits = this.parseManualCreditUnits(payment);
+    const totalUnits = incoming.receivedUnits + manualUnits;
     const receivedUsdt = Number(
-      ethers.formatUnits(incoming.receivedUnits, TON_USDT_DECIMALS),
+      ethers.formatUnits(totalUnits, TON_USDT_DECIMALS),
     );
     const requiredUnits = ethers.parseUnits(
       ethers.formatUnits(requiredWei, USDT_DECIMALS),
       TON_USDT_DECIMALS,
     );
 
-    if (incoming.receivedUnits >= requiredUnits && !deadlinePassed) {
+    if (totalUnits >= requiredUnits && !deadlinePassed) {
       if (this.fundingLocks.has(escrowAddress)) {
         // Another check is already forwarding — report progress only.
         return { completed: false, receivedUsdt, requiredUsdt };
@@ -270,6 +274,18 @@ export class TonUsdtRail implements PaymentRail {
     throw new BadRequestException(
       'TON payment requires a USDT-denominated deal (or a locked USDT amount)',
     );
+  }
+
+  /** Admin-credited units from metadata; malformed values count as 0. */
+  private parseManualCreditUnits(payment: Payment): bigint {
+    try {
+      const units = BigInt(
+        (payment.metadata?.manualCreditUnits as string) ?? '0',
+      );
+      return units >= 0n ? units : 0n;
+    } catch {
+      return 0n;
+    }
   }
 
   /** Short, unambiguous transfer comment, e.g. "TG-7K2M9QX4". */

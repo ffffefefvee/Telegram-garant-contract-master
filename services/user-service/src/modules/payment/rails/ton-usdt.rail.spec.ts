@@ -256,6 +256,44 @@ describe('TonUsdtRail', () => {
       expect(relay.forwardAndFund).not.toHaveBeenCalled();
     });
 
+    it('counts admin-credited units (manual match) toward completion', async () => {
+      await setup();
+      relay.readEscrow.mockResolvedValue(makeSnapshot());
+      // Buyer sent 102.5 USDT without a memo; admin matched it manually.
+      tonApi.findIncomingUsdtByMemo.mockResolvedValue({ receivedUnits: 0n });
+      const payment = makePayment({
+        metadata: {
+          memo: 'TG-TEST1234',
+          manualCreditUnits: usdt('102.5').toString(),
+        },
+      } as unknown as Partial<Payment>);
+
+      const result = await rail.checkStatus(payment);
+
+      expect(relay.forwardAndFund).toHaveBeenCalledWith(
+        ESCROW_ADDR,
+        usdt('102.5'),
+      );
+      expect(result.completed).toBe(true);
+    });
+
+    it('treats malformed manualCreditUnits as zero', async () => {
+      await setup();
+      relay.readEscrow.mockResolvedValue(makeSnapshot());
+      tonApi.findIncomingUsdtByMemo.mockResolvedValue({
+        receivedUnits: usdt('50'),
+      });
+      const payment = makePayment({
+        metadata: { memo: 'TG-TEST1234', manualCreditUnits: 'garbage' },
+      } as unknown as Partial<Payment>);
+
+      const result = await rail.checkStatus(payment);
+
+      expect(result.completed).toBe(false);
+      expect(result.receivedUsdt).toBe(50);
+      expect(relay.forwardAndFund).not.toHaveBeenCalled();
+    });
+
     it('is idempotent for an already-FUNDED escrow', async () => {
       await setup();
       relay.readEscrow.mockResolvedValue(

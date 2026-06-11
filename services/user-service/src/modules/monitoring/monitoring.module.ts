@@ -12,6 +12,7 @@ import { DealModule } from '../deal/deal.module';
 import { PaymentModule } from '../payment/payment.module';
 import { Deal } from '../deal/entities/deal.entity';
 import { Payment } from '../payment/entities/payment.entity';
+import { TonUnmatchedDeposit } from '../payment/entities/ton-unmatched-deposit.entity';
 import { OpsModule } from '../ops/ops.module';
 import { TelegramBotModule } from '../telegram-bot/telegram-bot.module';
 import { BlockchainModule } from '../blockchain/blockchain.module';
@@ -28,6 +29,7 @@ import { HealthController } from './health.controller';
       JobSchedule,
       Deal,
       Payment,
+      TonUnmatchedDeposit,
     ]),
     forwardRef(() => DealModule),
     forwardRef(() => PaymentModule),

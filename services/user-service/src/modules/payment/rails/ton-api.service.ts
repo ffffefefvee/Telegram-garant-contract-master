@@ -18,6 +18,22 @@ export interface TonUsdtIncoming {
   lastTxHash?: string;
 }
 
+/** One finalized incoming USDT jetton transfer to the platform wallet. */
+export interface TonIncomingTransfer {
+  /** tonapi event id (proof-of-payment reference). */
+  eventId: string;
+  /** Index of the JettonTransfer action inside the event. */
+  actionIndex: number;
+  /** On-chain timestamp (unix seconds). */
+  timestamp: number;
+  /** Sender address in raw `0:hex` form as reported by tonapi. */
+  sender: string;
+  /** Amount in raw jetton units (6 dp). */
+  amountUnits: bigint;
+  /** Transfer comment as sent (trimmed; empty string when absent). */
+  comment: string;
+}
+
 interface TonapiJettonTransferAction {
   type: string;
   status: string;
@@ -100,7 +116,27 @@ export class TonApiService {
     if (!this.isEnabled()) {
       return { receivedUnits: 0n };
     }
+    const events = await this.fetchEvents(sinceUnix);
+    return this.sumMatchingTransfers(events, memo);
+  }
 
+  /**
+   * All finalized incoming USDT jetton transfers to the platform wallet
+   * since `sinceUnix`, regardless of comment. Used by the unmatched-deposit
+   * scanner — every transfer must be attributable, not only the ones whose
+   * memo we expect.
+   */
+  async listIncomingUsdtTransfers(
+    sinceUnix: number,
+  ): Promise<TonIncomingTransfer[]> {
+    if (!this.isEnabled()) {
+      return [];
+    }
+    const events = await this.fetchEvents(sinceUnix);
+    return this.extractIncomingTransfers(events);
+  }
+
+  private async fetchEvents(sinceUnix: number): Promise<TonapiEvent[]> {
     const url =
       `${this.baseUrl}/v2/accounts/${encodeURIComponent(this.walletAddress)}` +
       `/events?limit=100&start_date=${Math.max(0, Math.floor(sinceUnix))}`;
@@ -115,7 +151,7 @@ export class TonApiService {
       );
     }
     const body = (await response.json()) as { events?: TonapiEvent[] };
-    return this.sumMatchingTransfers(body.events ?? [], memo);
+    return body.events ?? [];
   }
 
   /** Exposed for unit tests — pure parsing, no I/O. */
@@ -123,24 +159,41 @@ export class TonApiService {
     let receivedUnits = 0n;
     let lastTxHash: string | undefined;
 
+    for (const transfer of this.extractIncomingTransfers(events)) {
+      if (transfer.comment !== memo) continue;
+      receivedUnits += transfer.amountUnits;
+      lastTxHash = transfer.eventId;
+    }
+    return { receivedUnits, lastTxHash };
+  }
+
+  /** Exposed for unit tests — pure parsing, no I/O. */
+  extractIncomingTransfers(events: TonapiEvent[]): TonIncomingTransfer[] {
+    const transfers: TonIncomingTransfer[] = [];
+
     for (const event of events) {
       if (event.in_progress) continue; // not finalized yet
-      for (const action of event.actions ?? []) {
-        if (action.type !== 'JettonTransfer' || action.status !== 'ok') continue;
+      (event.actions ?? []).forEach((action, actionIndex) => {
+        if (action.type !== 'JettonTransfer' || action.status !== 'ok') return;
         const t = action.JettonTransfer;
-        if (!t?.amount || !t.recipient?.address || !t.jetton?.address) continue;
-        if (!this.sameAddress(t.recipient.address, this.walletRaw)) continue;
-        if (!this.sameAddress(t.jetton.address, this.jettonRaw)) continue;
-        if ((t.comment ?? '').trim() !== memo) continue;
+        if (!t?.amount || !t.recipient?.address || !t.jetton?.address) return;
+        if (!this.sameAddress(t.recipient.address, this.walletRaw)) return;
+        if (!this.sameAddress(t.jetton.address, this.jettonRaw)) return;
         try {
-          receivedUnits += BigInt(t.amount);
-          lastTxHash = event.event_id;
+          transfers.push({
+            eventId: event.event_id,
+            actionIndex,
+            timestamp: event.timestamp,
+            sender: t.sender?.address ?? 'unknown',
+            amountUnits: BigInt(t.amount),
+            comment: (t.comment ?? '').trim(),
+          });
         } catch {
           this.logger.warn(`Unparseable jetton amount in event ${event.event_id}`);
         }
-      }
+      });
     }
-    return { receivedUnits, lastTxHash };
+    return transfers;
   }
 
   private sameAddress(rawFromApi: string, ourRaw: string | null): boolean {

@@ -28,6 +28,9 @@ import { OutboxService } from '../ops/outbox.service';
 import { TelegramBotService } from '../telegram-bot/telegram-bot.service';
 import { ConfigService } from '@nestjs/config';
 import { TreasuryClient } from '../blockchain/treasury.client';
+import { RelayService } from '../blockchain/relay.service';
+import { TonUnmatchedDeposit } from '../payment/entities/ton-unmatched-deposit.entity';
+import { ethers } from 'ethers';
 import { BlockchainProvider } from '../blockchain/blockchain.provider';
 
 @Injectable()
@@ -55,11 +58,14 @@ export class MonitoringService implements OnModuleInit {
     private dealRepo: Repository<Deal>,
     @InjectRepository(Payment)
     private paymentRepo: Repository<Payment>,
+    @InjectRepository(TonUnmatchedDeposit)
+    private tonUnmatchedRepo: Repository<TonUnmatchedDeposit>,
     private readonly outbox: OutboxService,
     @Inject(forwardRef(() => TelegramBotService))
     private readonly telegramBot: TelegramBotService,
     private readonly config: ConfigService,
     private readonly treasury: TreasuryClient,
+    private readonly relay: RelayService,
     private readonly blockchainProvider: BlockchainProvider,
   ) {}
 
@@ -77,6 +83,7 @@ export class MonitoringService implements OnModuleInit {
     setInterval(() => this.checkStuckDeals(), 300000);
     setInterval(() => this.checkPendingPayments(), 120000);
     setInterval(() => this.checkTreasuryReserve(), 600000);
+    setInterval(() => this.checkTonOps(), 600000);
     setInterval(() => this.cleanupOldAlerts(), 3600000);
 
     this.logger.log('Background monitoring started');
@@ -276,6 +283,85 @@ export class MonitoringService implements OnModuleInit {
     }
   }
 
+  /**
+   * TON rail operations check (every 10 min):
+   *  1. Relay Polygon USDT float — the TON rail funds escrows from it.
+   *     Below TON_MIN_FLOAT_USDT the rail auto-hides (CRITICAL: a payment
+   *     method just disappeared for users); below TON_FLOAT_WARN_USDT
+   *     (default 2× min) it is time to rebalance TON→Polygon (WARNING).
+   *  2. Unmatched TON deposits — customer money the watcher could not
+   *     attribute (ERROR: needs manual matching in the admin panel).
+   */
+  async checkTonOps(): Promise<void> {
+    try {
+      const unmatched = await this.tonUnmatchedRepo.count({
+        where: { status: 'unmatched' },
+      });
+      await this.recordMetric('ton.unmatched_deposits', unmatched, 'count');
+      if (unmatched > 0) {
+        await this.createAlertOnce(
+          AlertType.PAYMENT_FAILED,
+          AlertSeverity.ERROR,
+          'Unmatched TON deposits need manual matching',
+          `${unmatched} incoming TON deposit(s) have no matching payment (missing/typo'd memo). Match or ignore them: GET /admin/payments/ton/unmatched`,
+          { unmatched },
+        );
+      }
+    } catch (error) {
+      this.logger.error(`TON unmatched check failed: ${(error as Error).message}`);
+    }
+
+    if (!this.blockchainProvider.isReady) return;
+    try {
+      const minFloat = Number(this.config.get<string>('TON_MIN_FLOAT_USDT', '500'));
+      const warnFloat = Number(
+        this.config.get<string>('TON_FLOAT_WARN_USDT', String(minFloat * 2)),
+      );
+      const balance = await this.relay.hotWalletBalance();
+      const floatUsdt = Number(ethers.formatUnits(balance, 6));
+      await this.recordMetric('ton.relay_float_usdt', floatUsdt, 'USDT');
+
+      if (floatUsdt < minFloat) {
+        await this.createAlertOnce(
+          AlertType.SYSTEM_ERROR,
+          AlertSeverity.CRITICAL,
+          'TON rail hidden: relay float below minimum',
+          `Relay float ${floatUsdt.toFixed(2)} USDT < TON_MIN_FLOAT_USDT (${minFloat}). The TON payment method is now hidden from users — rebalance TON→Polygon.`,
+          { floatUsdt, minFloat },
+        );
+      } else if (floatUsdt < warnFloat) {
+        await this.createAlertOnce(
+          AlertType.SYSTEM_ERROR,
+          AlertSeverity.WARNING,
+          'TON relay float running low',
+          `Relay float ${floatUsdt.toFixed(2)} USDT < warn threshold (${warnFloat}). Plan a TON→Polygon rebalance before the rail auto-hides at ${minFloat}.`,
+          { floatUsdt, warnFloat, minFloat },
+        );
+      }
+    } catch (error) {
+      this.logger.error(`TON float check failed: ${(error as Error).message}`);
+    }
+  }
+
+  /**
+   * Like createAlert, but skips when an unresolved alert with the same
+   * type+title already exists — periodic checks must not spam a new row
+   * (and a new Telegram ping) every tick for the same ongoing condition.
+   */
+  async createAlertOnce(
+    type: AlertType,
+    severity: AlertSeverity,
+    title: string,
+    message?: string,
+    metadata?: Record<string, any>,
+  ): Promise<SystemAlert | null> {
+    const existing = await this.alertRepository.findOne({
+      where: { type, title, isResolved: false },
+    });
+    if (existing) return null;
+    return this.createAlert(type, severity, title, message, metadata);
+  }
+
   async createAlert(
     type: AlertType,
     severity: AlertSeverity,
@@ -297,7 +383,38 @@ export class MonitoringService implements OnModuleInit {
       this.logger.warn(`ERROR ALERT: ${title} - ${message}`);
     }
 
+    if (
+      severity === AlertSeverity.CRITICAL ||
+      severity === AlertSeverity.ERROR
+    ) {
+      await this.pushAlertToOpsChat(severity, title, message);
+    }
+
     return alert;
+  }
+
+  /**
+   * Best-effort Telegram push for ERROR/CRITICAL alerts. Set
+   * OPS_ALERT_CHAT_ID to the admin's Telegram chat id to receive them;
+   * unset = silently skipped. Never throws — alerting must not break the
+   * code path that raised the alert.
+   */
+  private async pushAlertToOpsChat(
+    severity: AlertSeverity,
+    title: string,
+    message?: string,
+  ): Promise<void> {
+    const chatId = Number(this.config.get<string>('OPS_ALERT_CHAT_ID', ''));
+    if (!chatId) return;
+    try {
+      const icon = severity === AlertSeverity.CRITICAL ? '🚨' : '⚠️';
+      const text = `${icon} <b>${escapeHtml(title)}</b>\n${escapeHtml(message ?? '')}`;
+      await this.telegramBot.sendMessage(chatId, text, { parseMode: 'HTML' });
+    } catch (error) {
+      this.logger.warn(
+        `Failed to push alert to ops chat: ${(error as Error).message}`,
+      );
+    }
   }
 
   async resolveAlert(alertId: string, resolvedBy: string, resolution: string): Promise<void> {
@@ -395,4 +512,11 @@ export class MonitoringService implements OnModuleInit {
       payments_pending: pendingPayments,
     };
   }
+}
+
+function escapeHtml(text: string): string {
+  return text
+    .replace(/&/g, '&amp;')
+    .replace(/</g, '&lt;')
+    .replace(/>/g, '&gt;');
 }
