@@ -13,6 +13,14 @@ import { User } from '../user/entities/user.entity';
 const BOT_TOKEN = '987654321:JEST_BOT_TOKEN';
 const JWT_SECRET = 'jest-jwt-secret-keep-this-long-enough-32b';
 
+// Nest ConfigModule gives process.env precedence over `load:` factories.
+// CI exports TELEGRAM_BOT_TOKEN/JWT_SECRET (e.g. for other suites), which
+// would silently override our fixtures and break the HMAC — pin them here.
+beforeAll(() => {
+  process.env.TELEGRAM_BOT_TOKEN = BOT_TOKEN;
+  process.env.JWT_SECRET = JWT_SECRET;
+});
+
 function buildInitData(opts: { user: object; authDate?: number; tamper?: boolean }): string {
   const fields: Record<string, string> = {
     user: JSON.stringify(opts.user),
@@ -136,6 +144,9 @@ describe('AuthService', () => {
 
   describe('configuration guards', () => {
     it('throws 503 when bot token missing', async () => {
+      // process.env overrides `load:` factories — must actually unset it.
+      const savedToken = process.env.TELEGRAM_BOT_TOKEN;
+      delete process.env.TELEGRAM_BOT_TOKEN;
       const moduleRef2 = await Test.createTestingModule({
         imports: [
           ConfigModule.forRoot({
@@ -148,8 +159,12 @@ describe('AuthService', () => {
         providers: [AuthService, { provide: UserService, useValue: { updateTelegramUser: jest.fn() } }],
       }).compile();
       const svc = moduleRef2.get(AuthService);
-      await expect(svc.loginWithInitData('whatever')).rejects.toThrow(ServiceUnavailableException);
-      await moduleRef2.close();
+      try {
+        await expect(svc.loginWithInitData('whatever')).rejects.toThrow(ServiceUnavailableException);
+      } finally {
+        process.env.TELEGRAM_BOT_TOKEN = savedToken;
+        await moduleRef2.close();
+      }
     });
   });
 });

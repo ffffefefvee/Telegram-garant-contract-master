@@ -84,6 +84,34 @@ export interface Payment {
     | 'refunded';
   paymentUrl?: string;
   createdAt: string;
+  metadata?: {
+    receivedUsdt?: number;
+    requiredUsdt?: number;
+    [key: string]: unknown;
+  };
+}
+
+/** Payment rail descriptor from GET /payments/methods. */
+export interface PaymentMethodInfo {
+  method: 'cryptomus' | 'crypto';
+  label: string;
+  available: boolean;
+  kind: 'hosted' | 'direct';
+}
+
+/** Response of POST /payments. */
+export interface CreatePaymentResponse {
+  payment: Payment;
+  /** Hosted checkout URL (Cryptomus). */
+  paymentUrl?: string;
+  /** Direct on-chain deposit details (direct USDT rail). */
+  deposit?: {
+    address: string;
+    network: string;
+    asset: string;
+    requiredAmount: string;
+  };
+  expiresAt?: string;
 }
 
 export interface Review {

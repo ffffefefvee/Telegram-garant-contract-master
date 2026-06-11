@@ -314,6 +314,56 @@ export class PaymentWebhookService {
     return quote;
   }
 
+  /**
+   * Settlement for the direct USDT rail: by the time this is called the
+   * escrow clone is already FUNDED on-chain (buyer paid the clone address
+   * directly and the rail fired notifyFunded). No fund forwarding — we only
+   * audit-log and move the deal to IN_PROGRESS.
+   */
+  async finalizeDirectPayment(
+    payment: Payment,
+    details: { txId?: string; fundedUsdt?: number },
+  ): Promise<void> {
+    await this.auditLog.write({
+      aggregateType: 'payment',
+      aggregateId: payment.id,
+      action: 'payment.completed',
+      details: {
+        orderId: payment.transactionId,
+        method: 'direct_usdt',
+        txid: details.txId ?? null,
+        fundedUsdt: details.fundedUsdt ?? null,
+        dealId: payment.dealId,
+        escrowAddress: payment.escrowAddress,
+      },
+    });
+
+    if (!payment.dealId) {
+      return;
+    }
+    const deal =
+      payment.deal ??
+      (await this.dealRepository.findOne({ where: { id: payment.dealId } }));
+    if (!deal) {
+      this.logger.warn(
+        `Direct payment ${payment.id} completed but deal ${payment.dealId} not found`,
+      );
+      return;
+    }
+
+    await this.auditLog.write({
+      aggregateType: 'deal',
+      aggregateId: deal.id,
+      action: 'escrow.funded',
+      details: {
+        escrowAddress: payment.escrowAddress,
+        notifyTx: details.txId ?? null,
+        rail: 'direct_usdt',
+      },
+    });
+    await this.transitionDealToInProgress(deal, payment);
+  }
+
   private async transitionDealToInProgress(deal: Deal, payment: Payment): Promise<void> {
     if (deal.status === DealStatus.IN_PROGRESS || deal.status === DealStatus.COMPLETED) {
       return;
