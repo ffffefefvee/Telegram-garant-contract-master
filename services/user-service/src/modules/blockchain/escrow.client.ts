@@ -105,6 +105,20 @@ export class EscrowClient {
   }
 
   /**
+   * Extend the funding deadline of an AWAITING_FUNDING escrow. Relay-only
+   * on-chain; used by admin recovery when a buyer's money arrived late.
+   */
+  async extendFundingDeadline(address: string, newDeadlineUnix: number): Promise<string> {
+    const c = this.writeContract(address);
+    const tx = await c.extendFundingDeadline(newDeadlineUnix);
+    const receipt = await tx.wait();
+    this.logger.log(
+      `extendFundingDeadline ${address} → ${newDeadlineUnix}, tx=${receipt.hash}`,
+    );
+    return receipt.hash as string;
+  }
+
+  /**
    * Force-expire an unfunded deal past its deadline. Anyone can call.
    */
   async expire(address: string): Promise<string> {
