@@ -18,6 +18,8 @@ import { CommissionConfigService } from './commission-config.service';
 import { WebhookRateLimitGuard } from './webhook-rate-limit.guard';
 import { CryptomusRail } from './rails/cryptomus.rail';
 import { DirectUsdtRail } from './rails/direct-usdt.rail';
+import { TonApiService } from './rails/ton-api.service';
+import { TonUsdtRail } from './rails/ton-usdt.rail';
 import { RailRegistryService } from './rails/rail-registry.service';
 import { DirectDepositWatcher } from './direct-deposit.watcher';
 
@@ -39,6 +41,8 @@ import { DirectDepositWatcher } from './direct-deposit.watcher';
     WebhookRateLimitGuard,
     CryptomusRail,
     DirectUsdtRail,
+    TonApiService,
+    TonUsdtRail,
     RailRegistryService,
     DirectDepositWatcher,
   ],

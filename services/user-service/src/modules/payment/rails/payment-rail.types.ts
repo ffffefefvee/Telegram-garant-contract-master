@@ -17,6 +17,13 @@ export interface RailInvoice {
   paymentUrl?: string;
   /** On-chain deposit address (direct rails). */
   depositAddress?: string;
+  /**
+   * Polygon escrow clone backing this payment (settlement layer). May differ
+   * from `depositAddress` for rails where money arrives elsewhere (TON).
+   */
+  escrowAddress?: string;
+  /** Transfer comment the buyer MUST attach (TON rail). */
+  memo?: string;
   /** Network the buyer must use, e.g. 'polygon'. */
   network?: string;
   /** Asset the buyer must send, e.g. 'USDT'. */
@@ -60,8 +67,10 @@ export interface PaymentRail {
   readonly method: PaymentMethod;
   /** Human label for UI listings. */
   readonly label: string;
-  /** Is this rail currently usable (config/chain availability)? */
-  isAvailable(): boolean;
+  /** Hosted checkout vs on-chain deposit — drives mini-app UI. */
+  readonly kind: 'hosted' | 'direct';
+  /** Is this rail currently usable (config/chain/float availability)? */
+  isAvailable(): boolean | Promise<boolean>;
   /** Create rail-specific invoice data for a new payment. */
   createInvoice(ctx: RailInvoiceContext): Promise<RailInvoice>;
   /**

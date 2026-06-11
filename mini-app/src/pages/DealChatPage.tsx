@@ -48,6 +48,7 @@ export const DealChatPage: React.FC = () => {
   const [payStep, setPayStep] = useState<'choose' | 'hosted' | 'direct'>('choose');
   const [deposit, setDeposit] = useState<CreatePaymentResponse['deposit'] | null>(null);
   const [addressCopied, setAddressCopied] = useState(false);
+  const [memoCopied, setMemoCopied] = useState(false);
   const [showPaymentSheet, setShowPaymentSheet] = useState(false);
   const [showPaymentVerify, setShowPaymentVerify] = useState(false);
   const [showCancelSheet, setShowCancelSheet] = useState(false);
@@ -126,7 +127,7 @@ export const DealChatPage: React.FC = () => {
     }
   };
 
-  const handleSelectMethod = async (method: 'cryptomus' | 'crypto') => {
+  const handleSelectMethod = async (method: 'cryptomus' | 'crypto' | 'crypto_ton') => {
     if (!deal) return;
     setActionError(null);
     setActionLoading(true);
@@ -138,7 +139,7 @@ export const DealChatPage: React.FC = () => {
         method,
         description: `Оплата сделки #${deal.dealNumber}`,
       });
-      if (method === 'crypto') {
+      if (method === 'crypto' || method === 'crypto_ton') {
         if (!result.deposit) {
           setActionError('Не удалось получить адрес для перевода');
           return;
@@ -171,6 +172,18 @@ export const DealChatPage: React.FC = () => {
       setAddressCopied(true);
       window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred('success');
       setTimeout(() => setAddressCopied(false), 2000);
+    } catch {
+      // clipboard unavailable in some webviews — user can long-press the text
+    }
+  };
+
+  const handleCopyMemo = async () => {
+    if (!deposit?.memo) return;
+    try {
+      await navigator.clipboard.writeText(deposit.memo);
+      setMemoCopied(true);
+      window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred('success');
+      setTimeout(() => setMemoCopied(false), 2000);
     } catch {
       // clipboard unavailable in some webviews — user can long-press the text
     }
@@ -537,9 +550,11 @@ export const DealChatPage: React.FC = () => {
                       loading={actionLoading}
                       onClick={() => void handleSelectMethod(m.method)}
                     >
-                      {m.kind === 'direct'
-                        ? 'Перевести USDT напрямую (Polygon)'
-                        : 'Оплатить через Cryptomus'}
+                      {m.method === 'crypto_ton'
+                        ? 'USDT через @wallet (TON)'
+                        : m.kind === 'direct'
+                          ? 'Перевести USDT напрямую (Polygon)'
+                          : 'Оплатить через Cryptomus'}
                     </Button>
                   ),
                 )}
@@ -573,8 +588,9 @@ export const DealChatPage: React.FC = () => {
         {payStep === 'choose' && (
           <p className="deal-new-hint" style={{ marginTop: 12 }}>
             Cryptomus — оплата картой или криптовалютой через платёжную страницу.
-            Прямой перевод — отправьте USDT в сети Polygon с любого кошелька или биржи
-            сразу на адрес смарт-контракта сделки, без посредников.
+            Прямой перевод — USDT в сети Polygon с любого кошелька или биржи сразу
+            на адрес смарт-контракта сделки. TON — USDT из кошелька @wallet прямо
+            в Telegram (укажите код сделки в комментарии к переводу).
           </p>
         )}
         {payStep === 'hosted' && (
@@ -586,7 +602,7 @@ export const DealChatPage: React.FC = () => {
           <div className="deal-direct-deposit">
             <p style={{ marginBottom: 8 }}>
               Отправьте <strong>ровно {deposit.requiredAmount} {deposit.asset}</strong> (сумма сделки +
-              комиссия покупателя) на адрес смарт-контракта:
+              комиссия покупателя) на {deposit.network === 'ton' ? 'TON-адрес платформы' : 'адрес смарт-контракта'}:
             </p>
             <div
               onClick={() => void handleCopyAddress()}
@@ -605,6 +621,32 @@ export const DealChatPage: React.FC = () => {
             <Button variant="secondary" fullWidth onClick={() => void handleCopyAddress()} style={{ marginTop: 8 }}>
               {addressCopied ? 'Скопировано ✓' : 'Скопировать адрес'}
             </Button>
+            {deposit.memo && (
+              <>
+                <p style={{ marginTop: 12, marginBottom: 8 }}>
+                  Комментарий к переводу (<strong>обязательно</strong>, иначе платёж не будет засчитан):
+                </p>
+                <div
+                  onClick={() => void handleCopyMemo()}
+                  style={{
+                    fontFamily: 'monospace',
+                    fontSize: 15,
+                    textAlign: 'center',
+                    letterSpacing: 1,
+                    background: 'var(--color-bg-secondary, rgba(128,128,128,0.12))',
+                    borderRadius: 8,
+                    padding: '10px 12px',
+                    cursor: 'pointer',
+                  }}
+                >
+                  {deposit.memo}
+                </div>
+                <Button variant="secondary" fullWidth onClick={() => void handleCopyMemo()} style={{ marginTop: 8 }}>
+                  {memoCopied ? 'Скопировано ✓' : 'Скопировать комментарий'}
+                </Button>
+              </>
+            )}
+            {deposit.network !== 'ton' && (
             <div style={{ display: 'flex', justifyContent: 'center', marginTop: 12 }}>
               <img
                 src={`https://api.qrserver.com/v1/create-qr-code/?size=200x200&data=${encodeURIComponent(deposit.address)}`}
@@ -614,6 +656,15 @@ export const DealChatPage: React.FC = () => {
                 style={{ borderRadius: 8, background: '#fff', padding: 6 }}
               />
             </div>
+            )}
+            {deposit.network === 'ton' ? (
+              <p className="deal-new-hint" style={{ marginTop: 12 }}>
+                ⚠️ Только <strong>USDT</strong> в сети <strong>TON</strong> и обязательно
+                с комментарием выше. В @wallet: Отправить → вставьте адрес → выберите USDT →
+                сумма → добавьте комментарий. Эскроу на Polygon будет профинансирован
+                автоматически в течение 1–2 минут после поступления.
+              </p>
+            ) : (
             <p className="deal-new-hint" style={{ marginTop: 12 }}>
               ⚠️ Только <strong>{deposit.asset}</strong> в сети{' '}
               <strong>{deposit.network === 'polygon' ? 'Polygon' : deposit.network}</strong>.
@@ -621,6 +672,7 @@ export const DealChatPage: React.FC = () => {
               напрямую в эскроу-контракт — платформа их не хранит. Подтверждение
               занимает 1–2 минуты после поступления.
             </p>
+            )}
           </div>
         )}
       </BottomSheet>

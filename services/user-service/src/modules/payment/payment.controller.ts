@@ -37,7 +37,7 @@ export class PaymentController {
   /** Available payment rails for the method selector in the mini-app.
    *  NOTE: static route — must stay above `@Get(':id')`. */
   @Get('methods')
-  getMethods(): RailDescriptor[] {
+  getMethods(): Promise<RailDescriptor[]> {
     return this.paymentService.listPaymentMethods();
   }
 

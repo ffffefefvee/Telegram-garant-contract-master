@@ -33,6 +33,7 @@ const USDT_DECIMALS = 6;
 export class DirectUsdtRail implements PaymentRail {
   readonly method = PaymentMethod.CRYPTO;
   readonly label = 'USDT (Polygon) — прямой перевод';
+  readonly kind = 'direct' as const;
 
   private readonly logger = new Logger(DirectUsdtRail.name);
 
@@ -104,6 +105,7 @@ export class DirectUsdtRail implements PaymentRail {
 
     return {
       depositAddress: escrowAddress,
+      escrowAddress,
       network: 'polygon',
       asset: 'USDT',
       requiredAmount,

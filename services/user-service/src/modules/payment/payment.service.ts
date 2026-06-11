@@ -20,6 +20,8 @@ export interface CreatedPaymentResult {
     asset: string;
     /** Exact amount the buyer must send (deal amount + buyer fee). */
     requiredAmount: string;
+    /** Transfer comment the buyer MUST attach (TON rail). */
+    memo?: string;
   };
   expiresAt: Date;
 }
@@ -38,7 +40,7 @@ export class PaymentService {
   ) {}
 
   /** Rails the mini-app can offer right now. */
-  listPaymentMethods(): RailDescriptor[] {
+  async listPaymentMethods(): Promise<RailDescriptor[]> {
     return this.rails.list();
   }
 
@@ -60,8 +62,9 @@ export class PaymentService {
   ): Promise<CreatedPaymentResult> {
     const method = options?.method ?? PaymentMethod.CRYPTOMUS;
     const rail = this.rails.get(method);
-    const currency =
-      options?.currency || (method === PaymentMethod.CRYPTO ? 'USDT' : 'USD');
+    const isDirectCrypto =
+      method === PaymentMethod.CRYPTO || method === PaymentMethod.CRYPTO_TON;
+    const currency = options?.currency || (isDirectCrypto ? 'USDT' : 'USD');
     const orderId = `DEAL_${dealId}_${Date.now()}`;
 
     const existingPayment = await this.paymentRepository.findOne({
@@ -117,8 +120,8 @@ export class PaymentService {
 
       savedPayment.paymentUrl = invoice.paymentUrl ?? null;
       savedPayment.walletAddress = invoice.depositAddress ?? null;
-      if (invoice.depositAddress) {
-        savedPayment.escrowAddress = invoice.depositAddress;
+      if (invoice.escrowAddress) {
+        savedPayment.escrowAddress = invoice.escrowAddress;
       }
       savedPayment.expiresAt = invoice.expiresAt;
       if (invoice.metadata) {
@@ -168,18 +171,22 @@ export class PaymentService {
     if (payment.paymentUrl) {
       result.paymentUrl = payment.paymentUrl;
     }
-    if (
-      payment.paymentMethod === PaymentMethod.CRYPTO &&
-      payment.escrowAddress
-    ) {
+    const isDirect =
+      payment.paymentMethod === PaymentMethod.CRYPTO ||
+      payment.paymentMethod === PaymentMethod.CRYPTO_TON;
+    if (isDirect && payment.walletAddress) {
       result.deposit = {
-        address: payment.escrowAddress,
+        address: payment.walletAddress,
         network: (payment.metadata?.network as string) ?? 'polygon',
         asset: (payment.metadata?.asset as string) ?? 'USDT',
         requiredAmount:
           (payment.metadata?.requiredAmount as string) ??
           String(payment.totalAmount),
       };
+      const memo = payment.metadata?.memo as string | undefined;
+      if (memo) {
+        result.deposit.memo = memo;
+      }
     }
     return result;
   }
@@ -260,7 +267,10 @@ export class PaymentService {
       }
       await this.paymentRepository.save(payment);
 
-      if (payment.paymentMethod === PaymentMethod.CRYPTO) {
+      if (
+        payment.paymentMethod === PaymentMethod.CRYPTO ||
+        payment.paymentMethod === PaymentMethod.CRYPTO_TON
+      ) {
         await this.webhookService.finalizeDirectPayment(payment, {
           txId: result.txId,
           fundedUsdt: result.fundedUsdt,
@@ -294,7 +304,9 @@ export class PaymentService {
   async findOpenDirectPayments(limit = 100): Promise<Payment[]> {
     return this.paymentRepository
       .createQueryBuilder('payment')
-      .where('payment.paymentMethod = :method', { method: PaymentMethod.CRYPTO })
+      .where('payment.paymentMethod IN (:...methods)', {
+        methods: [PaymentMethod.CRYPTO, PaymentMethod.CRYPTO_TON],
+      })
       .andWhere('payment.status IN (:...statuses)', {
         statuses: [PaymentStatus.PENDING, PaymentStatus.PROCESSING],
       })

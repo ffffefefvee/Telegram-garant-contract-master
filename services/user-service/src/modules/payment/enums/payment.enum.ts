@@ -62,6 +62,9 @@ export enum PaymentMethod {
   
   /** Криптовалюта (напрямую) */
   CRYPTO = 'crypto',
+
+  /** USDT в сети TON (через @wallet и любые TON-кошельки) */
+  CRYPTO_TON = 'crypto_ton',
   
   /** Внутренний баланс */
   BALANCE = 'balance',
