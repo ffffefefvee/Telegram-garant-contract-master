@@ -7,6 +7,18 @@ import { EscrowClient } from './escrow.client';
 import { CreateEscrowParams, EscrowSnapshot, EscrowStatus, FeeQuote } from './blockchain.types';
 
 /**
+ * Outcome of {@link RelayService.forwardAndFund}. `transferTxHash` is null
+ * when the clone already held enough USDT (a previous transfer landed but
+ * notifyFunded failed); `notifyTxHash` is null when the escrow was already
+ * FUNDED and nothing had to be done.
+ */
+export interface ForwardAndFundResult {
+  transferTxHash: string | null;
+  notifyTxHash: string | null;
+  alreadyFunded: boolean;
+}
+
+/**
  * Coordinates the platform hot-wallet operations: deploys escrow clones,
  * forwards USDT from the platform's hot-wallet (where Cryptomus pays) into
  * the freshly-deployed clone, and triggers `notifyFunded()` on-chain.
@@ -67,23 +79,55 @@ export class RelayService {
   async forwardAndFund(
     escrowAddress: string,
     amount: bigint,
-  ): Promise<{ transferTxHash: string; notifyTxHash: string }> {
+  ): Promise<ForwardAndFundResult> {
     if (!this.provider.isReady) {
       throw new Error('Blockchain not ready');
     }
-    const balance = await this.erc20.balanceOf(this.hotWalletAddress());
-    if (balance < amount) {
-      throw new Error(
-        `Hot-wallet balance ${balance} < required ${amount} (USDT short for forwarding to ${escrowAddress})`,
+
+    // Recovery-aware funding. `transfer` and `notifyFunded` are two separate
+    // txs: if the first lands but the second fails (gas spike, RPC blip), the
+    // USDT is already in the clone. A naive retry would transfer a SECOND
+    // time. So we inspect on-chain state first and only do the work that is
+    // still missing, making the whole operation idempotent.
+    const snapshot = await this.escrow.snapshot(escrowAddress);
+    if (snapshot && this.isFundedOrLater(snapshot)) {
+      this.logger.log(
+        `Escrow ${escrowAddress} already funded (status=${snapshot.status}) — skipping forward (idempotent)`,
+      );
+      return { transferTxHash: null, notifyTxHash: null, alreadyFunded: true };
+    }
+
+    // The contract's funding check is `balance >= amount + buyerFee`. Prefer
+    // the authoritative on-chain figure; fall back to the caller's amount if
+    // the snapshot is unavailable.
+    const required = snapshot ? snapshot.amount + snapshot.buyerFee : amount;
+    const currentBalance = snapshot
+      ? snapshot.balance
+      : await this.erc20.balanceOf(escrowAddress);
+
+    let transferTxHash: string | null = null;
+    if (currentBalance < required) {
+      const shortfall = required - currentBalance;
+      const hotBalance = await this.erc20.balanceOf(this.hotWalletAddress());
+      if (hotBalance < shortfall) {
+        throw new Error(
+          `Hot-wallet balance ${hotBalance} < required ${shortfall} (USDT short for forwarding to ${escrowAddress})`,
+        );
+      }
+      this.logger.log(`Forwarding ${shortfall} USDT to escrow ${escrowAddress}…`);
+      transferTxHash = await this.erc20.transfer(escrowAddress, shortfall);
+    } else {
+      // Transfer already landed on a previous attempt; only notify is left.
+      this.logger.log(
+        `Escrow ${escrowAddress} already holds ${currentBalance} ≥ ${required} USDT — skipping transfer, completing notifyFunded (recovery)`,
       );
     }
-    this.logger.log(`Forwarding ${amount} USDT to escrow ${escrowAddress}…`);
-    const transferTxHash = await this.erc20.transfer(escrowAddress, amount);
+
     const notifyTxHash = await this.escrow.notifyFunded(escrowAddress);
     this.logger.log(
-      `Escrow ${escrowAddress} funded: transfer=${transferTxHash}, notify=${notifyTxHash}`,
+      `Escrow ${escrowAddress} funded: transfer=${transferTxHash ?? 'skipped'}, notify=${notifyTxHash}`,
     );
-    return { transferTxHash, notifyTxHash };
+    return { transferTxHash, notifyTxHash, alreadyFunded: false };
   }
 
   /**

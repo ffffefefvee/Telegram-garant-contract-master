@@ -289,7 +289,9 @@ export abstract class BaseTonRail implements PaymentRail {
         );
         return {
           completed: true,
-          txId: notifyTxHash,
+          // notifyTxHash is null only on an idempotent replay (already
+          // funded); the rail records it as "no new tx".
+          txId: notifyTxHash ?? undefined,
           fundedUsdt: receivedUsdt,
           requiredUsdt,
         };

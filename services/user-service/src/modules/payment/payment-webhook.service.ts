@@ -281,8 +281,8 @@ export class PaymentWebhookService {
         escrowAddress,
         forwarded: true,
         txHashes: {
-          transfer: forwardResult.transferTxHash,
-          notify: forwardResult.notifyTxHash,
+          transfer: forwardResult.transferTxHash ?? undefined,
+          notify: forwardResult.notifyTxHash ?? undefined,
         },
         notes,
       };

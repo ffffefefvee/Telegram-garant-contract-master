@@ -3,7 +3,7 @@ import { ethers } from 'ethers';
 import { BlockchainProvider } from '../blockchain/blockchain.provider';
 import { FactoryClient } from '../blockchain/factory.client';
 import { EscrowClient } from '../blockchain/escrow.client';
-import { RelayService } from '../blockchain/relay.service';
+import { RelayService, ForwardAndFundResult } from '../blockchain/relay.service';
 import {
   EscrowStatus,
   FeeModel,
@@ -167,7 +167,7 @@ export class EscrowService {
   async forwardAndFund(
     dealId: string,
     amountUsdt: number,
-  ): Promise<{ transferTxHash: string; notifyTxHash: string }> {
+  ): Promise<ForwardAndFundResult> {
     const escrowAddress = await this.getEscrowAddress(dealId);
     if (!escrowAddress || escrowAddress === ethers.ZeroAddress) {
       throw new BadRequestException(`Escrow not deployed for deal ${dealId}`);
