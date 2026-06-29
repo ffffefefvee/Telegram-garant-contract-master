@@ -4,7 +4,7 @@ import { IsNull, Not, Repository } from 'typeorm';
 import { Payment } from '../payment/entities/payment.entity';
 import { PaymentStatus } from '../payment/enums/payment.enum';
 import { Deal } from '../deal/entities/deal.entity';
-import { DealStatus } from '../deal/enums/deal.enum';
+import { DealStatus, Currency } from '../deal/enums/deal.enum';
 import { EscrowService } from '../escrow/escrow.service';
 import { DealService } from '../deal/deal.service';
 
@@ -94,17 +94,38 @@ export class ReconciliationService {
         continue;
       }
 
+      const amountUsdt = this.resolveFundingUsdt(deal, payment);
+      if (amountUsdt === null) {
+        report.payments.skipped += 1;
+        report.notes.push(
+          `payment ${payment.id}: USDT funding amount unknown for deal ${deal.id} (FX not locked) — skipped`,
+        );
+        this.logger.warn(
+          `Reconciliation skipped payment ${payment.id}: cannot determine USDT amount for deal ${deal.id}`,
+        );
+        continue;
+      }
+
       try {
+        // Lock FX on the deal if the live webhook path never captured it
+        // (e.g. both wallets were attached only AFTER the payment landed).
+        if (!(Number(deal.amountUsdt) > 0)) {
+          deal.amountUsdt = amountUsdt;
+          deal.fxRateLockedAt = deal.fxRateLockedAt ?? new Date();
+        }
         if (!deal.escrowAddress) {
           const created = await this.escrow.createEscrow(
             deal.id,
             buyerWallet,
             sellerWallet,
-            Number(deal.amount),
+            amountUsdt,
           );
           deal.escrowAddress = created.escrowAddress;
         }
-        await this.escrow.forwardAndFund(deal.id, Number(deal.amount));
+        // Persist escrowAddress + locked FX before funding so a transient
+        // failure below doesn't lose the deployed clone address.
+        await this.dealRepo.save(deal);
+        await this.escrow.forwardAndFund(deal.id, amountUsdt);
         await this.dealService.confirmPayment(
           deal.id,
           Number(payment.amount),
@@ -112,7 +133,7 @@ export class ReconciliationService {
         );
         report.payments.forwarded += 1;
         this.logger.log(
-          `Reconciled payment ${payment.id} → deal ${deal.id} forwarded`,
+          `Reconciled payment ${payment.id} → deal ${deal.id} forwarded ${amountUsdt} USDT`,
         );
       } catch (err) {
         report.payments.failed += 1;
@@ -121,6 +142,36 @@ export class ReconciliationService {
         );
       }
     }
+  }
+
+  /**
+   * Determine the USDT amount to fund the on-chain escrow with. The deal's
+   * `amount`/`currency` may be fiat (RUB), so they must NEVER be sent to the
+   * chain directly. Mirrors `PaymentWebhookService.lockFundingFx` priority:
+   *   1. `deal.amountUsdt` — FX already locked at funding time.
+   *   2. `payment.cryptoAmount` — actual crypto recorded when the payment landed.
+   *   3. quote amount, only when the deal is explicitly USDT-denominated.
+   * Returns `null` when USDT cannot be safely determined — the caller then
+   * skips rather than risk funding a wrong (fiat-scale) amount on-chain.
+   */
+  private resolveFundingUsdt(deal: Deal, payment: Payment): number | null {
+    const locked = Number(deal.amountUsdt);
+    if (Number.isFinite(locked) && locked > 0) {
+      return locked;
+    }
+    const paidCrypto = Number(payment.cryptoAmount);
+    if (Number.isFinite(paidCrypto) && paidCrypto > 0) {
+      return paidCrypto;
+    }
+    const isUsdtQuoted =
+      deal.currency === Currency.USDT || deal.quoteCurrency === 'USDT';
+    if (isUsdtQuoted) {
+      const quote = Number(deal.quoteAmount ?? deal.amount);
+      if (Number.isFinite(quote) && quote > 0) {
+        return quote;
+      }
+    }
+    return null;
   }
 
   /** Daily reconciliation summary for admin dashboards. */

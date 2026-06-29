@@ -4,7 +4,7 @@ import { ReconciliationService } from './reconciliation.service';
 import { Payment } from '../payment/entities/payment.entity';
 import { PaymentStatus } from '../payment/enums/payment.enum';
 import { Deal } from '../deal/entities/deal.entity';
-import { DealStatus } from '../deal/enums/deal.enum';
+import { DealStatus, Currency } from '../deal/enums/deal.enum';
 import { EscrowService } from '../escrow/escrow.service';
 import { DealService } from '../deal/deal.service';
 
@@ -91,6 +91,8 @@ describe('ReconciliationService', () => {
     const deal: Partial<Deal> = {
       id: 'd1',
       amount: 100,
+      currency: Currency.USDT,
+      amountUsdt: 100,
       status: DealStatus.PENDING_PAYMENT,
       escrowAddress: null,
       buyer: { walletAddress: W('a') } as any,
@@ -104,6 +106,7 @@ describe('ReconciliationService', () => {
           dealId: 'd1',
           amount: 100,
           currency: 'USDT',
+          cryptoAmount: 100,
           deal: deal as Deal,
         },
       ],
@@ -121,16 +124,141 @@ describe('ReconciliationService', () => {
     const report = await svc.runOnce();
     expect(report.payments.scanned).toBe(1);
     expect(report.payments.forwarded).toBe(1);
-    expect(escrow.createEscrow).toHaveBeenCalled();
+    expect(escrow.createEscrow).toHaveBeenCalledWith('d1', W('a'), W('b'), 100);
     expect(escrow.forwardAndFund).toHaveBeenCalledWith('d1', 100);
     expect(dealService.confirmPayment).toHaveBeenCalledWith('d1', expect.any(Number), expect.any(String));
     expect(dealRepo.rows[0].status).toBe(DealStatus.IN_PROGRESS);
+  });
+
+  it('funds the locked USDT amount, never the fiat deal.amount (RUB regression)', async () => {
+    // RUB deal: amount is 50000 ₽, but on-chain must be funded with the
+    // locked USDT equivalent (~550), NOT 50000.
+    const deal: Partial<Deal> = {
+      id: 'd1',
+      amount: 50000,
+      currency: Currency.RUB,
+      amountUsdt: 550,
+      status: DealStatus.PENDING_PAYMENT,
+      escrowAddress: null,
+      buyer: { walletAddress: W('a') } as any,
+      seller: { walletAddress: W('b') } as any,
+    };
+    await build({
+      payments: [
+        {
+          id: 'p1',
+          status: PaymentStatus.COMPLETED,
+          dealId: 'd1',
+          amount: 50000,
+          currency: 'RUB',
+          cryptoAmount: 550,
+          deal: deal as Deal,
+        },
+      ],
+      deals: [deal],
+    });
+    (escrow.createEscrow as jest.Mock).mockResolvedValue({
+      escrowAddress: W('c'),
+      transactionHash: '0xdeploy',
+    });
+    (escrow.forwardAndFund as jest.Mock).mockResolvedValue({
+      transferTxHash: '0xtx',
+      notifyTxHash: '0xnotify',
+    });
+
+    const report = await svc.runOnce();
+    expect(report.payments.forwarded).toBe(1);
+    expect(escrow.createEscrow).toHaveBeenCalledWith('d1', W('a'), W('b'), 550);
+    expect(escrow.forwardAndFund).toHaveBeenCalledWith('d1', 550);
+    expect(escrow.forwardAndFund).not.toHaveBeenCalledWith('d1', 50000);
+  });
+
+  it('falls back to payment.cryptoAmount when deal FX was not locked', async () => {
+    // Wallets attached only after payment landed → webhook never ran
+    // lockFundingFx, so deal.amountUsdt is null. Use the recorded crypto.
+    const deal: Partial<Deal> = {
+      id: 'd1',
+      amount: 50000,
+      currency: Currency.RUB,
+      amountUsdt: null,
+      status: DealStatus.PENDING_PAYMENT,
+      escrowAddress: null,
+      buyer: { walletAddress: W('a') } as any,
+      seller: { walletAddress: W('b') } as any,
+    };
+    await build({
+      payments: [
+        {
+          id: 'p1',
+          status: PaymentStatus.COMPLETED,
+          dealId: 'd1',
+          amount: 50000,
+          currency: 'RUB',
+          cryptoAmount: 551.25,
+          deal: deal as Deal,
+        },
+      ],
+      deals: [deal],
+    });
+    (escrow.createEscrow as jest.Mock).mockResolvedValue({
+      escrowAddress: W('c'),
+      transactionHash: '0xdeploy',
+    });
+    (escrow.forwardAndFund as jest.Mock).mockResolvedValue({
+      transferTxHash: '0xtx',
+      notifyTxHash: '0xnotify',
+    });
+
+    const report = await svc.runOnce();
+    expect(report.payments.forwarded).toBe(1);
+    expect(escrow.forwardAndFund).toHaveBeenCalledWith('d1', 551.25);
+    // FX should now be locked on the deal for downstream release math.
+    expect(dealRepo.rows[0].amountUsdt).toBe(551.25);
+    expect(dealRepo.rows[0].fxRateLockedAt).toBeInstanceOf(Date);
+  });
+
+  it('skips (does not fund) when the USDT amount cannot be determined', async () => {
+    // RUB deal, no locked USDT and no recorded crypto amount → unsafe to fund.
+    const deal: Partial<Deal> = {
+      id: 'd1',
+      amount: 50000,
+      currency: Currency.RUB,
+      amountUsdt: null,
+      status: DealStatus.PENDING_PAYMENT,
+      escrowAddress: null,
+      buyer: { walletAddress: W('a') } as any,
+      seller: { walletAddress: W('b') } as any,
+    };
+    await build({
+      payments: [
+        {
+          id: 'p1',
+          status: PaymentStatus.COMPLETED,
+          dealId: 'd1',
+          amount: 50000,
+          currency: 'RUB',
+          cryptoAmount: null,
+          deal: deal as Deal,
+        },
+      ],
+      deals: [deal],
+    });
+    const report = await svc.runOnce();
+    expect(report.payments.scanned).toBe(1);
+    expect(report.payments.skipped).toBe(1);
+    expect(report.payments.forwarded).toBe(0);
+    expect(escrow.createEscrow).not.toHaveBeenCalled();
+    expect(escrow.forwardAndFund).not.toHaveBeenCalled();
+    expect(report.notes.some((n) => /USDT funding amount unknown/.test(n))).toBe(true);
+    expect(dealRepo.rows[0].status).toBe(DealStatus.PENDING_PAYMENT);
   });
 
   it('skips deals still missing wallets', async () => {
     const deal: Partial<Deal> = {
       id: 'd1',
       amount: 100,
+      currency: Currency.USDT,
+      amountUsdt: 100,
       status: DealStatus.PENDING_PAYMENT,
       buyer: { walletAddress: null } as any,
       seller: { walletAddress: W('b') } as any,
@@ -143,6 +271,7 @@ describe('ReconciliationService', () => {
           dealId: 'd1',
           amount: 100,
           currency: 'USDT',
+          cryptoAmount: 100,
           deal: deal as Deal,
         },
       ],
@@ -159,6 +288,8 @@ describe('ReconciliationService', () => {
     const deal: Partial<Deal> = {
       id: 'd1',
       amount: 100,
+      currency: Currency.USDT,
+      amountUsdt: 100,
       status: DealStatus.IN_PROGRESS,
       buyer: { walletAddress: W('a') } as any,
       seller: { walletAddress: W('b') } as any,
@@ -171,6 +302,7 @@ describe('ReconciliationService', () => {
           dealId: 'd1',
           amount: 100,
           currency: 'USDT',
+          cryptoAmount: 100,
           deal: deal as Deal,
         },
       ],
@@ -185,6 +317,8 @@ describe('ReconciliationService', () => {
     const deal: Partial<Deal> = {
       id: 'd1',
       amount: 100,
+      currency: Currency.USDT,
+      amountUsdt: 100,
       status: DealStatus.PENDING_PAYMENT,
       escrowAddress: W('c'),
       buyer: { walletAddress: W('a') } as any,
@@ -198,6 +332,7 @@ describe('ReconciliationService', () => {
           dealId: 'd1',
           amount: 100,
           currency: 'USDT',
+          cryptoAmount: 100,
           deal: deal as Deal,
         },
       ],
