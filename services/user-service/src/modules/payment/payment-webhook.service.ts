@@ -16,6 +16,7 @@ import { EscrowService } from '../escrow/escrow.service';
 import { DealService } from '../deal/deal.service';
 import { AuditLogService } from '../ops/audit-log.service';
 import { WebhookIdempotencyService } from './webhook-idempotency.service';
+import { normalizeUsdtAmount } from '../escrow/usdt-amount';
 
 /** Identifies Cryptomus rows in the shared processed-webhook-events ledger. */
 const WEBHOOK_PROVIDER_CRYPTOMUS = 'cryptomus';
@@ -123,7 +124,13 @@ export class PaymentWebhookService {
     payment.status = 'completed' as Payment['status'];
     payment.paidAt = payment.paidAt ?? new Date();
     payment.txId = txid;
-    payment.cryptoAmount = parseFloat(cryptoAmount);
+    // Parse at the money boundary: a malformed/empty amount must not become
+    // NaN in the decimal column. normalizeUsdtAmount returns null on garbage,
+    // in which case we leave cryptoAmount untouched (FX fallback handles it).
+    const normalizedCrypto = normalizeUsdtAmount(cryptoAmount);
+    if (normalizedCrypto !== null) {
+      payment.cryptoAmount = normalizedCrypto;
+    }
     payment.cryptomusData = {
       ...payment.cryptomusData,
       paidAt: new Date().toISOString(),
@@ -306,8 +313,9 @@ export class PaymentWebhookService {
    * Lock RUB→USDT (or native USDT) at funding time using Cryptomus snapshot.
    */
   private async lockFundingFx(deal: Deal, cryptoAmount: string): Promise<number> {
-    const fromWebhook = parseFloat(cryptoAmount);
-    if (Number.isFinite(fromWebhook) && fromWebhook > 0) {
+    // Parse the provider string without a float round-trip; null on garbage.
+    const fromWebhook = normalizeUsdtAmount(cryptoAmount);
+    if (fromWebhook !== null && fromWebhook > 0) {
       deal.amountUsdt = fromWebhook;
       deal.fxRateLockedAt = new Date();
       if (deal.quoteAmount == null) {
@@ -327,6 +335,7 @@ export class PaymentWebhookService {
     if (deal.amountUsdt != null && Number(deal.amountUsdt) > 0) {
       return Number(deal.amountUsdt);
     }
+
 
     const quote =
       deal.quoteCurrency === 'USDT' || deal.currency === Currency.USDT

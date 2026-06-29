@@ -9,6 +9,7 @@ import {
   FeeModel,
   FeeQuote,
 } from '../blockchain/blockchain.types';
+import { parseUsdtToWei } from './usdt-amount';
 
 export interface EscrowCreationResult {
   dealId: string;
@@ -227,14 +228,13 @@ export class EscrowService {
   }
 
   /**
-   * Convert USDT amount (6 decimals) to on-chain wei.
+   * Convert USDT amount (6 decimals) to on-chain wei. Delegates to the shared
+   * money parser so the rounding/validation rules match the rest of the
+   * payment boundary (rejects NaN/Infinity/negative, truncates >6 decimals).
    * @internal — exposed for tests and DealService.
    */
   toWei(amountUsdt: number): bigint {
-    if (!Number.isFinite(amountUsdt) || amountUsdt < 0) {
-      throw new BadRequestException(`Invalid USDT amount: ${amountUsdt}`);
-    }
-    return ethers.parseUnits(amountUsdt.toFixed(6), 6);
+    return parseUsdtToWei(amountUsdt);
   }
 
   /**

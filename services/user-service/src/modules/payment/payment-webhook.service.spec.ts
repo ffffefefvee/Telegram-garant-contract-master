@@ -125,6 +125,40 @@ describe('PaymentWebhookService', () => {
     );
   });
 
+  it('parses a decimal crypto amount exactly (no float drift) and stores it', async () => {
+    const seed: any = {
+      id: 'p1',
+      transactionId: 'order-1',
+      dealId: null,
+      deal: null,
+      cryptomusData: {},
+    };
+    await setup({ payment: seed });
+    await service.handlePaymentWebhook(
+      makePayload({ currency_amount: '123.456789' }),
+    );
+    expect(paymentRepo.rows[0].cryptoAmount).toBeCloseTo(123.456789, 6);
+  });
+
+  it('does NOT corrupt cryptoAmount with NaN when currency_amount is malformed', async () => {
+    const seed: any = {
+      id: 'p1',
+      transactionId: 'order-1',
+      dealId: null,
+      deal: null,
+      cryptomusData: {},
+      cryptoAmount: null,
+    };
+    await setup({ payment: seed });
+    const result = await service.handlePaymentWebhook(
+      makePayload({ currency_amount: '' }),
+    );
+    expect(result.paymentStatus).toBe('completed');
+    // Left untouched (null), never NaN.
+    expect(paymentRepo.rows[0].cryptoAmount).toBeNull();
+    expect(Number.isNaN(paymentRepo.rows[0].cryptoAmount)).toBe(false);
+  });
+
   it('marks the payment paid even when no deal is linked (recorded-only case)', async () => {
     await setup({
       payment: {
