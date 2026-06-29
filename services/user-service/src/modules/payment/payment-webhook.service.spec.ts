@@ -9,6 +9,7 @@ import { EscrowService } from '../escrow/escrow.service';
 import { DealService } from '../deal/deal.service';
 import { AuditLogService } from '../ops/audit-log.service';
 import { CryptomusWebhookPayload } from './cryptomus.service';
+import { WebhookIdempotencyService } from './webhook-idempotency.service';
 
 interface InMemoryRepoOptions<T> {
   /** Pre-seed rows. Cloned on save so tests don't share refs by accident. */
@@ -67,15 +68,18 @@ describe('PaymentWebhookService', () => {
   let dealRepo: any;
   let escrow: jest.Mocked<Partial<EscrowService>>;
   let dealService: { confirmPayment: jest.Mock };
+  let idempotency: { isProcessed: jest.Mock; markProcessed: jest.Mock };
 
   function setup({
     payment,
     deal,
     escrowEnabled = true,
+    alreadyProcessed = false,
   }: {
     payment?: Partial<Payment> | null;
     deal?: Partial<Deal> | null;
     escrowEnabled?: boolean;
+    alreadyProcessed?: boolean;
   }) {
     paymentRepo = makeRepo<Payment>({ seed: payment ? [payment as Payment] : [] });
     dealRepo = makeRepo<Deal>({ seed: deal ? [deal as Deal] : [] });
@@ -93,6 +97,10 @@ describe('PaymentWebhookService', () => {
         return row;
       }),
     };
+    idempotency = {
+      isProcessed: jest.fn(async () => alreadyProcessed),
+      markProcessed: jest.fn(async () => undefined),
+    };
     return Test.createTestingModule({
       providers: [
         PaymentWebhookService,
@@ -101,6 +109,7 @@ describe('PaymentWebhookService', () => {
         { provide: EscrowService, useValue: escrow },
         { provide: DealService, useValue: dealService },
         { provide: AuditLogService, useValue: { write: jest.fn() } },
+        { provide: WebhookIdempotencyService, useValue: idempotency },
       ],
     })
       .compile()
@@ -207,6 +216,69 @@ describe('PaymentWebhookService', () => {
     expect(result.txHashes.notify).toBe('0xnotify');
     expect(dealRepo.rows[0].status).toBe(DealStatus.IN_PROGRESS);
     expect(dealRepo.rows[0].escrowAddress).toMatch(/^0xcccccccc/);
+    // Funding must be recorded so re-deliveries can be deduped.
+    expect(idempotency.markProcessed).toHaveBeenCalledWith(
+      expect.objectContaining({ provider: 'cryptomus', eventKey: 'order-1' }),
+    );
+  });
+
+  it('does NOT forward twice when the event was already processed (idempotent replay)', async () => {
+    const deal: Partial<Deal> = {
+      id: 'd1',
+      amount: 100,
+      status: DealStatus.PENDING_PAYMENT,
+      escrowAddress: '0xcccccccccccccccccccccccccccccccccccccccc',
+      buyer: { walletAddress: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' } as any,
+      seller: { walletAddress: '0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb' } as any,
+    };
+    await setup({
+      payment: {
+        id: 'p1',
+        transactionId: 'order-1',
+        dealId: 'd1',
+        deal: deal as Deal,
+        cryptomusData: {},
+      },
+      deal,
+      alreadyProcessed: true,
+    });
+
+    const result = await service.handlePaymentWebhook(makePayload());
+
+    // The relay must NOT move money a second time.
+    expect(escrow.forwardAndFund).not.toHaveBeenCalled();
+    expect(result.forwarded).toBe(false);
+    expect(result.notes[0]).toMatch(/idempotent/);
+    // The deal still reaches IN_PROGRESS (catch-up if the first pass crashed
+    // before the transition).
+    expect(dealRepo.rows[0].status).toBe(DealStatus.IN_PROGRESS);
+  });
+
+  it('does NOT forward again when the deal already moved past PENDING_PAYMENT', async () => {
+    const deal: Partial<Deal> = {
+      id: 'd1',
+      amount: 100,
+      status: DealStatus.IN_PROGRESS,
+      escrowAddress: '0xcccccccccccccccccccccccccccccccccccccccc',
+      buyer: { walletAddress: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' } as any,
+      seller: { walletAddress: '0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb' } as any,
+    };
+    await setup({
+      payment: {
+        id: 'p1',
+        transactionId: 'order-1',
+        dealId: 'd1',
+        deal: deal as Deal,
+        cryptomusData: {},
+      },
+      deal,
+    });
+
+    const result = await service.handlePaymentWebhook(makePayload());
+
+    expect(escrow.forwardAndFund).not.toHaveBeenCalled();
+    expect(result.forwarded).toBe(false);
+    expect(result.notes[0]).toMatch(/idempotent/);
   });
 
   it('skips forward+notify in stub mode but still transitions the deal', async () => {

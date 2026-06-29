@@ -15,6 +15,10 @@ import { DealStatus, Currency } from '../deal/enums/deal.enum';
 import { EscrowService } from '../escrow/escrow.service';
 import { DealService } from '../deal/deal.service';
 import { AuditLogService } from '../ops/audit-log.service';
+import { WebhookIdempotencyService } from './webhook-idempotency.service';
+
+/** Identifies Cryptomus rows in the shared processed-webhook-events ledger. */
+const WEBHOOK_PROVIDER_CRYPTOMUS = 'cryptomus';
 
 export enum WebhookStatus {
   PAID = 'paid',
@@ -53,6 +57,7 @@ export class PaymentWebhookService {
     @Inject(forwardRef(() => DealService))
     private readonly dealService: DealService,
     private readonly auditLog: AuditLogService,
+    private readonly idempotency: WebhookIdempotencyService,
   ) {}
 
   /**
@@ -224,6 +229,27 @@ export class PaymentWebhookService {
       };
     }
 
+    // Idempotency guard: never forward twice for the same order. A duplicate
+    // `paid` webhook (Cryptomus retry / manual replay) or a deal already
+    // funded by reconciliation must NOT trigger a second USDT transfer from
+    // the relay hot-wallet — that would be real money lost.
+    const alreadyForwarded = await this.idempotency.isProcessed(
+      WEBHOOK_PROVIDER_CRYPTOMUS,
+      payment.transactionId,
+    );
+    if (alreadyForwarded || deal.status !== DealStatus.PENDING_PAYMENT) {
+      notes.push('escrow already funded for this order — skipping forward (idempotent)');
+      await this.transitionDealToInProgress(deal, payment);
+      return {
+        paymentStatus: 'completed',
+        dealId: deal.id,
+        escrowAddress,
+        forwarded: false,
+        txHashes: {},
+        notes,
+      };
+    }
+
     try {
       const forwardResult = await this.escrow.forwardAndFund(deal.id, amountUsdt);
       this.logger.log(
@@ -238,6 +264,15 @@ export class PaymentWebhookService {
           transferTx: forwardResult.transferTxHash,
           notifyTx: forwardResult.notifyTxHash,
         },
+      });
+      // Record the funding so any re-delivery of this `paid` event is a no-op.
+      // Done only after the transfer succeeded — a failure above leaves no
+      // row, so the provider retry (or reconciliation) can still fund later.
+      await this.idempotency.markProcessed({
+        provider: WEBHOOK_PROVIDER_CRYPTOMUS,
+        eventKey: payment.transactionId,
+        orderId: payment.transactionId,
+        status: 'paid',
       });
       await this.transitionDealToInProgress(deal, payment);
       return {

@@ -19,6 +19,7 @@ import { DealModule } from './modules/deal/deal.module';
 import { Payment } from './modules/payment/entities/payment.entity';
 import { CommissionRate } from './modules/payment/entities/commission-rate.entity';
 import { CurrencyRate } from './modules/payment/entities/currency-rate.entity';
+import { ProcessedWebhookEvent } from './modules/payment/entities/processed-webhook-event.entity';
 import { PaymentModule } from './modules/payment/payment.module';
 import { Review } from './modules/review/entities/review.entity';
 import { ReputationScore } from './modules/review/entities/reputation-score.entity';
@@ -103,6 +104,7 @@ import {
               Payment,
               CommissionRate,
               CurrencyRate,
+              ProcessedWebhookEvent,
               Review,
               ReputationScore,
               Dispute,
@@ -150,6 +152,7 @@ synchronize: true,
             Payment,
             CommissionRate,
             CurrencyRate,
+            ProcessedWebhookEvent,
             Review,
             ReputationScore,
             Dispute,

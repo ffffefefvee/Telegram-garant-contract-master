@@ -3,6 +3,7 @@ import { TypeOrmModule } from '@nestjs/typeorm';
 import { Payment } from './entities/payment.entity';
 import { CommissionRate } from './entities/commission-rate.entity';
 import { CurrencyRate } from './entities/currency-rate.entity';
+import { ProcessedWebhookEvent } from './entities/processed-webhook-event.entity';
 import { Deal } from '../deal/entities/deal.entity';
 import { PaymentService } from './payment.service';
 import { PaymentController } from './payment.controller';
@@ -16,6 +17,7 @@ import { BlockchainModule } from '../blockchain/blockchain.module';
 import { OpsModule } from '../ops/ops.module';
 import { CommissionConfigService } from './commission-config.service';
 import { WebhookRateLimitGuard } from './webhook-rate-limit.guard';
+import { WebhookIpAllowlistGuard } from './webhook-ip-allowlist.guard';
 import { CryptomusRail } from './rails/cryptomus.rail';
 import { DirectUsdtRail } from './rails/direct-usdt.rail';
 import { TonApiService } from './rails/ton-api.service';
@@ -27,6 +29,7 @@ import { TonUnmatchedDeposit } from './entities/ton-unmatched-deposit.entity';
 import { RailRegistryService } from './rails/rail-registry.service';
 import { EscrowDeadlineService } from './escrow-deadline.service';
 import { DirectDepositWatcher } from './direct-deposit.watcher';
+import { WebhookIdempotencyService } from './webhook-idempotency.service';
 
 @Module({
   imports: [
@@ -36,6 +39,7 @@ import { DirectDepositWatcher } from './direct-deposit.watcher';
       CurrencyRate,
       Deal,
       TonUnmatchedDeposit,
+      ProcessedWebhookEvent,
     ]),
     forwardRef(() => DealModule),
     forwardRef(() => UserModule),
@@ -48,8 +52,10 @@ import { DirectDepositWatcher } from './direct-deposit.watcher';
     PaymentService,
     CryptomusService,
     PaymentWebhookService,
+    WebhookIdempotencyService,
     CommissionConfigService,
     WebhookRateLimitGuard,
+    WebhookIpAllowlistGuard,
     CryptomusRail,
     DirectUsdtRail,
     TonApiService,

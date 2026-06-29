@@ -13,6 +13,7 @@ import { SkipThrottle } from '@nestjs/throttler';
 import { RawBodyRequest } from '@nestjs/common';
 import { Request } from 'express';
 import { WebhookRateLimitGuard } from './webhook-rate-limit.guard';
+import { WebhookIpAllowlistGuard } from './webhook-ip-allowlist.guard';
 import { CryptomusService, CryptomusWebhookPayload } from './cryptomus.service';
 import { PaymentWebhookService } from './payment-webhook.service';
 
@@ -35,7 +36,8 @@ import { PaymentWebhookService } from './payment-webhook.service';
 // merchant signature.
 @SkipThrottle()
 @Controller('webhook/cryptomus')
-@UseGuards(WebhookRateLimitGuard)
+// IP allow-list first (cheap reject of forged sources), then per-IP rate limit.
+@UseGuards(WebhookIpAllowlistGuard, WebhookRateLimitGuard)
 export class CryptomusWebhookController {
   private readonly logger = new Logger(CryptomusWebhookController.name);
 
