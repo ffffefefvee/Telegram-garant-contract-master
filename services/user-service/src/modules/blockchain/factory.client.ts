@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ethers } from 'ethers';
 import { BlockchainConfig } from './blockchain.config';
 import { BlockchainProvider } from './blockchain.provider';
+import { RelayTxQueue } from './relay-tx-queue';
 import { CreateEscrowParams, FeeModel, FeeQuote } from './blockchain.types';
 import factoryAbi from './abi/EscrowFactory.json';
 
@@ -14,6 +15,7 @@ export class FactoryClient {
   constructor(
     private readonly cfg: BlockchainConfig,
     private readonly provider: BlockchainProvider,
+    private readonly txQueue: RelayTxQueue,
   ) {}
 
   private read(): ethers.Contract {
@@ -75,18 +77,20 @@ export class FactoryClient {
     if (!this.provider.isReady) {
       throw new Error('Blockchain not ready');
     }
-    const tx = await this.write().createEscrow(
-      params.dealId,
-      params.buyer,
-      params.seller,
-      params.amount,
-      params.feeModel,
-      BigInt(params.fundingDeadline),
-    );
-    const receipt = await tx.wait();
-    const escrow = (await this.read().escrowOf(params.dealId)) as string;
-    this.logger.log(`Escrow deployed for dealId=${params.dealId} → ${escrow}, tx=${receipt.hash}`);
-    return { escrow, txHash: receipt.hash as string };
+    return this.txQueue.submit(`factory.createEscrow ${params.dealId}`, async () => {
+      const tx = await this.write().createEscrow(
+        params.dealId,
+        params.buyer,
+        params.seller,
+        params.amount,
+        params.feeModel,
+        BigInt(params.fundingDeadline),
+      );
+      const receipt = await tx.wait();
+      const escrow = (await this.read().escrowOf(params.dealId)) as string;
+      this.logger.log(`Escrow deployed for dealId=${params.dealId} → ${escrow}, tx=${receipt.hash}`);
+      return { escrow, txHash: receipt.hash as string };
+    });
   }
 
   /**

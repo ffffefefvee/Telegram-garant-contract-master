@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ethers } from 'ethers';
 import { BlockchainProvider } from './blockchain.provider';
+import { RelayTxQueue } from './relay-tx-queue';
 import { EscrowSnapshot, EscrowStatus, ResolveParams } from './blockchain.types';
 import escrowAbi from './abi/EscrowImplementation.json';
 
@@ -20,7 +21,10 @@ import escrowAbi from './abi/EscrowImplementation.json';
 export class EscrowClient {
   private readonly logger = new Logger(EscrowClient.name);
 
-  constructor(private readonly provider: BlockchainProvider) {}
+  constructor(
+    private readonly provider: BlockchainProvider,
+    private readonly txQueue: RelayTxQueue,
+  ) {}
 
   private readContract(address: string): ethers.Contract {
     return new ethers.Contract(address, escrowAbi, this.provider.provider);
@@ -71,19 +75,23 @@ export class EscrowClient {
   }
 
   async notifyFunded(address: string): Promise<string> {
-    const c = this.writeContract(address);
-    const tx = await c.notifyFunded();
-    const receipt = await tx.wait();
-    this.logger.log(`notifyFunded ${address}, tx=${receipt.hash}`);
-    return receipt.hash as string;
+    return this.txQueue.submit(`escrow.notifyFunded ${address}`, async () => {
+      const c = this.writeContract(address);
+      const tx = await c.notifyFunded();
+      const receipt = await tx.wait();
+      this.logger.log(`notifyFunded ${address}, tx=${receipt.hash}`);
+      return receipt.hash as string;
+    });
   }
 
   async assignArbitrator(address: string, arbitrator: string): Promise<string> {
-    const c = this.writeContract(address);
-    const tx = await c.assignArbitrator(arbitrator);
-    const receipt = await tx.wait();
-    this.logger.log(`assignArbitrator ${address} → ${arbitrator}, tx=${receipt.hash}`);
-    return receipt.hash as string;
+    return this.txQueue.submit(`escrow.assignArbitrator ${address}`, async () => {
+      const c = this.writeContract(address);
+      const tx = await c.assignArbitrator(arbitrator);
+      const receipt = await tx.wait();
+      this.logger.log(`assignArbitrator ${address} → ${arbitrator}, tx=${receipt.hash}`);
+      return receipt.hash as string;
+    });
   }
 
   /**
@@ -109,23 +117,27 @@ export class EscrowClient {
    * on-chain; used by admin recovery when a buyer's money arrived late.
    */
   async extendFundingDeadline(address: string, newDeadlineUnix: number): Promise<string> {
-    const c = this.writeContract(address);
-    const tx = await c.extendFundingDeadline(newDeadlineUnix);
-    const receipt = await tx.wait();
-    this.logger.log(
-      `extendFundingDeadline ${address} → ${newDeadlineUnix}, tx=${receipt.hash}`,
-    );
-    return receipt.hash as string;
+    return this.txQueue.submit(`escrow.extendFundingDeadline ${address}`, async () => {
+      const c = this.writeContract(address);
+      const tx = await c.extendFundingDeadline(newDeadlineUnix);
+      const receipt = await tx.wait();
+      this.logger.log(
+        `extendFundingDeadline ${address} → ${newDeadlineUnix}, tx=${receipt.hash}`,
+      );
+      return receipt.hash as string;
+    });
   }
 
   /**
    * Force-expire an unfunded deal past its deadline. Anyone can call.
    */
   async expire(address: string): Promise<string> {
-    const c = this.writeContract(address);
-    const tx = await c.expire();
-    const receipt = await tx.wait();
-    this.logger.log(`expire ${address}, tx=${receipt.hash}`);
-    return receipt.hash as string;
+    return this.txQueue.submit(`escrow.expire ${address}`, async () => {
+      const c = this.writeContract(address);
+      const tx = await c.expire();
+      const receipt = await tx.wait();
+      this.logger.log(`expire ${address}, tx=${receipt.hash}`);
+      return receipt.hash as string;
+    });
   }
 }

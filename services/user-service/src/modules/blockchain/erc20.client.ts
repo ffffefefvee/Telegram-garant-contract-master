@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ethers } from 'ethers';
 import { BlockchainConfig } from './blockchain.config';
 import { BlockchainProvider } from './blockchain.provider';
+import { RelayTxQueue } from './relay-tx-queue';
 import erc20Abi from './abi/IERC20.json';
 
 /**
@@ -17,6 +18,7 @@ export class Erc20Client {
   constructor(
     private readonly cfg: BlockchainConfig,
     private readonly provider: BlockchainProvider,
+    private readonly txQueue: RelayTxQueue,
   ) {}
 
   private read(): ethers.Contract {
@@ -50,9 +52,13 @@ export class Erc20Client {
     if (!this.provider.isReady) {
       throw new Error('Blockchain not ready');
     }
-    const tx = await this.write().transfer(to, amount);
-    const receipt = await tx.wait();
-    this.logger.log(`USDT transfer ${amount} → ${to}, tx=${receipt.hash}`);
-    return receipt.hash as string;
+    // Serialized via RelayTxQueue: the relay signer is shared, so concurrent
+    // broadcasts would collide on the same nonce.
+    return this.txQueue.submit(`erc20.transfer ${amount}→${to}`, async () => {
+      const tx = await this.write().transfer(to, amount);
+      const receipt = await tx.wait();
+      this.logger.log(`USDT transfer ${amount} → ${to}, tx=${receipt.hash}`);
+      return receipt.hash as string;
+    });
   }
 }

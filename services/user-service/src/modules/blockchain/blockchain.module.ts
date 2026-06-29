@@ -8,6 +8,7 @@ import { EscrowClient } from './escrow.client';
 import { TreasuryClient } from './treasury.client';
 import { RegistryClient } from './registry.client';
 import { RelayService } from './relay.service';
+import { RelayTxQueue } from './relay-tx-queue';
 
 /**
  * BlockchainModule — single source of truth for on-chain interactions.
@@ -28,6 +29,7 @@ import { RelayService } from './relay.service';
   providers: [
     BlockchainConfig,
     BlockchainProvider,
+    RelayTxQueue,
     Erc20Client,
     FactoryClient,
     EscrowClient,
@@ -38,6 +40,7 @@ import { RelayService } from './relay.service';
   exports: [
     BlockchainConfig,
     BlockchainProvider,
+    RelayTxQueue,
     Erc20Client,
     FactoryClient,
     EscrowClient,

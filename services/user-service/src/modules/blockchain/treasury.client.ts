@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { ethers } from 'ethers';
 import { BlockchainConfig } from './blockchain.config';
 import { BlockchainProvider } from './blockchain.provider';
+import { RelayTxQueue } from './relay-tx-queue';
 import treasuryAbi from './abi/PlatformTreasury.json';
 
 /**
@@ -21,6 +22,7 @@ export class TreasuryClient {
   constructor(
     private readonly cfg: BlockchainConfig,
     private readonly provider: BlockchainProvider,
+    private readonly txQueue: RelayTxQueue,
   ) {}
 
   private read(): ethers.Contract {
@@ -58,9 +60,11 @@ export class TreasuryClient {
    */
   async reconcile(): Promise<string | null> {
     if (!this.provider.isReady) return null;
-    const tx = await this.write().reconcile();
-    const receipt = await tx.wait();
-    this.logger.log(`Treasury reconciled, tx=${receipt.hash}`);
-    return receipt.hash as string;
+    return this.txQueue.submit('treasury.reconcile', async () => {
+      const tx = await this.write().reconcile();
+      const receipt = await tx.wait();
+      this.logger.log(`Treasury reconciled, tx=${receipt.hash}`);
+      return receipt.hash as string;
+    });
   }
 }
