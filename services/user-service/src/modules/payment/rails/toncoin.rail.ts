@@ -15,6 +15,7 @@ import {
   TonInvoiceBuildArgs,
   TonRailProgress,
 } from './ton-rail.base';
+import { TonFundingLockService } from './ton-funding-lock.service';
 
 const USDT_DECIMALS = 6;
 /** Required TON amounts are rounded UP to this many decimal places so the
@@ -59,8 +60,9 @@ export class ToncoinRail extends BaseTonRail {
     relay: RelayService,
     tonApi: TonApiService,
     config: ConfigService,
+    fundingLock: TonFundingLockService,
   ) {
-    super(dealRepository, escrow, relay, tonApi, config);
+    super(dealRepository, escrow, relay, tonApi, config, fundingLock);
     this.rateBufferPct = Number(
       config.get<string>('TON_RATE_BUFFER_PCT', '1'),
     );

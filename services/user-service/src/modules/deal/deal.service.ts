@@ -6,6 +6,8 @@ import {
   ConflictException,
   ForbiddenException,
   BadRequestException,
+  Inject,
+  forwardRef,
 } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
@@ -32,6 +34,7 @@ import { EscrowService } from '../escrow/escrow.service';
 import { OutboxService } from '../ops/outbox.service';
 import { ReputationService } from '../review/reputation.service';
 import { KycLimitsService } from '../user/kyc-limits.service';
+import { DisputeService } from '../arbitration/dispute.service';
 
 /** D6: minimum deal amount in RUB. */
 export const DEAL_MIN_AMOUNT_RUB = 300;
@@ -114,6 +117,8 @@ export class DealService {
     private reputationService: ReputationService,
     private kycLimits: KycLimitsService,
     private configService: ConfigService,
+    @Inject(forwardRef(() => DisputeService))
+    private disputeService: DisputeService,
   ) {
     this.stateMachine = new DealStateMachine({
       commissionRate: 0.05, // 5% комиссия
@@ -748,11 +753,23 @@ export class DealService {
       .update(JSON.stringify(snapshot))
       .digest('hex');
 
+    // Materialise the Dispute aggregate so downstream flows (evidence upload,
+    // arbitrator assignment) have a real disputeId. Idempotent: reuses the
+    // open dispute if one already exists for this deal.
+    const dispute = await this.disputeService.createDisputeForDeal({
+      dealId: deal.id,
+      buyerId: deal.buyerId,
+      sellerId: deal.sellerId,
+      userId,
+      reason,
+    });
+
     deal.metadata = {
       ...(deal.metadata ?? {}),
       chatSnapshotHash,
       chatSnapshotMessageCount: messages.length,
       disputeOpenedAt: new Date().toISOString(),
+      disputeId: dispute.id,
     };
 
     deal.status = DealStatus.DISPUTED;
@@ -779,7 +796,7 @@ export class DealService {
         eventType: 'dispute.opened',
         payload: {
           dealId: deal.id,
-          disputeId: deal.id,
+          disputeId: dispute.id,
           dealTitle: deal.title ?? `Deal ${deal.dealNumber ?? deal.id}`,
           reason,
           opponentUserId: opponentId,

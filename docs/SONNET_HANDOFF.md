@@ -1,5 +1,10 @@
 # Plan-prompt для Claude Sonnet 4.6 — Telegram Garant
 
+> **Статус (обновлено):** evidence upload в mini-app уже подключён
+> (`DealChatPage.handleDispute` → `arbitrationApi.uploadEvidence`), бэкенд
+> создаёт Dispute-сущность при открытии спора. См.
+> [PAYMENTS_HARDENING_PLAN.md](./PAYMENTS_HARDENING_PLAN.md) §12.
+
 Скопируйте блок **«Промпт для агента»** в новый чат Sonnet вместе с этим репозиторием.  
 Цель: снять «витринный долг» (моки, пустая админка, заглушки) **без** изменений платёжного контура и blockchain.
 

@@ -10,6 +10,7 @@ import { TelegramDealHandler } from './telegram-deal.handler';
 import { buildTelegramClientOptions } from './telegram-client.options';
 import { persistChatSession, TelegramSessionStore } from './telegram-session.store';
 import { TelegramDealLifecycleHandler } from './telegram-deal-lifecycle.handler';
+import { TelegramAntiScamHandler } from './telegram-anti-scam.handler';
 import { buildTelegramMiniAppUrl, normalizeHostedMiniAppUrl } from './telegram-mini-app.util';
 import { formatTelegramUserDisplayName, withInlineKeyboard } from './telegram-reply.util';
 import type { Update } from 'telegraf/types';
@@ -46,6 +47,7 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
     private dealService: DealService,
     private dealHandler: TelegramDealHandler,
     private lifecycleHandler: TelegramDealLifecycleHandler,
+    private antiScamHandler: TelegramAntiScamHandler,
     private sessionStore: TelegramSessionStore,
     private moduleRef: ModuleRef,
   ) {
@@ -97,6 +99,7 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
         { command: 'help', description: 'Справка' },
         { command: 'new_deal', description: 'Новая сделка' },
         { command: 'my_deals', description: 'Мои сделки' },
+        { command: 'check', description: 'Проверить пользователя на скам' },
         { command: 'profile', description: 'Профиль' },
         { command: 'language', description: 'Язык' },
         { command: 'settings', description: 'Настройки' },
@@ -169,6 +172,10 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
     this.setupErrorHandler();
 
     if (this.bot) {
+      // Anti-scam must register first: its text handler intercepts the
+      // id/@username check query and complaint reason before the deal
+      // handler's numeric/description hears-handlers can swallow them.
+      this.antiScamHandler.registerHandlers(this.bot as never);
       this.dealHandler.registerHandlers(this.bot);
       this.lifecycleHandler.registerHandlers(this.bot);
       this.setupFreeTextGuard();
@@ -218,6 +225,9 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
       }
       if (matches(text, 'menu.profile')) {
         return this.handleProfileCommand(ctx as any, lang);
+      }
+      if (matches(text, 'menu.check_user')) {
+        return this.antiScamHandler.startCheck(ctx as any, lang);
       }
       if (matches(text, 'menu.settings')) {
         const keyboard = Markup.inlineKeyboard([
@@ -478,6 +488,7 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
           'profile',
           'new_deal',
           'my_deals',
+          'check',
         ]);
 
         if (!known.has(command)) {
@@ -528,6 +539,7 @@ export class TelegramBotService implements OnModuleInit, OnModuleDestroy {
     const rows = [
       [Markup.button.text(t('menu.new_deal')), Markup.button.text(t('menu.my_deals'))],
       [Markup.button.text(t('menu.balance')), Markup.button.text(t('menu.profile'))],
+      [Markup.button.text(t('menu.check_user'))],
       [Markup.button.text(t('menu.settings')), Markup.button.text(t('menu.help'))],
       [Markup.button.text(t('menu.support'))],
     ];

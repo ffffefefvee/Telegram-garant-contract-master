@@ -89,6 +89,10 @@ export class MonitoringService implements OnModuleInit {
     setInterval(() => this.healthCheck(), 60000);
     setInterval(() => this.checkStuckDeals(), 300000);
     setInterval(() => this.checkPendingPayments(), 120000);
+    setInterval(
+      () => this.checkStuckFunding(),
+      Number(this.config.get<string>('STUCK_FUNDING_CHECK_INTERVAL_MS', '300000')),
+    );
     setInterval(() => this.checkTreasuryReserve(), 600000);
     setInterval(() => this.checkTonOps(), 600000);
     setInterval(() => this.cleanupOldAlerts(), 3600000);
@@ -274,6 +278,43 @@ export class MonitoringService implements OnModuleInit {
       }
     } catch (error) {
       this.logger.error(`Failed to check pending payments: ${error.message}`);
+    }
+  }
+
+  /**
+   * Limbo payments: USDT has arrived (payment COMPLETED) but the on-chain
+   * escrow was never funded (deal still PENDING_PAYMENT). This is real money
+   * sitting on the hot wallet instead of in escrow — it must be surfaced
+   * proactively, not only when someone opens the admin report.
+   *
+   * Fires a single ERROR alert (→ ops Telegram) while the condition holds:
+   * `createAlertOnce` suppresses duplicates until the existing alert is
+   * resolved, so repeated ticks never spam. Threshold via
+   * STUCK_FUNDING_ALERT_THRESHOLD (default 0 = alert on any stuck payment).
+   */
+  async checkStuckFunding(): Promise<void> {
+    try {
+      const threshold = Number(
+        this.config.get<string>('STUCK_FUNDING_ALERT_THRESHOLD', '0'),
+      );
+      const stuck = await this.paymentService.findStuckFunding();
+      await this.recordMetric('monitoring.stuck_funding', stuck.length, 'count');
+
+      if (stuck.length > threshold) {
+        await this.createAlertOnce(
+          AlertType.PAYMENT_FAILED,
+          AlertSeverity.ERROR,
+          'Stuck funding: paid deals without funded escrow',
+          `${stuck.length} completed payment(s) whose deal is still awaiting ` +
+            `funding — USDT received but escrow not funded. Investigate: ` +
+            `GET /admin/payments/stuck/funding`,
+          { count: stuck.length, threshold },
+        );
+      }
+    } catch (error) {
+      this.logger.error(
+        `Failed to check stuck funding: ${(error as Error).message}`,
+      );
     }
   }
 

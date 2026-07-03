@@ -13,6 +13,8 @@ import { Deal } from '../deal/entities/deal.entity';
 import { User } from '../user/entities/user.entity';
 import {
   DisputeStatus,
+  DisputeType,
+  DisputeSide,
   ArbitrationEventType,
 } from './entities/enums/arbitration.enum';
 import { OpenDisputeDto, UpdateDisputeStatusDto } from './dto';
@@ -171,6 +173,81 @@ export class DisputeService {
     } finally {
       await queryRunner.release();
     }
+  }
+
+  /**
+   * Ensure a Dispute record exists for a deal whose status the DealService has
+   * already flipped to DISPUTED. This is the narrow, idempotent counterpart to
+   * `openDispute`: it only materialises the Dispute aggregate (+ its chat) so
+   * that downstream flows (evidence upload, arbitrator assignment) have a real
+   * `disputeId` to work with. It deliberately does NOT touch deal.status,
+   * user stats or notifications — those remain owned by DealService.openDispute
+   * to avoid double side-effects.
+   *
+   * @returns the existing open Dispute if one is already present, otherwise a
+   *          freshly created one.
+   */
+  async createDisputeForDeal(params: {
+    dealId: string;
+    buyerId: string;
+    sellerId: string | null;
+    userId: string;
+    reason: string;
+  }): Promise<Dispute> {
+    const { dealId, buyerId, userId, reason } = params;
+
+    // Idempotency: never create a second open dispute for the same deal.
+    const existing = await this.disputeRepository.findOne({ where: { dealId } });
+    if (existing && !existing.isClosed) {
+      return existing;
+    }
+
+    const openedBy = buyerId === userId ? DisputeSide.BUYER : DisputeSide.SELLER;
+    const evidenceHours = await this.settingsService.getEvidenceSubmissionHours();
+    const penaltyPercent = await this.settingsService.getPenaltyPercent();
+
+    const dispute = this.disputeRepository.create({
+      disputeNumber: Dispute.generateDisputeNumber(),
+      dealId,
+      openerId: userId,
+      openedBy,
+      type: DisputeType.OTHER,
+      status: DisputeStatus.OPENED,
+      reason,
+      penaltyPercent,
+      evidenceDueAt: new Date(Date.now() + evidenceHours * 60 * 60 * 1000),
+    });
+
+    const chat = this.chatRepository.create({ disputeId: dispute.id });
+
+    const queryRunner = this.dataSource.createQueryRunner();
+    await queryRunner.connect();
+    await queryRunner.startTransaction();
+    try {
+      await queryRunner.manager.save(dispute);
+      chat.disputeId = dispute.id;
+      await queryRunner.manager.save(chat);
+      dispute.chatId = chat.id;
+      await queryRunner.manager.save(dispute);
+
+      const event = this.eventRepository.create({
+        disputeId: dispute.id,
+        type: ArbitrationEventType.DISPUTE_OPENED,
+        description: `Спор открыт: ${reason}`,
+        actorId: userId,
+        metadata: { openedBy },
+      });
+      await queryRunner.manager.save(event);
+
+      await queryRunner.commitTransaction();
+    } catch (error) {
+      await queryRunner.rollbackTransaction();
+      throw error;
+    } finally {
+      await queryRunner.release();
+    }
+
+    return dispute;
   }
 
   /**

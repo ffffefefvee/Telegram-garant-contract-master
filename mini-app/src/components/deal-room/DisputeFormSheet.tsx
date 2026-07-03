@@ -74,7 +74,8 @@ export const DisputeFormSheet: React.FC<DisputeFormSheetProps> = ({
           style={{ display: 'block', marginTop: 8, fontSize: 'var(--text-xs)' }}
         />
       </label>
-      {/* TODO: POST /deals/:id/dispute/evidence when backend ready */}
+      {/* Files are uploaded to the created dispute via
+          arbitrationApi.uploadEvidence in the parent onSubmit handler. */}
       {previews.length > 0 && (
         <div className="dispute-form__files">
           {previews.map((url) => (

@@ -562,7 +562,39 @@ outbox_events (id, source, payload, processed_at, attempts, last_error)  -- outb
 
 ---
 
+## 11a. Anti-scam чек (проверка аккаунтов + база скамеров)
+
+Отдельная от эскроу-сделок функция: любой пользователь может проверить произвольный Telegram-аккаунт на скам и подать жалобу.
+
+**Модуль:** `services/user-service/src/modules/anti-scam/` (+ хендлер `telegram-bot/telegram-anti-scam.handler.ts`).
+
+**UX в боте (button-driven, D12):** пункт меню «🛡 Проверить пользователя» / команда `/check` → кнопка «Выбрать пользователя» (`request_users` → `users_shared`) либо ввод Telegram ID / `@username` → вердикт (чист / есть жалобы / скамер + ссылка на базу) → кнопка «🚩 Пожаловаться» (причина + **обязательные** скриншоты-доказательства).
+
+**Модель подтверждения (гибрид):**
+- **Авто:** запись помечается `CONFIRMED` при достижении порога РАЗНЫХ жалобщиков (`ANTISCAM_AUTO_CONFIRM_THRESHOLD`, дефолт 3).
+- **Ручная:** при первой жалобе в чат модерации (`ANTISCAM_MODERATION_CHAT_ID`) приходит карточка с кнопками «✅ Скамер / ❌ Отклонить» (только для ADMIN/SUPER_ADMIN); также REST под `RolesGuard` (`/admin/anti-scam/*`).
+
+**Anti-spam / дедуп:** одна жалоба на пару (жалобщик, цель); запрет одинакового текста жалобы глобально (SHA-256 `contentHash`); запрет self-report; скриншоты обязательны.
+
+**Публикация в каналы (бот-постинг):**
+- Канал-доказательства — отдельное сообщение на каждого скамера (текст жалоб + скриншоты media-group).
+- Канал-база — пакетная запись при накоплении `ANTISCAM_PUBLISH_BATCH_SIZE` (дефолт 10) через `@Cron`; формат строки: «Скамер — @юз — ссылка через tg id — ссылка на доказательства».
+
+**Данные:** `scammer_records` (ключ `targetTelegramId`, статус, счётчик жалобщиков, message-id постов), `scam_reports` (жалоба, `contentHash`, `screenshotFileIds`). Скриншоты хранятся как Telegram `file_id` (без внешнего storage). Миграция `1716500000000-CreateAntiScamTables`.
+
+**Конфиг (env):** `ANTISCAM_DB_CHANNEL_ID/_USERNAME`, `ANTISCAM_EVIDENCE_CHANNEL_ID/_USERNAME`, `ANTISCAM_MODERATION_CHAT_ID`, `ANTISCAM_AUTO_CONFIRM_THRESHOLD`, `ANTISCAM_PUBLISH_BATCH_SIZE`, `ANTISCAM_MIN/MAX_SCREENSHOTS`, `ANTISCAM_PUBLISH_ENABLED`. Бот должен быть админом обоих каналов.
+
+---
+
 ## 12. Дорожная карта
+
+> **Статус (обновлено):** Кодовая часть Горизонта 1 (MVP) в основном выполнена:
+> контракты (114/114), сделки+FSM, платежи (Cryptomus/TON/direct-USDT),
+> чат+release, арбитраж (споры/evidence/resolve on-chain), admin/arbitrator UI,
+> отзывы/репутация. Backend-тесты 318/318.
+> **Осталось (инфра/человек):** relay-ключ в KMS/Vault, редеплой escrow после
+> правки `resolve()`, E2E платежей в sandbox, внешний аудит, mainnet deploy,
+> юрлицо/KYC/найм арбитров. Детали: [PAYMENTS_HARDENING_PLAN.md](./PAYMENTS_HARDENING_PLAN.md).
 
 ### Горизонт 0 — Гигиена (1 спринт = ~1 неделя)
 - [ ] Отозвать утёкший TG bot token, очистить git history.

@@ -1,5 +1,11 @@
 # Plan-prompt для Claude Opus 4.6 — Telegram Garant
 
+> **Статус (обновлено):** часть пакетов уже выполнена — O3 (справедливая
+> комиссия в `resolve()`, B1), единый источник комиссий (B2), cron-алерты
+> застрявших платежей (B3), связка openDispute→Dispute-сущность + evidence
+> upload. См. [PAYMENTS_HARDENING_PLAN.md](./PAYMENTS_HARDENING_PLAN.md) §§9–12.
+> Не переделывайте это заново.
+
 Скопируйте блок **«Промпт для агента»** в новый чат Opus вместе с репозиторием.  
 Цель: **деньги, on-chain, арбитраж core, надёжность** — всё, что Sonnet не должен трогать ([SONNET_HANDOFF.md](./SONNET_HANDOFF.md)).
 

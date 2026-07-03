@@ -58,6 +58,7 @@ export interface Deal {
     paymentConfirming?: boolean;
     paymentConfirmations?: number;
     releaseTxHash?: string;
+    disputeId?: string;
   };
 }
 

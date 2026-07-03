@@ -1,6 +1,7 @@
 import { expect } from "chai";
 import { ethers } from "hardhat";
 import { time } from "@nomicfoundation/hardhat-network-helpers";
+import { anyValue } from "@nomicfoundation/hardhat-chai-matchers/withArgs";
 import { SignerWithAddress } from "@nomicfoundation/hardhat-ethers/signers";
 import {
   ArbitratorRegistry,
@@ -414,6 +415,96 @@ describe("EscrowFactory + EscrowImplementation", () => {
       expect(await usdt.balanceOf(arbitrator.address)).to.equal(arbBefore + expectedFine);
       // Seller gets remaining
       expect(await usdt.balanceOf(seller.address)).to.equal(sellerBefore + (escrowFunded - expectedFine));
+    });
+
+    it("innocent seller pays ZERO platform fee when buyer is the scammer (0/100)", async () => {
+      // Business rule (PRODUCT_PLAN §6.5): the fully innocent party never pays the
+      // platform commission. Buyer scammed → seller wins 100% → Treasury takes no fee.
+      await escrow.connect(buyer).dispute();
+      await escrow.connect(relay).assignArbitrator(arbitrator.address);
+
+      const mainBefore = await treasury.mainBalance();
+      const reserveBefore = await treasury.reserveBalance();
+
+      const tx = await escrow.connect(arbitrator).resolve(0, 100);
+
+      // No platform fee taken from the innocent seller.
+      expect(await treasury.mainBalance()).to.equal(mainBefore);
+      expect(await treasury.reserveBalance()).to.equal(reserveBefore);
+      // Resolved event reports feeToTreasury = 0.
+      await expect(tx)
+        .to.emit(escrow, "Resolved")
+        .withArgs(arbitrator.address, 0, 100, anyValue, anyValue, anyValue, anyValue, 0n);
+    });
+
+    it("innocent buyer pays ZERO platform fee when seller is the scammer (100/0)", async () => {
+      // Mirror case: seller scammed → buyer wins 100% → Treasury takes no fee.
+      await escrow.connect(buyer).dispute();
+      await escrow.connect(relay).assignArbitrator(arbitrator.address);
+
+      // Buyer fully wins → fine is paid from Treasury Reserve; pre-fund it.
+      const expectedFine = 2_000_000n;
+      await usdt.mint(admin.address, expectedFine);
+      await usdt.connect(admin).approve(await treasury.getAddress(), expectedFine);
+      await treasury.connect(admin).fundReserve(expectedFine);
+
+      const mainBefore = await treasury.mainBalance();
+
+      const tx = await escrow.connect(arbitrator).resolve(100, 0);
+
+      // No platform fee taken from the innocent buyer's payout.
+      expect(await treasury.mainBalance()).to.equal(mainBefore);
+      await expect(tx)
+        .to.emit(escrow, "Resolved")
+        .withArgs(arbitrator.address, 100, 0, anyValue, anyValue, anyValue, anyValue, 0n);
+    });
+
+    it("partial fault 70/30: reduced fee split BY FAULT, guiltier side pays more", async () => {
+      // Deal 20 USDT, fee 1 USDT (5% split 50/50), fine 2 USDT.
+      // buyerSharePct=70 (buyer 70% right → 30% at fault), sellerSharePct=30 (seller 70% at fault).
+      await escrow.connect(buyer).dispute();
+      await escrow.connect(relay).assignArbitrator(arbitrator.address);
+
+      const escrowFunded = TWENTY_USDT + 500_000n; // 20.5 USDT
+      const fine = 2_000_000n; // 10% of 20 USDT, within [min,max]
+      const fineFromEscrow = (fine * 30n) / 100n; // 600_000
+      const fineFromReserve = fine - fineFromEscrow; // 1_400_000 → pre-fund reserve
+
+      await usdt.mint(admin.address, fineFromReserve);
+      await usdt.connect(admin).approve(await treasury.getAddress(), fineFromReserve);
+      await treasury.connect(admin).fundReserve(fineFromReserve);
+
+      // Expected math
+      const remaining = escrowFunded - fineFromEscrow; // 19_900_000
+      const buyerBase = (remaining * 70n) / 100n; // 13_930_000
+      const sellerBase = remaining - buyerBase; // 5_970_000
+      const disputeFee = ((500_000n + 500_000n) * 5000n) / 10000n; // 500_000 (50% of 1 USDT)
+      const feeFromBuyer = (disputeFee * 30n) / 100n; // 150_000 (buyer 30% at fault)
+      const feeFromSeller = (disputeFee * 70n) / 100n; // 350_000 (seller 70% at fault)
+      const feeToTreasury = feeFromBuyer + feeFromSeller; // 500_000
+      const buyerPayout = buyerBase - feeFromBuyer; // 13_780_000
+      const sellerPayout = sellerBase - feeFromSeller; // 5_620_000
+
+      const arbBefore = await usdt.balanceOf(arbitrator.address);
+      const buyerBefore = await usdt.balanceOf(buyer.address);
+      const sellerBefore = await usdt.balanceOf(seller.address);
+      const mainBefore = await treasury.mainBalance();
+
+      await escrow.connect(arbitrator).resolve(70, 30);
+
+      // Guiltier side (seller, 70% fault) pays more fee than buyer (30% fault).
+      expect(feeFromSeller).to.be.greaterThan(feeFromBuyer);
+
+      expect(await usdt.balanceOf(buyer.address)).to.equal(buyerBefore + buyerPayout);
+      expect(await usdt.balanceOf(seller.address)).to.equal(sellerBefore + sellerPayout);
+      expect(await usdt.balanceOf(arbitrator.address)).to.equal(arbBefore + fine);
+
+      // Platform received the reduced fee: 80% to main (reserveBps=20%).
+      expect(await treasury.mainBalance()).to.equal(mainBefore + (feeToTreasury * 8000n) / 10000n);
+
+      // Conservation invariant: nothing left stuck in the escrow.
+      expect(await usdt.balanceOf(escrowAddr)).to.equal(0n);
+      expect(buyerPayout + sellerPayout + feeToTreasury + fineFromEscrow).to.equal(escrowFunded);
     });
 
     it("resolve with invalid shares reverts", async () => {

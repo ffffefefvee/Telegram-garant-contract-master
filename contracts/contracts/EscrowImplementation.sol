@@ -58,6 +58,15 @@ contract EscrowImplementation is Initializable, ReentrancyGuard {
     uint256 public fineMax;
     uint16 public fineBps;     // 1000 = 10%
 
+    /// @notice Уменьшенная ставка платформенной комиссии при арбитраже.
+    ///         Доля от штатной комиссии сделки (buyerFee + sellerFee). 5000 = 50%.
+    /// @dev Комиссия в споре удерживается ТОЛЬКО из доли ВИНОВНОЙ стороны и никогда
+    ///      не уменьшает выплату невиновному — пострадавший от скамера не платит
+    ///      комиссию за чужую вину (PRODUCT_PLAN §6.5).
+    uint16 public constant DISPUTE_FEE_BPS = 5000;
+    uint16 private constant BPS_DENOMINATOR = 10000;
+    uint16 private constant SHARE_DENOMINATOR = 100;
+
     uint64 public fundingDeadline;
     Status public status;
 
@@ -79,7 +88,8 @@ contract EscrowImplementation is Initializable, ReentrancyGuard {
         uint256 buyerPayout,
         uint256 sellerPayout,
         uint256 fineToArbitrator,
-        uint256 fineFromReserve
+        uint256 fineFromReserve,
+        uint256 feeToTreasury
     );
 
     error NotBuyer();
@@ -280,6 +290,17 @@ contract EscrowImplementation is Initializable, ReentrancyGuard {
         emit ArbitratorAssigned(arbitrator);
     }
 
+    /// @notice Результат расчёта распределения средств при resolve() (вынесен в struct
+    ///         из-за лимита stack-depth solc и для читаемости).
+    struct ResolveSplit {
+        uint256 fine;            // полный штраф арбитру (D15)
+        uint256 fineFromEscrow;  // часть штрафа из эскроу (виновен покупатель)
+        uint256 fineFromReserve; // часть штрафа из Treasury Reserve (виновен продавец)
+        uint256 buyerPayout;     // выплата покупателю (за вычетом его доли комиссии)
+        uint256 sellerPayout;    // выплата продавцу (за вычетом его доли комиссии)
+        uint256 feeToTreasury;   // уменьшенная комиссия платформы
+    }
+
     /// @notice Арбитр выносит решение. См. PRODUCT_PLAN §6.5.
     /// @param buyerSharePct 0..100, sellerSharePct = 100 - buyerSharePct.
     function resolve(uint16 buyerSharePct, uint16 sellerSharePct)
@@ -288,22 +309,10 @@ contract EscrowImplementation is Initializable, ReentrancyGuard {
         nonReentrant
     {
         if (msg.sender != assignedArbitrator) revert NotAssignedArbitrator();
-        if (uint256(buyerSharePct) + uint256(sellerSharePct) != 100) revert InvalidShares();
+        if (uint256(buyerSharePct) + uint256(sellerSharePct) != SHARE_DENOMINATOR) revert InvalidShares();
 
-        // Штраф D15: пропорция между escrow (buyer-side fault) и Treasury Reserve (seller-side fault).
-        uint256 fine = _computeFine();
         uint256 escrowBalance = token.balanceOf(address(this));
-
-        // fineFromEscrow = fine * sellerSharePct / 100; capped at escrowBalance to avoid underflow
-        uint256 fineFromEscrow = (fine * sellerSharePct) / 100;
-        if (fineFromEscrow > escrowBalance) {
-            fineFromEscrow = escrowBalance;
-        }
-        uint256 fineFromReserve = fine - fineFromEscrow;
-
-        uint256 remaining = escrowBalance - fineFromEscrow;
-        uint256 buyerPayout = (remaining * buyerSharePct) / 100;
-        uint256 sellerPayout = remaining - buyerPayout; // sellerSharePct = 100 - buyerSharePct → no rounding loss
+        ResolveSplit memory s = _computeResolveSplit(escrowBalance, buyerSharePct, sellerSharePct);
 
         status = Status.RESOLVED;
 
@@ -311,28 +320,77 @@ contract EscrowImplementation is Initializable, ReentrancyGuard {
         registry.incrementResolved(assignedArbitrator);
 
         // Interactions
-        if (fineFromEscrow > 0) {
-            token.safeTransfer(assignedArbitrator, fineFromEscrow);
+        if (s.fineFromEscrow > 0) {
+            token.safeTransfer(assignedArbitrator, s.fineFromEscrow);
         }
-        if (fineFromReserve > 0) {
-            treasury.payArbitratorFromReserve(assignedArbitrator, fineFromReserve, dealId);
+        if (s.fineFromReserve > 0) {
+            treasury.payArbitratorFromReserve(assignedArbitrator, s.fineFromReserve, dealId);
         }
-        if (buyerPayout > 0) {
-            token.safeTransfer(buyer, buyerPayout);
+        if (s.feeToTreasury > 0) {
+            token.safeTransfer(address(treasury), s.feeToTreasury);
+            treasury.depositFee(s.feeToTreasury);
         }
-        if (sellerPayout > 0) {
-            token.safeTransfer(seller, sellerPayout);
+        if (s.buyerPayout > 0) {
+            token.safeTransfer(buyer, s.buyerPayout);
+        }
+        if (s.sellerPayout > 0) {
+            token.safeTransfer(seller, s.sellerPayout);
         }
 
         emit Resolved(
             assignedArbitrator,
             buyerSharePct,
             sellerSharePct,
-            buyerPayout,
-            sellerPayout,
-            fine,
-            fineFromReserve
+            s.buyerPayout,
+            s.sellerPayout,
+            s.fine,
+            s.fineFromReserve,
+            s.feeToTreasury
         );
+    }
+
+    /// @notice Чистый расчёт распределения средств спора. Инвариант:
+    ///         buyerPayout + sellerPayout + feeToTreasury + fineFromEscrow == escrowBalance.
+    /// @dev Штраф D15 и комиссия берутся только с виновной стороны:
+    ///      вина покупателя = sellerSharePct, вина продавца = buyerSharePct.
+    ///      Комиссия удерживается из СОБСТВЕННОЙ доли каждой стороны (cap),
+    ///      поэтому полностью невиновная сторона никогда не платит комиссию.
+    function _computeResolveSplit(
+        uint256 escrowBalance,
+        uint16 buyerSharePct,
+        uint16 sellerSharePct
+    ) internal view returns (ResolveSplit memory s) {
+        s.fine = _computeFine();
+
+        // Штраф D15: capped на escrowBalance во избежание underflow.
+        uint256 fineFromEscrow = (s.fine * sellerSharePct) / SHARE_DENOMINATOR;
+        if (fineFromEscrow > escrowBalance) {
+            fineFromEscrow = escrowBalance;
+        }
+        s.fineFromEscrow = fineFromEscrow;
+        s.fineFromReserve = s.fine - fineFromEscrow;
+
+        uint256 remaining = escrowBalance - fineFromEscrow;
+        uint256 buyerBase = (remaining * buyerSharePct) / SHARE_DENOMINATOR;
+        uint256 sellerBase = remaining - buyerBase; // sellerSharePct = 100 - buyerSharePct → без потерь округления
+
+        // Уменьшенная комиссия платформы, распределённая ПО ВИНЕ.
+        uint256 disputeFee = ((buyerFee + sellerFee) * DISPUTE_FEE_BPS) / BPS_DENOMINATOR;
+
+        // Покупатель платит пропорционально своей вине (= sellerSharePct), но не больше своей доли.
+        uint256 feeFromBuyer = (disputeFee * sellerSharePct) / SHARE_DENOMINATOR;
+        if (feeFromBuyer > buyerBase) {
+            feeFromBuyer = buyerBase;
+        }
+        // Продавец платит пропорционально своей вине (= buyerSharePct), но не больше своей доли.
+        uint256 feeFromSeller = (disputeFee * buyerSharePct) / SHARE_DENOMINATOR;
+        if (feeFromSeller > sellerBase) {
+            feeFromSeller = sellerBase;
+        }
+
+        s.feeToTreasury = feeFromBuyer + feeFromSeller;
+        s.buyerPayout = buyerBase - feeFromBuyer;
+        s.sellerPayout = sellerBase - feeFromSeller;
     }
 
     function _computeFine() internal view returns (uint256) {

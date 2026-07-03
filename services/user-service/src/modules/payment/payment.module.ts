@@ -16,6 +16,7 @@ import { EscrowModule } from '../escrow/escrow.module';
 import { BlockchainModule } from '../blockchain/blockchain.module';
 import { OpsModule } from '../ops/ops.module';
 import { CommissionConfigService } from './commission-config.service';
+import { FeeConsistencyService } from './fee-consistency.service';
 import { WebhookRateLimitGuard } from './webhook-rate-limit.guard';
 import { WebhookIpAllowlistGuard } from './webhook-ip-allowlist.guard';
 import { CryptomusRail } from './rails/cryptomus.rail';
@@ -23,6 +24,7 @@ import { DirectUsdtRail } from './rails/direct-usdt.rail';
 import { TonApiService } from './rails/ton-api.service';
 import { TonUsdtRail } from './rails/ton-usdt.rail';
 import { ToncoinRail } from './rails/toncoin.rail';
+import { TonFundingLockService } from './rails/ton-funding-lock.service';
 import { TonUnmatchedScanner } from './rails/ton-unmatched.scanner';
 import { TonRecoveryService } from './rails/ton-recovery.service';
 import { TonUnmatchedDeposit } from './entities/ton-unmatched-deposit.entity';
@@ -54,11 +56,13 @@ import { WebhookIdempotencyService } from './webhook-idempotency.service';
     PaymentWebhookService,
     WebhookIdempotencyService,
     CommissionConfigService,
+    FeeConsistencyService,
     WebhookRateLimitGuard,
     WebhookIpAllowlistGuard,
     CryptomusRail,
     DirectUsdtRail,
     TonApiService,
+    TonFundingLockService,
     TonUsdtRail,
     ToncoinRail,
     RailRegistryService,

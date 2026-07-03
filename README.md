@@ -292,25 +292,33 @@ I18N_HOT_RELOAD=true
 - Development: подробные логи
 - Production: ошибки и предупреждения
 
-## 🔜 Переход к Фазе 3
+## 📈 Статус готовности
 
-Для продолжения разработки (Фаза 3 - Система сделок) необходимо:
+Кодовая часть MVP практически завершена. Тесты: backend **318/318**, контракты
+**114/114**, mini-app — сборка проходит.
 
-1. ✅ Модели пользователей готовы
-2. ✅ i18n сервис настроен
-3. ✅ Авторизация работает
-4. ⏭️ Создать модели Deal, DealMessage, DealAttachment
-5. ⏭️ Реализовать FSM для сделок
-6. ⏭️ Интегрировать с текущей системой пользователей
+### ✅ Готово
+- Auth (Telegram initData + JWT), i18n, профили/роли.
+- Сделки: модели, FSM, invite/accept/cancel, чат, escrow release.
+- Платежи: Cryptomus + TON + direct-USDT rails, reconciliation, идемпотентность webhook.
+- Арбитраж: споры, evidence upload, назначение арбитров, on-chain resolve.
+- Смарт-контракты: EscrowFactory/Implementation, PlatformTreasury, ArbitratorRegistry.
+- **Справедливая комиссия в споре**: невиновная сторона не платит (см. ·6.5 PRODUCT_PLAN).
+- Мониторинг: cron-алерты застрявших платежей, treasury reserve, TON ops.
+- Единый источник комиссий + startup-сверка on-chain/off-chain.
 
-## 📝 Зависимости для Фазы 3
+### ⏳ Осталось (не код / инфраструктура)
+- **HIGH**: вынести relay-ключ (`BLOCKCHAIN_PRIVATE_KEY`) в KMS/Vault
+  (см. [docs/RELAY_KMS_SIGNER_CHECKLIST.md](./docs/RELAY_KMS_SIGNER_CHECKLIST.md)).
+- **MEDIUM**: редеплой `EscrowImplementation` (изменён `resolve()`) + обновление адреса,
+  проверка на Amoy testnet.
+- **MEDIUM**: реальный E2E платежей в Cryptomus sandbox
+  (см. [docs/PAYMENTS_E2E_CHECKLIST.md](./docs/PAYMENTS_E2E_CHECKLIST.md)).
+- **LOW**: техдолг — два пути открытия спора свести на общий код.
+- **Человек/бизнес**: внешний аудит контрактов, mainnet deploy, юрлицо, KYC,
+  найм арбитров, отзыв утёкшего bot-токена.
 
-Следующая фаза будет использовать:
-- `User` модель для связи с сделками
-- `LanguagePreference` для локализации сделок
-- `UserService` для проверки прав доступа
-- `I18nService` для переводов в сделках
-- `TelegramBotService` для уведомлений о сделках
+Подробнее: [docs/PAYMENTS_HARDENING_PLAN.md](./docs/PAYMENTS_HARDENING_PLAN.md).
 
 ## 🛡️ Безопасность
 

@@ -61,6 +61,29 @@ export class FactoryClient {
   }
 
   /**
+   * Reads the on-chain tariff grid (D5) from the factory. Returns null in stub
+   * mode (no node configured). Used by the startup consistency check to compare
+   * the on-chain percent rate against the canonical off-chain grid.
+   */
+  async readTariff(): Promise<{
+    threshold: bigint;
+    flatFee: bigint;
+    percentFeeBps: number;
+  } | null> {
+    if (!this.provider.isReady) return null;
+    const t = (await this.read().tariff()) as {
+      threshold: bigint;
+      flatFee: bigint;
+      percentFeeBps: bigint;
+    };
+    return {
+      threshold: t.threshold,
+      flatFee: t.flatFee,
+      percentFeeBps: Number(t.percentFeeBps),
+    };
+  }
+
+  /**
    * Predicts the address of the clone deployed for a given dealId. Useful for
    * the relay to know where to forward USDT before `createEscrow` is on-chain.
    */

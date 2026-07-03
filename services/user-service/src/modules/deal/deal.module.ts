@@ -14,6 +14,7 @@ import { EscrowModule } from '../escrow/escrow.module';
 import { OpsModule } from '../ops/ops.module';
 import { ReviewModule } from '../review/review.module';
 import { AuthModule } from '../auth/auth.module';
+import { ArbitrationModule } from '../arbitration/arbitration.module';
 
 @Module({
   imports: [
@@ -26,6 +27,7 @@ import { AuthModule } from '../auth/auth.module';
     ]),
     forwardRef(() => UserModule),
     forwardRef(() => ReviewModule),
+    forwardRef(() => ArbitrationModule),
     EscrowModule,
     OpsModule,
     AuthModule,

@@ -17,6 +17,7 @@ import {
   RailStatusResult,
 } from './payment-rail.types';
 import { TonApiService } from './ton-api.service';
+import { TonFundingLockService } from './ton-funding-lock.service';
 
 const USDT_DECIMALS = 6;
 const FLOAT_CACHE_TTL_MS = 60_000;
@@ -75,9 +76,6 @@ export abstract class BaseTonRail implements PaymentRail {
 
   private cachedFloat: bigint | null = null;
   private cachedFloatAt = 0;
-  /** Per-escrow funding locks: protects the float from double-spends when
-   *  the watcher tick and a user-triggered check race each other. */
-  private readonly fundingLocks = new Set<string>();
 
   constructor(
     protected readonly dealRepository: Repository<Deal>,
@@ -85,6 +83,10 @@ export abstract class BaseTonRail implements PaymentRail {
     protected readonly relay: RelayService,
     protected readonly tonApi: TonApiService,
     protected readonly config: ConfigService,
+    /** Distributed per-escrow lock: protects the float from double-spends
+     *  when the watcher tick and a user-triggered check race each other,
+     *  across restarts and horizontally-scaled instances. */
+    protected readonly fundingLock: TonFundingLockService,
   ) {
     this.minFloatUsdt = Number(config.get<string>('TON_MIN_FLOAT_USDT', '500'));
   }
@@ -273,11 +275,12 @@ export abstract class BaseTonRail implements PaymentRail {
     const receivedUsdt = this.unitsToUsdt(payment, totalUnits);
 
     if (totalUnits >= progress.requiredUnits && !deadlinePassed) {
-      if (this.fundingLocks.has(escrowAddress)) {
-        // Another check is already forwarding — report progress only.
+      const locked = await this.fundingLock.acquire(escrowAddress);
+      if (!locked) {
+        // Another check (this or another instance) is already forwarding —
+        // report progress only.
         return { completed: false, receivedUsdt, requiredUsdt };
       }
-      this.fundingLocks.add(escrowAddress);
       try {
         const { notifyTxHash } = await this.relay.forwardAndFund(
           escrowAddress,
@@ -302,7 +305,7 @@ export abstract class BaseTonRail implements PaymentRail {
         );
         return { completed: false, receivedUsdt, requiredUsdt };
       } finally {
-        this.fundingLocks.delete(escrowAddress);
+        await this.fundingLock.release(escrowAddress);
       }
     }
 

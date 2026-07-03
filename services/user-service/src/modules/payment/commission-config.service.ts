@@ -3,11 +3,7 @@ import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { CommissionRate } from './entities/commission-rate.entity';
 import { FeeModel } from '../deal/enums/deal.enum';
-
-/** D5 hard-coded fallback thresholds (RUB). */
-const D5_FIXED_FEE_RUB = 50;
-const D5_FIXED_THRESHOLD_RUB = 1000;
-const D5_PERCENT_RATE = 0.05;
+import { computeDealFeeRub, D5_PERCENT_RATE } from './fee-model';
 
 @Injectable()
 export class CommissionConfigService {
@@ -41,10 +37,8 @@ export class CommissionConfigService {
       }
     }
 
-    // D5 hard-coded fallback
-    return amountRub < D5_FIXED_THRESHOLD_RUB
-      ? D5_FIXED_FEE_RUB
-      : Math.round(amountRub * D5_PERCENT_RATE * 100) / 100;
+    // D5 canonical fallback (single source of truth in fee-model.ts)
+    return computeDealFeeRub(amountRub);
   }
 
   /**

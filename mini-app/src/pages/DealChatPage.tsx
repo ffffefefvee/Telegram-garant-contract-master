@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { Flag, MessageSquare, CheckCircle2 } from 'lucide-react';
-import { dealsApi, paymentsApi } from '../api';
+import { dealsApi, paymentsApi, arbitrationApi } from '../api';
 import { useAppStore } from '../store/appStore';
 import { ChatWindow } from '../components/ChatWindow';
 import { EscrowReleasePanel } from '../components/EscrowReleasePanel';
@@ -328,12 +328,28 @@ export const DealChatPage: React.FC = () => {
     }
   };
 
-  const handleDispute = async (reason: string, _files: File[]) => {
+  const handleDispute = async (reason: string, files: File[]) => {
     if (!deal) return;
     setActionLoading(true);
     try {
-      await dealsApi.openDispute(deal.id, reason);
+      const updated = await dealsApi.openDispute(deal.id, reason);
       setShowDisputeSheet(false);
+
+      // Upload any attached evidence to the freshly created dispute. The
+      // backend now returns the deal with metadata.disputeId set.
+      const disputeId = updated?.metadata?.disputeId;
+      if (disputeId && files.length > 0) {
+        const results = await Promise.allSettled(
+          files.map((file) => arbitrationApi.uploadEvidence(disputeId, file)),
+        );
+        const failed = results.filter((r) => r.status === 'rejected').length;
+        if (failed > 0) {
+          showToast(
+            `Спор открыт, но ${failed} из ${files.length} файлов не загрузились`,
+          );
+        }
+      }
+
       await loadDeal();
       window.Telegram?.WebApp?.HapticFeedback?.notificationOccurred('warning');
     } catch (error) {

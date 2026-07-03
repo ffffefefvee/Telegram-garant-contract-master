@@ -46,6 +46,7 @@
     "my_deals": "📋 My Deals",
     "balance": "💰 Balance",
     "profile": "👤 Profile",
+    "check_user": "🛡 Check user",
     "settings": "⚙️ Settings",
     "help": "❓ Help",
     "language": "🌐 Language",
@@ -54,6 +55,27 @@
     "arbitration": "⚖️ Arbitration",
     "back_to_menu": "⬅️ Back to Menu",
     "open_mini_app": "📲 Open app"
+  },
+  "antiscam": {
+    "select_user_button": "👤 Select a user",
+    "check_prompt": "Scam check. Tap \"Select a user\" or send a Telegram ID or @username.",
+    "not_resolved": "Could not resolve the user. Send a numeric Telegram ID or @username.",
+    "verdict_scammer": "This user is in the scammers database!",
+    "verdict_reported": "There are complaints about this user, but scammer status is not confirmed yet.",
+    "verdict_clean": "User not found in the scammers database.",
+    "open_db": "📂 Open database",
+    "report_button": "🚩 Report",
+    "ask_reason": "Describe what happened (complaint reason):",
+    "ask_screenshots": "Send screenshot(s) as proof. Screenshots are mandatory. When done — tap \"Submit\".",
+    "screenshot_saved": "Screenshots added: {count}. Send more or tap \"Submit\".",
+    "submit_button": "✅ Submit complaint",
+    "submit_ok": "Complaint accepted and sent for moderation. Thank you!",
+    "submit_confirmed": "Complaint accepted. Threshold reached — the user is flagged as a scammer.",
+    "submit_incomplete": "Complaint incomplete: a reason and at least one screenshot are required.",
+    "cancelled": "Complaint cancelled.",
+    "mod_forbidden": "You do not have moderator rights.",
+    "mod_confirmed": "User flagged as a scammer.",
+    "mod_rejected": "Complaint rejected."
   },
   "deal": {
     "types": {

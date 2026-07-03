@@ -11,6 +11,7 @@ import { EscrowService } from '../../escrow/escrow.service';
 import { RelayService } from '../../blockchain/relay.service';
 import { EscrowStatus, EscrowSnapshot } from '../../blockchain/blockchain.types';
 import { Payment } from '../entities/payment.entity';
+import { TonFundingLockService } from './ton-funding-lock.service';
 
 const ESCROW_ADDR = '0x' + '1'.repeat(40);
 const BUYER = '0x' + '2'.repeat(40);
@@ -58,6 +59,7 @@ describe('ToncoinRail', () => {
     findIncomingTonByMemo: jest.Mock;
     getTonUsdRate: jest.Mock;
   };
+  let fundingLock: { acquire: jest.Mock; release: jest.Mock };
 
   async function setup({
     rate = 5.0,
@@ -94,6 +96,10 @@ describe('ToncoinRail', () => {
       findIncomingTonByMemo: jest.fn(async () => ({ receivedUnits: 0n })),
       getTonUsdRate: jest.fn(async () => rate),
     };
+    fundingLock = {
+      acquire: jest.fn(async () => true),
+      release: jest.fn(async () => undefined),
+    };
 
     const moduleRef = await Test.createTestingModule({
       providers: [
@@ -106,6 +112,7 @@ describe('ToncoinRail', () => {
           provide: ConfigService,
           useValue: { get: (_k: string, d?: string) => d },
         },
+        { provide: TonFundingLockService, useValue: fundingLock },
       ],
     }).compile();
     rail = moduleRef.get(ToncoinRail);

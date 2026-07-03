@@ -46,6 +46,7 @@
     "my_deals": "📋 Mis Transacciones",
     "balance": "💰 Saldo",
     "profile": "👤 Perfil",
+    "check_user": "🛡 Verificar usuario",
     "settings": "⚙️ Configuración",
     "help": "❓ Ayuda",
     "language": "🌐 Idioma",
@@ -54,6 +55,27 @@
     "arbitration": "⚖️ Arbitraje",
     "back_to_menu": "⬅️ Volver al Menú",
     "open_mini_app": "📲 Abrir aplicación"
+  },
+  "antiscam": {
+    "select_user_button": "👤 Seleccionar usuario",
+    "check_prompt": "Verificación de estafa. Pulsa \"Seleccionar usuario\" o envía un ID de Telegram o @username.",
+    "not_resolved": "No se pudo identificar al usuario. Envía un ID numérico de Telegram o @username.",
+    "verdict_scammer": "¡Este usuario está en la base de estafadores!",
+    "verdict_reported": "Hay quejas sobre este usuario, pero el estado de estafador aún no está confirmado.",
+    "verdict_clean": "Usuario no encontrado en la base de estafadores.",
+    "open_db": "📂 Abrir base de datos",
+    "report_button": "🚩 Denunciar",
+    "ask_reason": "Describe lo que ocurrió (motivo de la queja):",
+    "ask_screenshots": "Envía captura(s) como prueba. Las capturas son obligatorias. Al terminar — pulsa \"Enviar\".",
+    "screenshot_saved": "Capturas añadidas: {count}. Envía más o pulsa \"Enviar\".",
+    "submit_button": "✅ Enviar queja",
+    "submit_ok": "Queja aceptada y enviada a moderación. ¡Gracias!",
+    "submit_confirmed": "Queja aceptada. Umbral alcanzado: el usuario está marcado como estafador.",
+    "submit_incomplete": "Queja incompleta: se requiere un motivo y al menos una captura.",
+    "cancelled": "Queja cancelada.",
+    "mod_forbidden": "No tienes permisos de moderador.",
+    "mod_confirmed": "Usuario marcado como estafador.",
+    "mod_rejected": "Queja rechazada."
   },
   "deal": {
     "types": {

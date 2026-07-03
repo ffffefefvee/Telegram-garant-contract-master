@@ -49,6 +49,9 @@ import { AdminLog } from './modules/admin/entities/admin-log.entity';
 import { AdminProfile } from './modules/admin/entities/admin-profile.entity';
 import { NotificationsModule } from './modules/notifications/notifications.module';
 import { NotificationPreference } from './modules/notifications/entities/notification-preference.entity';
+import { AntiScamModule } from './modules/anti-scam/anti-scam.module';
+import { ScammerRecord } from './modules/anti-scam/entities/scammer-record.entity';
+import { ScamReport } from './modules/anti-scam/entities/scam-report.entity';
 import {
   SystemAlert,
   HealthCheck,
@@ -127,6 +130,8 @@ import {
               AuditLogEntry,
               AdminLog,
               AdminProfile,
+              ScammerRecord,
+              ScamReport,
             ],
 synchronize: true,
             logging: configService.get('NODE_ENV') === 'development',
@@ -175,6 +180,8 @@ synchronize: true,
             AuditLogEntry,
             AdminLog,
             AdminProfile,
+            ScammerRecord,
+            ScamReport,
           ],
           migrations: [__dirname + '/../migrations/*{.ts,.js}'],
           // synchronize lets TypeORM mutate the schema on boot. Convenient in
@@ -234,6 +241,7 @@ synchronize: true,
     MonitoringModule,
     OpsModule,
     NotificationsModule,
+    AntiScamModule,
   ],
   providers: [
     {

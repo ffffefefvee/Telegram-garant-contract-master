@@ -11,6 +11,7 @@ import { EscrowService } from '../../escrow/escrow.service';
 import { RelayService } from '../../blockchain/relay.service';
 import { EscrowStatus, EscrowSnapshot } from '../../blockchain/blockchain.types';
 import { Payment } from '../entities/payment.entity';
+import { TonFundingLockService } from './ton-funding-lock.service';
 
 const ESCROW_ADDR = '0x' + '1'.repeat(40);
 const BUYER = '0x' + '2'.repeat(40);
@@ -53,6 +54,7 @@ describe('TonUsdtRail', () => {
     getJettonMaster: jest.Mock;
     findIncomingUsdtByMemo: jest.Mock;
   };
+  let fundingLock: { acquire: jest.Mock; release: jest.Mock };
 
   async function setup({
     enabled = true,
@@ -89,6 +91,10 @@ describe('TonUsdtRail', () => {
       getJettonMaster: jest.fn(() => TON_WALLET),
       findIncomingUsdtByMemo: jest.fn(async () => ({ receivedUnits: 0n })),
     };
+    fundingLock = {
+      acquire: jest.fn(async () => true),
+      release: jest.fn(async () => undefined),
+    };
 
     const moduleRef = await Test.createTestingModule({
       providers: [
@@ -101,6 +107,7 @@ describe('TonUsdtRail', () => {
           provide: ConfigService,
           useValue: { get: (_k: string, d?: string) => d },
         },
+        { provide: TonFundingLockService, useValue: fundingLock },
       ],
     }).compile();
     rail = moduleRef.get(TonUsdtRail);
@@ -329,6 +336,49 @@ describe('TonUsdtRail', () => {
       const result = await rail.checkStatus(makePayment());
       expect(result.completed).toBe(false);
       expect(result.receivedUsdt).toBe(102.5);
+    });
+
+    it('skips forwarding when the funding lock is held elsewhere', async () => {
+      await setup();
+      relay.readEscrow.mockResolvedValue(makeSnapshot());
+      tonApi.findIncomingUsdtByMemo.mockResolvedValue({
+        receivedUnits: usdt('102.5'),
+      });
+      // Another instance / concurrent tick already holds the lock.
+      fundingLock.acquire.mockResolvedValue(false);
+
+      const result = await rail.checkStatus(makePayment());
+
+      expect(fundingLock.acquire).toHaveBeenCalledWith(ESCROW_ADDR);
+      expect(relay.forwardAndFund).not.toHaveBeenCalled();
+      expect(result.completed).toBe(false);
+      expect(result.receivedUsdt).toBe(102.5);
+    });
+
+    it('releases the funding lock after a successful forward', async () => {
+      await setup();
+      relay.readEscrow.mockResolvedValue(makeSnapshot());
+      tonApi.findIncomingUsdtByMemo.mockResolvedValue({
+        receivedUnits: usdt('102.5'),
+      });
+
+      await rail.checkStatus(makePayment());
+
+      expect(fundingLock.acquire).toHaveBeenCalledWith(ESCROW_ADDR);
+      expect(fundingLock.release).toHaveBeenCalledWith(ESCROW_ADDR);
+    });
+
+    it('releases the funding lock even when forwarding fails', async () => {
+      await setup();
+      relay.readEscrow.mockResolvedValue(makeSnapshot());
+      relay.forwardAndFund.mockRejectedValue(new Error('Hot-wallet balance short'));
+      tonApi.findIncomingUsdtByMemo.mockResolvedValue({
+        receivedUnits: usdt('102.5'),
+      });
+
+      await rail.checkStatus(makePayment());
+
+      expect(fundingLock.release).toHaveBeenCalledWith(ESCROW_ADDR);
     });
 
     it('does nothing without a memo or escrow address', async () => {
