@@ -287,6 +287,7 @@ contract EscrowImplementation is Initializable, ReentrancyGuard {
         if (assignedArbitrator != address(0)) revert AlreadyAssigned();
         if (!registry.isEligible(arbitrator)) revert ArbitratorNotEligible();
         assignedArbitrator = arbitrator;
+        registry.beginDispute(arbitrator);
         emit ArbitratorAssigned(arbitrator);
     }
 
@@ -317,7 +318,7 @@ contract EscrowImplementation is Initializable, ReentrancyGuard {
         status = Status.RESOLVED;
 
         // Effects
-        registry.incrementResolved(assignedArbitrator);
+        registry.endDispute(assignedArbitrator);
 
         // Interactions
         if (s.fineFromEscrow > 0) {
@@ -362,35 +363,30 @@ contract EscrowImplementation is Initializable, ReentrancyGuard {
     ) internal view returns (ResolveSplit memory s) {
         s.fine = _computeFine();
 
-        // Штраф D15: capped на escrowBalance во избежание underflow.
-        uint256 fineFromEscrow = (s.fine * sellerSharePct) / SHARE_DENOMINATOR;
-        if (fineFromEscrow > escrowBalance) {
-            fineFromEscrow = escrowBalance;
-        }
-        s.fineFromEscrow = fineFromEscrow;
-        s.fineFromReserve = s.fine - fineFromEscrow;
+        // Principal is distributed solely by the award. Neither fine nor platform fee
+        // may reduce the innocent party's principal payout (SEC-C01).
+        uint256 buyerPrincipal = (amount * buyerSharePct) / SHARE_DENOMINATOR;
+        uint256 sellerPrincipal = amount - buyerPrincipal;
+        uint256 ancillary = escrowBalance - amount;
 
-        uint256 remaining = escrowBalance - fineFromEscrow;
-        uint256 buyerBase = (remaining * buyerSharePct) / SHARE_DENOMINATOR;
-        uint256 sellerBase = remaining - buyerBase; // sellerSharePct = 100 - buyerSharePct → без потерь округления
+        // Buyer-fault fine can consume only buyer-funded ancillary value. The rest of
+        // the award is paid/capped/deferred by Treasury, never by the innocent seller.
+        uint256 requestedFromEscrow = (s.fine * sellerSharePct) / SHARE_DENOMINATOR;
+        s.fineFromEscrow = requestedFromEscrow > ancillary ? ancillary : requestedFromEscrow;
+        s.fineFromReserve = s.fine - s.fineFromEscrow;
+        ancillary -= s.fineFromEscrow;
 
-        // Уменьшенная комиссия платформы, распределённая ПО ВИНЕ.
-        uint256 disputeFee = ((buyerFee + sellerFee) * DISPUTE_FEE_BPS) / BPS_DENOMINATOR;
-
-        // Покупатель платит пропорционально своей вине (= sellerSharePct), но не больше своей доли.
-        uint256 feeFromBuyer = (disputeFee * sellerSharePct) / SHARE_DENOMINATOR;
-        if (feeFromBuyer > buyerBase) {
-            feeFromBuyer = buyerBase;
-        }
-        // Продавец платит пропорционально своей вине (= buyerSharePct), но не больше своей доли.
-        uint256 feeFromSeller = (disputeFee * buyerSharePct) / SHARE_DENOMINATOR;
-        if (feeFromSeller > sellerBase) {
-            feeFromSeller = sellerBase;
+        // A fully innocent winner pays no platform fee. For split awards, the reduced
+        // dispute fee is capped to ancillary funding, preserving both principals.
+        if (buyerSharePct != 0 && sellerSharePct != 0) {
+            uint256 disputeFee = ((buyerFee + sellerFee) * DISPUTE_FEE_BPS) / BPS_DENOMINATOR;
+            s.feeToTreasury = disputeFee > ancillary ? ancillary : disputeFee;
+            ancillary -= s.feeToTreasury;
         }
 
-        s.feeToTreasury = feeFromBuyer + feeFromSeller;
-        s.buyerPayout = buyerBase - feeFromBuyer;
-        s.sellerPayout = sellerBase - feeFromSeller;
+        // Return unused buyer-funded ancillary value; exact conservation is retained.
+        s.buyerPayout = buyerPrincipal + ancillary;
+        s.sellerPayout = sellerPrincipal;
     }
 
     function _computeFine() internal view returns (uint256) {

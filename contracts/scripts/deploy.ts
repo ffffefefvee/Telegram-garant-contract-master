@@ -28,9 +28,20 @@ async function main() {
   const [deployer] = await ethers.getSigners();
   console.log(`\nDeploying on ${networkName} from ${deployer.address}`);
 
-  // Resolve relay & admin addresses
+  // Local development may use the deployer EOA. Every non-local deployment must
+  // explicitly target deployed governance (Safe/Timelock), never an implicit EOA.
+  const isLocal = networkName === "hardhat" || networkName === "localhost";
   const relay = process.env.RELAY_ADDRESS || deployer.address;
-  const admin = process.env.ADMIN_ADDRESS || deployer.address;
+  const admin = process.env.ADMIN_ADDRESS || (isLocal ? deployer.address : undefined);
+  if (!admin) throw new Error("ADMIN_ADDRESS is required for non-local deployments");
+  if (!isLocal) {
+    if (admin.toLowerCase() === deployer.address.toLowerCase()) {
+      throw new Error("Production admin must differ from the deployer EOA");
+    }
+    if ((await ethers.provider.getCode(admin)) === "0x") {
+      throw new Error("Production ADMIN_ADDRESS must be a deployed governance contract");
+    }
+  }
   console.log(`  relay = ${relay}`);
   console.log(`  admin = ${admin}`);
 

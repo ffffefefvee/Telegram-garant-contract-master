@@ -90,8 +90,11 @@ export class ArbitrationController {
   }
 
   @Get('disputes/:id')
-  async getDispute(@Param('id', ParseUUIDPipe) id: string) {
-    return this.disputeService.getDispute(id);
+  async getDispute(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser() user: UserPayload,
+  ) {
+    return this.disputeService.getDisputeForUser(id, user.id);
   }
 
   @Post('disputes/:id/assign-arbitrator')
@@ -115,8 +118,11 @@ export class ArbitrationController {
   // === Evidence ===
 
   @Get('disputes/:id/evidence')
-  async getDisputeEvidence(@Param('id', ParseUUIDPipe) id: string) {
-    return this.evidenceService.getDisputeEvidence(id);
+  async getDisputeEvidence(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser() user: UserPayload,
+  ) {
+    return this.evidenceService.getDisputeEvidence(id, user.id);
   }
 
   @Post('disputes/:id/evidence')
@@ -154,8 +160,11 @@ export class ArbitrationController {
   }
 
   @Get('evidence/:id')
-  async getEvidence(@Param('id', ParseUUIDPipe) id: string) {
-    return this.evidenceService.getEvidence(id);
+  async getEvidence(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser() user: UserPayload,
+  ) {
+    return this.evidenceService.getEvidence(id, user.id);
   }
 
   @Post('evidence/:id/verify')
@@ -197,8 +206,11 @@ export class ArbitrationController {
   }
 
   @Get('decisions/:id')
-  async getDecision(@Param('id', ParseUUIDPipe) id: string) {
-    return this.arbitrationService.getDecision(id);
+  async getDecision(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser() user: UserPayload,
+  ) {
+    return this.arbitrationService.getDecision(id, user.id);
   }
 
   // === Appeals ===
@@ -236,8 +248,9 @@ export class ArbitrationController {
   async getChatMessages(
     @Param('id', ParseUUIDPipe) id: string,
     @Query('limit', ParseIntPipe) limit: number = 50,
+    @CurrentUser() user: UserPayload,
   ) {
-    const dispute = await this.disputeService.getDispute(id);
+    const dispute = await this.disputeService.getDisputeForUser(id, user.id);
     if (!dispute.chat) {
       return [];
     }

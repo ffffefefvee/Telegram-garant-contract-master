@@ -4,11 +4,21 @@ services:
     container_name: tg-garant-postgres
     restart: unless-stopped
     environment:
-      POSTGRES_USER: ${DB_USERNAME:-garant_user}
-      POSTGRES_PASSWORD: ${DB_PASSWORD:-garant_pass}
-      POSTGRES_DB: ${DB_NAME:-garant_db}
+      # Defaults are local-dev only; production sentinel checks below fail closed.
+      NODE_ENV: ${NODE_ENV:-development}
+      POSTGRES_USER: ${DB_USERNAME:-garant_dev}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-dev-only-change-db-password}
+      POSTGRES_DB: ${DB_NAME:-garant_dev}
+    command:
+      - sh
+      - -ec
+      - |
+        if [ "$${NODE_ENV}" = production ] && { [ "$${POSTGRES_PASSWORD}" = dev-only-change-db-password ] || [ -z "$${POSTGRES_PASSWORD}" ]; }; then
+          echo "DB_PASSWORD must be supplied securely in production" >&2; exit 1;
+        fi
+        exec postgres
     ports:
-      - "${DB_PORT:-5432}:5432"
+      - "127.0.0.1:${DB_PORT:-5432}:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     networks:
@@ -23,15 +33,25 @@ services:
     image: redis:7-alpine
     container_name: tg-garant-redis
     restart: unless-stopped
-    command: redis-server --requirepass ${REDIS_PASSWORD:-garant_redis}
+    environment:
+      NODE_ENV: ${NODE_ENV:-development}
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-dev-only-change-redis-password}
+    command:
+      - sh
+      - -ec
+      - |
+        if [ "$${NODE_ENV}" = production ] && { [ "$${REDIS_PASSWORD}" = dev-only-change-redis-password ] || [ -z "$${REDIS_PASSWORD}" ]; }; then
+          echo "REDIS_PASSWORD must be supplied securely in production" >&2; exit 1;
+        fi
+        exec redis-server --requirepass "$${REDIS_PASSWORD}"
     ports:
-      - "${REDIS_PORT:-6379}:6379"
+      - "127.0.0.1:${REDIS_PORT:-6379}:6379"
     volumes:
       - redis_data:/data
     networks:
       - garant-network
     healthcheck:
-      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD:-garant_redis}", "ping"]
+      test: ["CMD-SHELL", "REDISCLI_AUTH=$${REDIS_PASSWORD} redis-cli ping"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -49,18 +69,18 @@ services:
         condition: service_healthy
     environment:
       NODE_ENV: ${NODE_ENV:-development}
-      AUTH_DEV_MODE: ${AUTH_DEV_MODE:-false}
+      AUTH_DEV_MODE: ${AUTH_DEV_MODE:-true}
       USER_SERVICE_PORT: ${USER_SERVICE_PORT:-3001}
       DB_HOST: postgres
       DB_PORT: 5432
-      DB_USERNAME: ${DB_USERNAME:-garant_user}
-      DB_PASSWORD: ${DB_PASSWORD:-garant_pass}
-      DB_NAME: ${DB_NAME:-garant_db}
+      DB_USERNAME: ${DB_USERNAME:-garant_dev}
+      DB_PASSWORD: ${DB_PASSWORD:-dev-only-change-db-password}
+      DB_NAME: ${DB_NAME:-garant_dev}
       DB_USE_SQLITE: "false"
       REDIS_HOST: redis
       REDIS_PORT: 6379
-      REDIS_PASSWORD: ${REDIS_PASSWORD:-garant_redis}
-      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN}
+      REDIS_PASSWORD: ${REDIS_PASSWORD:-dev-only-change-redis-password}
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:-0:dev-only-invalid-token}
       TELEGRAM_CHAT_ID: ${TELEGRAM_CHAT_ID:-}
       TELEGRAM_TEST_INJECT_ENABLED: ${TELEGRAM_TEST_INJECT_ENABLED:-false}
       TELEGRAM_TEST_INJECT_SECRET: ${TELEGRAM_TEST_INJECT_SECRET:-}
@@ -72,9 +92,21 @@ services:
       HTTPS_PROXY: ${HTTPS_PROXY:-}
       TELEGRAM_API_ROOT: ${TELEGRAM_API_ROOT:-}
       NO_PROXY: postgres,redis,localhost,127.0.0.1,host.docker.internal
-      JWT_SECRET: ${JWT_SECRET}
-      CORS_ORIGIN: ${CORS_ORIGIN:-*}
-      I18N_HOT_RELOAD: ${I18N_HOT_RELOAD:-true}
+      JWT_SECRET: ${JWT_SECRET:-dev-only-change-jwt-secret}
+      CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:8080}
+      I18N_HOT_RELOAD: ${I18N_HOT_RELOAD:-false}
+    command:
+      - sh
+      - -ec
+      - |
+        if [ "$${NODE_ENV}" = production ]; then
+          [ "$${DB_PASSWORD}" != dev-only-change-db-password ] || { echo "DB_PASSWORD is required in production" >&2; exit 1; }
+          [ "$${REDIS_PASSWORD}" != dev-only-change-redis-password ] || { echo "REDIS_PASSWORD is required in production" >&2; exit 1; }
+          [ "$${JWT_SECRET}" != dev-only-change-jwt-secret ] || { echo "JWT_SECRET is required in production" >&2; exit 1; }
+          [ "$${TELEGRAM_BOT_TOKEN}" != 0:dev-only-invalid-token ] || { echo "TELEGRAM_BOT_TOKEN is required in production" >&2; exit 1; }
+          case "$${CORS_ORIGIN}" in https://*) ;; *) echo "HTTPS CORS_ORIGIN is required in production" >&2; exit 1;; esac
+        fi
+        exec node dist/main
     ports:
       - "${USER_SERVICE_PORT:-3001}:3001"
     networks:
@@ -95,7 +127,7 @@ services:
     depends_on:
       - user-service
     ports:
-      - "${MINI_APP_PORT:-8080}:80"
+      - "${MINI_APP_PORT:-8080}:8080"
     networks:
       - garant-network
 

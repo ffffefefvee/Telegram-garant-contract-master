@@ -13,19 +13,7 @@ export interface WebhookEventRef {
   status?: string | null;
 }
 
-/**
- * Persistent idempotency guard for inbound payment webhooks.
- *
- * Usage is "check, do work, then mark":
- *   1. `isProcessed` — skip the whole delivery if we already applied it.
- *   2. apply side effects (forward funds, transition deal, …).
- *   3. `markProcessed` — record the event so future re-deliveries skip.
- *
- * Marking only AFTER the work commits means a crash mid-delivery leaves no
- * row, so the provider's retry (or reconciliation) can finish the job. The
- * unique `(provider, eventKey)` constraint makes `markProcessed` safe under
- * concurrent duplicate deliveries — the loser swallows the violation.
- */
+/** PostgreSQL-backed cross-replica claim for money-moving webhooks. */
 @Injectable()
 export class WebhookIdempotencyService {
   private readonly logger = new Logger(WebhookIdempotencyService.name);
@@ -35,37 +23,35 @@ export class WebhookIdempotencyService {
     private readonly repo: Repository<ProcessedWebhookEvent>,
   ) {}
 
-  /** True if this exact event was already fully processed before. */
   async isProcessed(provider: string, eventKey: string): Promise<boolean> {
-    const existing = await this.repo.findOne({
-      where: { provider, eventKey },
-      select: ['id'],
-    });
-    return existing != null;
+    return (await this.repo.findOne({ where: { provider, eventKey }, select: ['id'] })) != null;
   }
 
-  /**
-   * Record an event as processed. Idempotent: a duplicate insert (concurrent
-   * delivery or replay) is swallowed instead of throwing, so callers never
-   * need to special-case the race.
-   */
-  async markProcessed(ref: WebhookEventRef): Promise<void> {
+  /** Claim before the external transfer. Exactly one replica can return true. */
+  async tryClaim(ref: WebhookEventRef): Promise<boolean> {
     try {
       await this.repo.insert({
         provider: ref.provider,
         eventKey: ref.eventKey,
+        processingState: 'processing',
         orderId: ref.orderId ?? null,
         status: ref.status ?? null,
       });
+      return true;
     } catch (err) {
       if (this.isUniqueViolation(err)) {
-        this.logger.debug(
-          `Webhook event already recorded (race): ${ref.provider}/${ref.eventKey}`,
-        );
-        return;
+        this.logger.debug(`Webhook claim already held: ${ref.provider}/${ref.eventKey}`);
+        return false;
       }
       throw err;
     }
+  }
+
+  async markProcessed(ref: WebhookEventRef): Promise<void> {
+    await this.repo.update(
+      { provider: ref.provider, eventKey: ref.eventKey },
+      { processingState: 'completed', status: ref.status ?? null },
+    );
   }
 
   private isUniqueViolation(err: unknown): boolean {

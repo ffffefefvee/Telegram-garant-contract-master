@@ -7,12 +7,14 @@ import {
 import { Request, Response, NextFunction } from 'express';
 import { AuthService } from './auth.service';
 import { UserService } from '../user/user.service';
+import { UserType } from '../user/entities/user.entity';
 
 export interface UserPayload {
   id: string;
   telegramId: number | null;
   telegramUsername: string | null;
   telegramLanguageCode: string | null;
+  roles: UserType[];
 }
 
 declare global {
@@ -66,6 +68,7 @@ export class RequireAuthMiddleware implements NestMiddleware {
       telegramId: user.telegramId,
       telegramUsername: user.telegramUsername,
       telegramLanguageCode: user.telegramLanguageCode,
+      roles: user.roles,
     };
     next();
   }

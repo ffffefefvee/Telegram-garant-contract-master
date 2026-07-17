@@ -40,13 +40,19 @@ export class DealController {
   }
 
   @Get('number/:number')
-  async findByNumber(@Param('number') number: string): Promise<Deal> {
-    return this.dealService.findByNumber(number);
+  async findByNumber(
+    @Param('number') number: string,
+    @CurrentUser() user: UserPayload,
+  ): Promise<Deal> {
+    return this.dealService.findByNumberForUser(number, user.id, user.roles);
   }
 
   @Get(':id')
-  async findById(@Param('id', ParseUUIDPipe) id: string): Promise<Deal> {
-    return this.dealService.findById(id, [
+  async findById(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser() user: UserPayload,
+  ): Promise<Deal> {
+    return this.dealService.findByIdForUser(id, user.id, user.roles, [
       'buyer',
       'seller',
       'messages',
@@ -137,8 +143,9 @@ export class DealController {
     @Param('id', ParseUUIDPipe) id: string,
     @Query('limit', ParseIntPipe) limit: number = 50,
     @Query('offset', ParseIntPipe) offset: number = 0,
+    @CurrentUser() user: UserPayload,
   ): Promise<DealMessage[]> {
-    return this.dealService.getMessages(id, limit, offset);
+    return this.dealService.getMessages(id, limit, offset, user.id, user.roles);
   }
 
   @Post(':id/messages')
@@ -158,8 +165,9 @@ export class DealController {
   async getEvents(
     @Param('id', ParseUUIDPipe) id: string,
     @Query('limit', ParseIntPipe) limit: number = 50,
+    @CurrentUser() user: UserPayload,
   ) {
-    return this.dealService.getEvents(id, limit);
+    return this.dealService.getEvents(id, limit, user.id, user.roles);
   }
 
   @Post(':id/invite')

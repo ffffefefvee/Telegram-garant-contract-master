@@ -16,11 +16,10 @@ import {
  * event would re-run `forwardAndFund`, sending a SECOND USDT transfer from the
  * relay hot-wallet into the escrow clone (real money lost).
  *
- * A row is written ONLY once a delivery has fully applied its side effects
- * (see `PaymentWebhookService`). The `(provider, eventKey)` pair is unique, so
- * concurrent duplicates collide on the DB constraint rather than both
- * committing. Partial/failed deliveries deliberately leave no row, so a later
- * re-delivery (or reconciliation) can still complete the work.
+ * A row is atomically claimed BEFORE any external side effect. The unique
+ * `(provider, eventKey)` pair is therefore a cross-replica mutex enforced by
+ * PostgreSQL rather than process memory. Failed attempts release their claim;
+ * successful attempts retain it permanently.
  */
 @Entity({ name: 'processed_webhook_events' })
 @Unique('UQ_processed_webhook_provider_key', ['provider', 'eventKey'])
@@ -40,6 +39,9 @@ export class ProcessedWebhookEvent {
    */
   @Column({ type: 'varchar', length: 255 })
   eventKey: string;
+
+  @Column({ type: 'varchar', length: 16, default: 'processing' })
+  processingState: 'processing' | 'completed';
 
   /** Order id (our payment `transactionId`) for debugging/correlation. */
   @Column({ type: 'varchar', length: 100, nullable: true })

@@ -28,7 +28,7 @@ import {
   FeeModel,
 } from './enums/deal.enum';
 import { DealStateMachine } from './fsm/deal-state-machine';
-import { User } from '../user/entities/user.entity';
+import { User, UserType } from '../user/entities/user.entity';
 import { UserService } from '../user/user.service';
 import { EscrowService } from '../escrow/escrow.service';
 import { OutboxService } from '../ops/outbox.service';
@@ -264,6 +264,48 @@ export class DealService {
     }
 
     return deal;
+  }
+
+  async findByIdForUser(
+    id: string,
+    userId: string,
+    roles: UserType[] = [],
+    relations: string[] = [],
+  ): Promise<Deal> {
+    const deal = await this.findById(id, relations);
+    await this.assertCanReadDeal(deal, userId, roles);
+    return deal;
+  }
+
+  async findByNumberForUser(
+    number: string,
+    userId: string,
+    roles: UserType[] = [],
+  ): Promise<Deal> {
+    const deal = await this.findByNumber(number);
+    await this.assertCanReadDeal(deal, userId, roles);
+    return deal;
+  }
+
+  private async assertCanReadDeal(
+    deal: Deal,
+    userId: string,
+    roles: UserType[] = [],
+  ): Promise<void> {
+    if (
+      roles.includes(UserType.ADMIN) ||
+      deal.buyerId === userId ||
+      deal.sellerId === userId
+    ) {
+      return;
+    }
+    const assigned = await this.disputeService.isAssignedArbitratorForDeal(
+      deal.id,
+      userId,
+    );
+    if (!assigned) {
+      throw new ForbiddenException('Access denied');
+    }
   }
 
   /**
@@ -849,7 +891,13 @@ export class DealService {
     dealId: string,
     limit: number = 50,
     offset: number = 0,
+    userId?: string,
+    roles: UserType[] = [],
   ): Promise<DealMessage[]> {
+    if (userId) {
+      const deal = await this.findById(dealId);
+      await this.assertCanReadDeal(deal, userId, roles);
+    }
     return this.messageRepository.find({
       where: { dealId, isDeleted: false },
       order: { createdAt: 'ASC' },
@@ -952,7 +1000,7 @@ export class DealService {
 
       const invite = await inviteRepo.findOne({
         where: { inviteToken: token },
-        relations: ['deal'],
+        lock: { mode: 'pessimistic_write' },
       });
 
       if (!invite) {
@@ -963,7 +1011,10 @@ export class DealService {
         throw new ConflictException('Invite is not valid');
       }
 
-      const deal = invite.deal ?? (await dealRepo.findOne({ where: { id: invite.dealId } }));
+      const deal = await dealRepo.findOne({
+        where: { id: invite.dealId },
+        lock: { mode: 'pessimistic_write' },
+      });
       if (!deal) {
         throw new NotFoundException('Deal not found');
       }
@@ -981,14 +1032,42 @@ export class DealService {
         return { savedInvite: invite, deal };
       }
 
-      invite.accept();
-      invite.invitedUserId = userId;
-      const savedInvite = await inviteRepo.save(invite);
+      const acceptedAt = new Date();
+      const inviteCas = await inviteRepo
+        .createQueryBuilder()
+        .update(DealInvite)
+        .set({
+          status: InviteStatus.ACCEPTED,
+          invitedUserId: userId,
+          acceptedAt,
+        })
+        .where('id = :inviteId', { inviteId: invite.id })
+        .andWhere('status = :status', { status: InviteStatus.PENDING })
+        .execute();
+      if (inviteCas.affected !== 1) {
+        throw new ConflictException('Invite is not valid');
+      }
 
-      deal.sellerId = userId;
-      deal.status = DealStatus.PENDING_PAYMENT;
-      deal.acceptedAt = new Date();
-      await dealRepo.save(deal);
+      const dealCas = await dealRepo
+        .createQueryBuilder()
+        .update(Deal)
+        .set({
+          sellerId: userId,
+          status: DealStatus.PENDING_PAYMENT,
+          acceptedAt,
+        })
+        .where('id = :dealId', { dealId: deal.id })
+        .andWhere('status = :status', { status: DealStatus.DRAFT })
+        .andWhere('seller_id IS NULL')
+        .execute();
+      if (dealCas.affected !== 1) {
+        throw new ConflictException('Deal already accepted');
+      }
+
+      invite.status = InviteStatus.ACCEPTED;
+      invite.invitedUserId = userId;
+      invite.acceptedAt = acceptedAt;
+      const savedInvite = invite;
 
       await inviteRepo
         .createQueryBuilder()
@@ -1144,7 +1223,16 @@ export class DealService {
   /**
    * Получение событий сделки
    */
-  async getEvents(dealId: string, limit: number = 50): Promise<DealEvent[]> {
+  async getEvents(
+    dealId: string,
+    limit: number = 50,
+    userId?: string,
+    roles: UserType[] = [],
+  ): Promise<DealEvent[]> {
+    if (userId) {
+      const deal = await this.findById(dealId);
+      await this.assertCanReadDeal(deal, userId, roles);
+    }
     return this.eventRepository.find({
       where: { dealId },
       order: { createdAt: 'DESC' },

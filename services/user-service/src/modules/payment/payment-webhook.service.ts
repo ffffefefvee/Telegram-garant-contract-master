@@ -240,12 +240,8 @@ export class PaymentWebhookService {
     // `paid` webhook (Cryptomus retry / manual replay) or a deal already
     // funded by reconciliation must NOT trigger a second USDT transfer from
     // the relay hot-wallet — that would be real money lost.
-    const alreadyForwarded = await this.idempotency.isProcessed(
-      WEBHOOK_PROVIDER_CRYPTOMUS,
-      payment.transactionId,
-    );
-    if (alreadyForwarded || deal.status !== DealStatus.PENDING_PAYMENT) {
-      notes.push('escrow already funded for this order — skipping forward (idempotent)');
+    if (deal.status !== DealStatus.PENDING_PAYMENT) {
+      notes.push('deal is not pending payment — skipping forward');
       await this.transitionDealToInProgress(deal, payment);
       return {
         paymentStatus: 'completed',
@@ -254,6 +250,21 @@ export class PaymentWebhookService {
         forwarded: false,
         txHashes: {},
         notes,
+      };
+    }
+
+    const claim = {
+      provider: WEBHOOK_PROVIDER_CRYPTOMUS,
+      eventKey: payment.transactionId,
+      orderId: payment.transactionId,
+      status: 'paid',
+    };
+    if (!(await this.idempotency.tryClaim(claim))) {
+      notes.push('funding claim already held — skipping forward (idempotent)');
+      await this.transitionDealToInProgress(deal, payment);
+      return {
+        paymentStatus: 'completed', dealId: deal.id, escrowAddress,
+        forwarded: false, txHashes: {}, notes,
       };
     }
 
@@ -275,12 +286,7 @@ export class PaymentWebhookService {
       // Record the funding so any re-delivery of this `paid` event is a no-op.
       // Done only after the transfer succeeded — a failure above leaves no
       // row, so the provider retry (or reconciliation) can still fund later.
-      await this.idempotency.markProcessed({
-        provider: WEBHOOK_PROVIDER_CRYPTOMUS,
-        eventKey: payment.transactionId,
-        orderId: payment.transactionId,
-        status: 'paid',
-      });
+      await this.idempotency.markProcessed(claim);
       await this.transitionDealToInProgress(deal, payment);
       return {
         paymentStatus: 'completed',
@@ -409,26 +415,20 @@ export class PaymentWebhookService {
   }
 
   private async transitionDealToInProgress(deal: Deal, payment: Payment): Promise<void> {
-    if (deal.status === DealStatus.IN_PROGRESS || deal.status === DealStatus.COMPLETED) {
+    if (deal.status !== DealStatus.PENDING_PAYMENT) {
       return;
     }
-    if (deal.status === DealStatus.PENDING_PAYMENT) {
-      try {
-        await this.dealService.confirmPayment(
-          deal.id,
-          Number(payment.amount),
-          payment.currency,
-        );
-        return;
-      } catch (err) {
-        this.logger.warn(
-          `confirmPayment failed for deal ${deal.id}: ${(err as Error).message}; falling back to direct status update`,
-        );
-      }
+    try {
+      await this.dealService.confirmPayment(
+        deal.id,
+        Number(payment.amount),
+        payment.currency,
+      );
+    } catch (err) {
+      this.logger.warn(
+        `PENDING_PAYMENT -> IN_PROGRESS CAS lost for deal ${deal.id}: ${(err as Error).message}`,
+      );
     }
-    deal.status = DealStatus.IN_PROGRESS;
-    deal.paidAt = deal.paidAt ?? new Date();
-    await this.dealRepository.save(deal);
   }
 
   private async handlePaymentProcessing(payment: Payment): Promise<WebhookProcessingResult> {

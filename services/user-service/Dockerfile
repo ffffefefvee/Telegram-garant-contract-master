@@ -33,7 +33,11 @@ COPY --from=builder /app/dist ./dist
 COPY --from=builder /app/locales ./locales
 COPY --from=builder /app/src/config ./src/config
 COPY --from=builder /app/src/migrations ./src/migrations
-COPY --from=builder /app/src/database ./src/database
+COPY --from=builder --chown=node:node /app/src/database ./src/database
+
+# Drop root after OS packages and application files are installed.
+RUN chown -R node:node /app
+USER node
 
 EXPOSE 3001
 

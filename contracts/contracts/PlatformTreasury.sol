@@ -28,6 +28,7 @@ contract PlatformTreasury is AccessControl, ReentrancyGuard {
 
     uint256 public mainBalance;
     uint256 public reserveBalance;
+    mapping(address => uint256) public deferredArbitratorRewards;
 
     event FeeDeposited(address indexed escrow, uint256 totalAmount, uint256 toMain, uint256 toReserve);
     event ArbitratorPaid(address indexed arbitrator, uint256 amount, bytes32 indexed disputeId);
@@ -36,15 +37,19 @@ contract PlatformTreasury is AccessControl, ReentrancyGuard {
     event ReserveBpsUpdated(uint16 oldBps, uint16 newBps);
     event ReserveFunded(address indexed from, uint256 amount);
     event MovedToReserve(uint256 amount);
+    event ArbitratorRewardDeferred(address indexed arbitrator, uint256 amount, bytes32 indexed disputeId);
+    event DeferredArbitratorRewardClaimed(address indexed arbitrator, uint256 amount);
 
     error ReserveBpsTooHigh();
     error InsufficientMainBalance();
     error InsufficientReserveBalance();
     error ZeroAddress();
     error ZeroAmount();
+    error GovernanceRequired();
 
     constructor(IERC20 token_, address admin) {
         if (address(token_) == address(0) || admin == address(0)) revert ZeroAddress();
+        if (block.chainid != 31337 && block.chainid != 1337 && admin.code.length == 0) revert GovernanceRequired();
         token = token_;
         _grantRole(DEFAULT_ADMIN_ROLE, admin);
         _grantRole(ADMIN_ROLE, admin);
@@ -66,13 +71,38 @@ contract PlatformTreasury is AccessControl, ReentrancyGuard {
         address arbitrator,
         uint256 amount,
         bytes32 disputeId
-    ) external onlyRole(ESCROW_ROLE) nonReentrant {
+    ) external onlyRole(ESCROW_ROLE) nonReentrant returns (uint256 paid, uint256 deferred) {
         if (arbitrator == address(0)) revert ZeroAddress();
         if (amount == 0) revert ZeroAmount();
-        if (amount > reserveBalance) revert InsufficientReserveBalance();
-        reserveBalance -= amount;
-        token.safeTransfer(arbitrator, amount);
-        emit ArbitratorPaid(arbitrator, amount, disputeId);
+
+        paid = amount > reserveBalance ? reserveBalance : amount;
+        deferred = amount - paid;
+        if (paid > 0) {
+            reserveBalance -= paid;
+            token.safeTransfer(arbitrator, paid);
+            emit ArbitratorPaid(arbitrator, paid, disputeId);
+        }
+        if (deferred > 0) {
+            deferredArbitratorRewards[arbitrator] += deferred;
+            emit ArbitratorRewardDeferred(arbitrator, deferred, disputeId);
+        }
+    }
+
+    /// @notice Permissionless settlement of a deferred reward, capped by current reserve.
+    function claimDeferredArbitratorReward(address arbitrator)
+        external
+        nonReentrant
+        returns (uint256 paid)
+    {
+        if (arbitrator == address(0)) revert ZeroAddress();
+        uint256 owed = deferredArbitratorRewards[arbitrator];
+        if (owed == 0) revert ZeroAmount();
+        paid = owed > reserveBalance ? reserveBalance : owed;
+        if (paid == 0) return 0;
+        deferredArbitratorRewards[arbitrator] = owed - paid;
+        reserveBalance -= paid;
+        token.safeTransfer(arbitrator, paid);
+        emit DeferredArbitratorRewardClaimed(arbitrator, paid);
     }
 
     /// @notice Принять slashed stake от ArbitratorRegistry в reserve.

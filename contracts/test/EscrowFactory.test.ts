@@ -411,10 +411,11 @@ describe("EscrowFactory + EscrowImplementation", () => {
 
       await escrow.connect(arbitrator).resolve(0, 100);
 
-      // Arbitrator got fine from escrow (no reserve needed)
-      expect(await usdt.balanceOf(arbitrator.address)).to.equal(arbBefore + expectedFine);
-      // Seller gets remaining
-      expect(await usdt.balanceOf(seller.address)).to.equal(sellerBefore + (escrowFunded - expectedFine));
+      // Ancillary funding pays what it can; Treasury safely defers the remainder.
+      expect(await usdt.balanceOf(arbitrator.address)).to.equal(arbBefore + 500_000n);
+      // Innocent seller receives full principal; fine cannot reduce that payout.
+      expect(await usdt.balanceOf(seller.address)).to.equal(sellerBefore + TWENTY_USDT);
+      expect(await treasury.deferredArbitratorRewards(arbitrator.address)).to.equal(1_500_000n);
     });
 
     it("innocent seller pays ZERO platform fee when buyer is the scammer (0/100)", async () => {
@@ -467,23 +468,17 @@ describe("EscrowFactory + EscrowImplementation", () => {
 
       const escrowFunded = TWENTY_USDT + 500_000n; // 20.5 USDT
       const fine = 2_000_000n; // 10% of 20 USDT, within [min,max]
-      const fineFromEscrow = (fine * 30n) / 100n; // 600_000
-      const fineFromReserve = fine - fineFromEscrow; // 1_400_000 → pre-fund reserve
+      const fineFromEscrow = 500_000n; // capped to buyer-funded ancillary value
+      const fineFromReserve = fine - fineFromEscrow; // 1_500_000 → pre-fund reserve
 
       await usdt.mint(admin.address, fineFromReserve);
       await usdt.connect(admin).approve(await treasury.getAddress(), fineFromReserve);
       await treasury.connect(admin).fundReserve(fineFromReserve);
 
-      // Expected math
-      const remaining = escrowFunded - fineFromEscrow; // 19_900_000
-      const buyerBase = (remaining * 70n) / 100n; // 13_930_000
-      const sellerBase = remaining - buyerBase; // 5_970_000
-      const disputeFee = ((500_000n + 500_000n) * 5000n) / 10000n; // 500_000 (50% of 1 USDT)
-      const feeFromBuyer = (disputeFee * 30n) / 100n; // 150_000 (buyer 30% at fault)
-      const feeFromSeller = (disputeFee * 70n) / 100n; // 350_000 (seller 70% at fault)
-      const feeToTreasury = feeFromBuyer + feeFromSeller; // 500_000
-      const buyerPayout = buyerBase - feeFromBuyer; // 13_780_000
-      const sellerPayout = sellerBase - feeFromSeller; // 5_620_000
+      // Principal award is immutable; ancillary funding is consumed by fine first.
+      const feeToTreasury = 0n;
+      const buyerPayout = 14_000_000n;
+      const sellerPayout = 6_000_000n;
 
       const arbBefore = await usdt.balanceOf(arbitrator.address);
       const buyerBefore = await usdt.balanceOf(buyer.address);
@@ -492,8 +487,6 @@ describe("EscrowFactory + EscrowImplementation", () => {
 
       await escrow.connect(arbitrator).resolve(70, 30);
 
-      // Guiltier side (seller, 70% fault) pays more fee than buyer (30% fault).
-      expect(feeFromSeller).to.be.greaterThan(feeFromBuyer);
 
       expect(await usdt.balanceOf(buyer.address)).to.equal(buyerBefore + buyerPayout);
       expect(await usdt.balanceOf(seller.address)).to.equal(sellerBefore + sellerPayout);

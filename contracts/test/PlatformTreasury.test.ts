@@ -94,11 +94,21 @@ describe("PlatformTreasury", () => {
       expect(await treasury.reserveBalance()).to.equal(700);
     });
 
-    it("reverts if reserve insufficient", async () => {
+    it("caps payment and defers the remainder when reserve is insufficient", async () => {
       const disputeId = ethers.encodeBytes32String("dispute-1");
-      await expect(
-        treasury.connect(escrow).payArbitratorFromReserve(arbitrator.address, 2000, disputeId),
-      ).to.be.revertedWithCustomError(treasury, "InsufficientReserveBalance");
+      await expect(treasury.connect(escrow).payArbitratorFromReserve(arbitrator.address, 2000, disputeId))
+        .to.emit(treasury, "ArbitratorRewardDeferred")
+        .withArgs(arbitrator.address, 1000, disputeId);
+      expect(await usdt.balanceOf(arbitrator.address)).to.equal(1000);
+      expect(await treasury.reserveBalance()).to.equal(0);
+      expect(await treasury.deferredArbitratorRewards(arbitrator.address)).to.equal(1000);
+
+      await usdt.mint(admin.address, 1000);
+      await usdt.connect(admin).approve(await treasury.getAddress(), 1000);
+      await treasury.connect(admin).fundReserve(1000);
+      await treasury.connect(stranger).claimDeferredArbitratorReward(arbitrator.address);
+      expect(await usdt.balanceOf(arbitrator.address)).to.equal(2000);
+      expect(await treasury.deferredArbitratorRewards(arbitrator.address)).to.equal(0);
     });
 
     it("reverts if not ESCROW_ROLE", async () => {

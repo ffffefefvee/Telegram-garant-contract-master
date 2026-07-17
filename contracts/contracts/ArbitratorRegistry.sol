@@ -41,6 +41,7 @@ contract ArbitratorRegistry is AccessControl, ReentrancyGuard {
         uint256 stake;
         uint256 totalResolved;
         uint256 totalSlashed;
+        uint256 activeDisputes;
         uint64 hiredAt;
         uint64 withdrawRequestAt; // 0 если нет активного запроса
         uint256 withdrawRequestAmount;
@@ -73,6 +74,8 @@ contract ArbitratorRegistry is AccessControl, ReentrancyGuard {
     event StatusChanged(address indexed arbitrator, Status oldStatus, Status newStatus);
     event LevelChanged(address indexed arbitrator, Level oldLevel, Level newLevel);
     event ResolvedIncremented(address indexed arbitrator, uint256 totalResolved);
+    event DisputeAssignmentStarted(address indexed arbitrator, uint256 activeDisputes);
+    event DisputeAssignmentEnded(address indexed arbitrator, uint256 activeDisputes);
 
     error ZeroAddress();
     error ZeroAmount();
@@ -84,6 +87,9 @@ contract ArbitratorRegistry is AccessControl, ReentrancyGuard {
     error WithdrawCooldownActive();
     error WithdrawWouldBreachMin();
     error NotEligibleForWithdraw();
+    error ActiveDisputes();
+    error NoActiveDispute();
+    error GovernanceRequired();
 
     constructor(
         IERC20 token_,
@@ -95,6 +101,7 @@ contract ArbitratorRegistry is AccessControl, ReentrancyGuard {
         if (address(token_) == address(0) || address(treasury_) == address(0) || admin == address(0)) {
             revert ZeroAddress();
         }
+        if (block.chainid != 31337 && block.chainid != 1337 && admin.code.length == 0) revert GovernanceRequired();
         token = token_;
         treasury = treasury_;
         minStake = minStake_;
@@ -154,8 +161,9 @@ contract ArbitratorRegistry is AccessControl, ReentrancyGuard {
         if (a.status == Status.PROBATION || a.status == Status.SUSPENDED) revert NotEligibleForWithdraw();
         if (amount > a.stake) revert InsufficientStake();
         if (a.withdrawRequestAt != 0) revert WithdrawAlreadyRequested();
+        if (a.activeDisputes != 0) revert ActiveDisputes();
 
-        // Если арбитр не TERMINATED — не разрешаем выводить ниже minStake для текущего уровня.
+        // Если арбитр не TERMINATED
         if (a.status != Status.TERMINATED) {
             uint256 minForLevel = _minStakeForLevel(a.level);
             if (a.stake - amount < minForLevel) revert WithdrawWouldBreachMin();
@@ -171,6 +179,7 @@ contract ArbitratorRegistry is AccessControl, ReentrancyGuard {
         if (a.withdrawRequestAt == 0) revert WithdrawNotRequested();
         if (block.timestamp < a.withdrawRequestAt + withdrawCooldown) revert WithdrawCooldownActive();
         if (a.status == Status.PROBATION || a.status == Status.SUSPENDED) revert NotEligibleForWithdraw();
+        if (a.activeDisputes != 0) revert ActiveDisputes();
 
         uint256 amount = a.withdrawRequestAmount;
         if (amount > a.stake) revert InsufficientStake();
@@ -223,11 +232,22 @@ contract ArbitratorRegistry is AccessControl, ReentrancyGuard {
         emit StakeSlashed(arbitrator, actual, reason, beneficiary);
     }
 
-    /// @notice Инкремент счётчика разрешённых споров (вызывается из Escrow при resolve()).
-    function incrementResolved(address arbitrator) external onlyRole(ESCROW_ROLE) {
+    /// @notice Records assignment from an escrow authorized by its factory.
+    function beginDispute(address arbitrator) external onlyRole(ESCROW_ROLE) {
         Arbitrator storage a = _arbitrators[arbitrator];
         if (a.status == Status.NONE) revert NotHired();
+        a.activeDisputes += 1;
+        emit DisputeAssignmentStarted(arbitrator, a.activeDisputes);
+    }
+
+    /// @notice Atomically closes an assignment and records its resolution.
+    function endDispute(address arbitrator) external onlyRole(ESCROW_ROLE) {
+        Arbitrator storage a = _arbitrators[arbitrator];
+        if (a.status == Status.NONE) revert NotHired();
+        if (a.activeDisputes == 0) revert NoActiveDispute();
+        a.activeDisputes -= 1;
         a.totalResolved += 1;
+        emit DisputeAssignmentEnded(arbitrator, a.activeDisputes);
         emit ResolvedIncremented(arbitrator, a.totalResolved);
     }
 
@@ -264,6 +284,7 @@ contract ArbitratorRegistry is AccessControl, ReentrancyGuard {
         Arbitrator storage a = _arbitrators[arbitrator];
         if (a.status != Status.ACTIVE) return false;
         if (a.stake < _minStakeForLevel(a.level)) return false;
+        if (a.withdrawRequestAt != 0) return false;
         return true;
     }
 

@@ -6,14 +6,26 @@ on:
   pull_request:
     branches: [main, master, develop]
 
+permissions:
+  contents: read
+
 jobs:
+  secret-scan:
+    name: gitleaks secret scan
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Scan repository for secrets
+        run: docker run --rm -v "$PWD:/repo" zricethezav/gitleaks:v8.24.2 detect --source=/repo --no-banner --redact --exit-code=1
+
   user-service:
     name: user-service build & test
     runs-on: ubuntu-latest
     defaults:
       run:
         working-directory: services/user-service
-
     services:
       postgres:
         image: postgres:15-alpine
@@ -21,45 +33,32 @@ jobs:
           POSTGRES_USER: garant_user
           POSTGRES_PASSWORD: garant_pass
           POSTGRES_DB: garant_db_test
-        ports:
-          - 5432:5432
+        ports: [5432:5432]
         options: >-
-          --health-cmd pg_isready
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-
+          --health-cmd pg_isready --health-interval 10s --health-timeout 5s --health-retries 5
       redis:
         image: redis:7-alpine
-        ports:
-          - 6379:6379
+        ports: [6379:6379]
         options: >-
-          --health-cmd "redis-cli ping"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 5
-
+          --health-cmd "redis-cli ping" --health-interval 10s --health-timeout 5s --health-retries 5
     steps:
       - uses: actions/checkout@v4
-
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
-          cache: 'npm'
+          cache: npm
           cache-dependency-path: services/user-service/package-lock.json
-
       - name: Install dependencies
         run: npm ci
-
-      - name: Lint
-        run: npm run lint -- --max-warnings=0
-        continue-on-error: true
-
+      - name: Audit production dependencies
+        run: npm audit --omit=dev --audit-level=high
+      # Package lint includes --fix; CI must inspect without mutating checkout.
+      - name: Lint (blocking, no autofix)
+        run: npx eslint "{src,apps,libs,test}/**/*.ts" --max-warnings=0
       - name: Build
         run: npm run build
         env:
           NODE_ENV: test
-
       - name: Unit tests
         run: npm test -- --passWithNoTests --forceExit
         env:
@@ -82,42 +81,52 @@ jobs:
     defaults:
       run:
         working-directory: mini-app
-
     steps:
       - uses: actions/checkout@v4
-
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
-          cache: 'npm'
+          cache: npm
           cache-dependency-path: mini-app/package-lock.json
-
       - name: Install dependencies
         run: npm ci
-
+      - name: Audit production dependencies
+        run: npm audit --omit=dev --audit-level=high
+      - name: Lint (blocking)
+        run: npm run lint -- --max-warnings=0
+      - name: Typecheck
+        run: npm run typecheck
       - name: Build
         run: npm run build
         env:
           VITE_API_URL: http://localhost:3001/api
 
   contracts:
-    name: contracts compile & test
+    name: contracts security, coverage & test
     runs-on: ubuntu-latest
     defaults:
       run:
         working-directory: contracts
-
     steps:
       - uses: actions/checkout@v4
-
       - uses: actions/setup-node@v4
         with:
           node-version: '20'
-          cache: 'npm'
+          cache: npm
           cache-dependency-path: contracts/package-lock.json
-
       - name: Install dependencies
         run: npm ci
-
-      - name: Compile & test
+      - name: Audit production dependencies
+        run: npm audit --omit=dev --audit-level=high
+      - name: Lint (blocking)
+        run: npm run lint -- --max-warnings=0
+      - name: Compile and test
         run: npm run compile && npm test
+      # Opt in after repeated deterministic green runs; other gates stay blocking.
+      - name: Contract coverage gate (stable suites only)
+        if: ${{ vars.CONTRACT_COVERAGE_GATE == 'true' }}
+        run: npm run coverage:check
+      - name: Install Slither
+        run: pipx install slither-analyzer==0.10.4
+      - name: Slither static analysis
+        run: slither . --fail-high

@@ -256,19 +256,33 @@ describe("ArbitratorRegistry", () => {
     });
   });
 
-  describe("incrementResolved", () => {
+  describe("dispute lifecycle", () => {
     beforeEach(async () => {
       await registry.connect(admin).hire(arbitrator.address, Level.JUNIOR);
+      await registry.connect(arbitrator).depositStake(MIN_STAKE * 2n);
     });
 
-    it("increments counter via ESCROW_ROLE", async () => {
-      await registry.connect(escrow).incrementResolved(arbitrator.address);
+    it("tracks assignment and resolution only via ESCROW_ROLE", async () => {
+      await registry.connect(escrow).beginDispute(arbitrator.address);
+      expect((await registry.getArbitrator(arbitrator.address)).activeDisputes).to.equal(1);
+      await registry.connect(escrow).endDispute(arbitrator.address);
       const a = await registry.getArbitrator(arbitrator.address);
+      expect(a.activeDisputes).to.equal(0);
       expect(a.totalResolved).to.equal(1);
+      await expect(registry.connect(stranger).beginDispute(arbitrator.address)).to.be.reverted;
+      await expect(registry.connect(stranger).endDispute(arbitrator.address)).to.be.reverted;
     });
 
-    it("reverts if not ESCROW_ROLE", async () => {
-      await expect(registry.connect(stranger).incrementResolved(arbitrator.address)).to.be.reverted;
+    it("blocks request and rechecks active disputes at withdraw time", async () => {
+      await registry.connect(escrow).beginDispute(arbitrator.address);
+      await expect(registry.connect(arbitrator).requestWithdraw(MIN_STAKE)).to.be.revertedWithCustomError(
+        registry, "ActiveDisputes",
+      );
+      await registry.connect(escrow).endDispute(arbitrator.address);
+      await registry.connect(arbitrator).requestWithdraw(MIN_STAKE);
+      await registry.connect(escrow).beginDispute(arbitrator.address);
+      await time.increase(14 * 24 * 3600 + 1);
+      await expect(registry.connect(arbitrator).withdraw()).to.be.revertedWithCustomError(registry, "ActiveDisputes");
     });
   });
 

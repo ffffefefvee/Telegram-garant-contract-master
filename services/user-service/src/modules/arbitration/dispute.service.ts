@@ -10,7 +10,7 @@ import { Dispute } from './entities/dispute.entity';
 import { ArbitrationChat } from './entities/arbitration-chat.entity';
 import { ArbitrationEvent } from './entities/arbitration-event.entity';
 import { Deal } from '../deal/entities/deal.entity';
-import { User } from '../user/entities/user.entity';
+import { User, UserType } from '../user/entities/user.entity';
 import {
   DisputeStatus,
   DisputeType,
@@ -407,6 +407,32 @@ export class DisputeService {
 
     await this.eventRepository.save(event);
     return this.disputeRepository.save(dispute);
+  }
+
+  async isAssignedArbitratorForDeal(
+    dealId: string,
+    userId: string,
+  ): Promise<boolean> {
+    return (await this.disputeRepository.count({
+      where: { dealId, arbitratorId: userId },
+    })) > 0;
+  }
+
+  async getDisputeForUser(
+    disputeId: string,
+    userId: string,
+    roles: UserType[] = [],
+  ): Promise<Dispute> {
+    const dispute = await this.getDispute(disputeId);
+    if (
+      !roles.includes(UserType.ADMIN) &&
+      dispute.arbitratorId !== userId &&
+      dispute.deal?.buyerId !== userId &&
+      dispute.deal?.sellerId !== userId
+    ) {
+      throw new ForbiddenException('Access denied');
+    }
+    return dispute;
   }
 
   /**

@@ -9,7 +9,9 @@ COPY package*.json ./
 RUN npm install
 
 COPY docker-entrypoint.dev.sh /usr/local/bin/docker-entrypoint.dev.sh
-RUN chmod +x /usr/local/bin/docker-entrypoint.dev.sh
+RUN chmod +x /usr/local/bin/docker-entrypoint.dev.sh && chown -R node:node /app
+
+USER node
 
 EXPOSE 3001
 

@@ -178,7 +178,7 @@ describe("Audit fixes", () => {
       expect(await treasury.reserveBalance()).to.equal(1_000_000n); // full fee now in reserve
     });
 
-    it("buyer-win dispute resolves after admin pre-funds the empty reserve", async () => {
+    it("buyer-win dispute resolves with empty reserve and defers the reward", async () => {
       // Hire an arbitrator
       await usdt.mint(arbitrator.address, ARB_MIN_STAKE);
       await usdt.connect(arbitrator).approve(await registry.getAddress(), ARB_MIN_STAKE);
@@ -191,17 +191,12 @@ describe("Audit fixes", () => {
       await escrow.connect(buyer).dispute();
       await escrow.connect(relay).assignArbitrator(arbitrator.address);
 
-      // Reserve is empty → buyer-win (fine paid 100% from reserve) must revert
-      await expect(escrow.connect(arbitrator).resolve(100, 0)).to.be.revertedWithCustomError(
-        treasury,
-        "InsufficientReserveBalance",
-      );
-
-      // Admin tops up the reserve → resolve succeeds
-      await usdt.mint(admin.address, FINE_MAX);
-      await usdt.connect(admin).approve(await treasury.getAddress(), FINE_MAX);
-      await treasury.connect(admin).fundReserve(FINE_MAX);
+      const buyerBefore = await usdt.balanceOf(buyer.address);
       await expect(escrow.connect(arbitrator).resolve(100, 0)).to.emit(escrow, "Resolved");
+      expect(await escrow.status()).to.equal(6); // RESOLVED, never frozen by reserve liquidity
+      expect(await usdt.balanceOf(buyer.address)).to.equal(buyerBefore + TWENTY_USDT + 500_000n);
+      expect(await usdt.balanceOf(escrowAddr)).to.equal(0n);
+      expect(await treasury.deferredArbitratorRewards(arbitrator.address)).to.equal(2_000_000n);
     });
   });
 

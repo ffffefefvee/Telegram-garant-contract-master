@@ -71,6 +71,7 @@ contract EscrowFactory is AccessControl {
     error InvalidFundingDeadline();
     error FeeExceedsAmount();
     error TariffTooHigh();
+    error GovernanceRequired();
 
     /// @notice Верхняя граница процентной комиссии (10%): защита от опечатки/злоупотребления админом.
     uint16 public constant MAX_PERCENT_FEE_BPS = 1000;
@@ -96,6 +97,7 @@ contract EscrowFactory is AccessControl {
         ) revert ZeroAddress();
 
         if (tariff_.percentFeeBps > MAX_PERCENT_FEE_BPS) revert TariffTooHigh();
+        if (block.chainid != 31337 && block.chainid != 1337 && admin.code.length == 0) revert GovernanceRequired();
 
         implementation = implementation_;
         token = token_;

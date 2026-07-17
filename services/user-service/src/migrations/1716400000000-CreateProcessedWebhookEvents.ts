@@ -19,6 +19,7 @@ export class CreateProcessedWebhookEvents1716400000000
         "id" uuid PRIMARY KEY DEFAULT gen_random_uuid(),
         "provider" varchar(32) NOT NULL,
         "eventKey" varchar(255) NOT NULL,
+        "processingState" varchar(16) NOT NULL DEFAULT 'processing',
         "orderId" varchar(100) NULL,
         "status" varchar(32) NULL,
         "createdAt" timestamp NOT NULL DEFAULT now()
