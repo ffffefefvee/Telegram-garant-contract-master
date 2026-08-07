@@ -4,6 +4,7 @@ import { Payment } from './entities/payment.entity';
 import { CommissionRate } from './entities/commission-rate.entity';
 import { CurrencyRate } from './entities/currency-rate.entity';
 import { ProcessedWebhookEvent } from './entities/processed-webhook-event.entity';
+import { PaymentOperation } from './entities/payment-operation.entity';
 import { Deal } from '../deal/entities/deal.entity';
 import { PaymentService } from './payment.service';
 import { PaymentController } from './payment.controller';
@@ -32,6 +33,7 @@ import { RailRegistryService } from './rails/rail-registry.service';
 import { EscrowDeadlineService } from './escrow-deadline.service';
 import { DirectDepositWatcher } from './direct-deposit.watcher';
 import { WebhookIdempotencyService } from './webhook-idempotency.service';
+import { PaymentOperationService } from './payment-operation.service';
 
 @Module({
   imports: [
@@ -42,6 +44,7 @@ import { WebhookIdempotencyService } from './webhook-idempotency.service';
       Deal,
       TonUnmatchedDeposit,
       ProcessedWebhookEvent,
+      PaymentOperation,
     ]),
     forwardRef(() => DealModule),
     forwardRef(() => UserModule),
@@ -55,6 +58,7 @@ import { WebhookIdempotencyService } from './webhook-idempotency.service';
     CryptomusService,
     PaymentWebhookService,
     WebhookIdempotencyService,
+    PaymentOperationService,
     CommissionConfigService,
     FeeConsistencyService,
     WebhookRateLimitGuard,
@@ -75,6 +79,7 @@ import { WebhookIdempotencyService } from './webhook-idempotency.service';
     PaymentService,
     CryptomusService,
     PaymentWebhookService,
+    PaymentOperationService,
     CommissionConfigService,
     RailRegistryService,
     TonRecoveryService,

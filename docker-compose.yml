@@ -4,27 +4,22 @@ services:
     container_name: tg-garant-postgres
     restart: unless-stopped
     environment:
-      # Defaults are local-dev only; production sentinel checks below fail closed.
-      NODE_ENV: ${NODE_ENV:-development}
+      # Development fallbacks are accepted only by the explicit dev overlay.
+      # The production overlay requires real values and the application also
+      # fails before serving if a placeholder/configuration leak is detected.
       POSTGRES_USER: ${DB_USERNAME:-garant_dev}
       POSTGRES_PASSWORD: ${DB_PASSWORD:-dev-only-change-db-password}
       POSTGRES_DB: ${DB_NAME:-garant_dev}
-    command:
-      - sh
-      - -ec
-      - |
-        if [ "$${NODE_ENV}" = production ] && { [ "$${POSTGRES_PASSWORD}" = dev-only-change-db-password ] || [ -z "$${POSTGRES_PASSWORD}" ]; }; then
-          echo "DB_PASSWORD must be supplied securely in production" >&2; exit 1;
-        fi
-        exec postgres
-    ports:
-      - "127.0.0.1:${DB_PORT:-5432}:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     networks:
       - garant-network
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${DB_USERNAME:-garant_user} -d ${DB_NAME:-garant_db}"]
+      test:
+        [
+          "CMD-SHELL",
+          "pg_isready -U ${DB_USERNAME:-garant_user} -d ${DB_NAME:-garant_db}",
+        ]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -34,18 +29,13 @@ services:
     container_name: tg-garant-redis
     restart: unless-stopped
     environment:
-      NODE_ENV: ${NODE_ENV:-development}
       REDIS_PASSWORD: ${REDIS_PASSWORD:-dev-only-change-redis-password}
+    # This invokes the image's official entrypoint; it does not replace it
+    # with a root shell wrapper.
     command:
-      - sh
-      - -ec
-      - |
-        if [ "$${NODE_ENV}" = production ] && { [ "$${REDIS_PASSWORD}" = dev-only-change-redis-password ] || [ -z "$${REDIS_PASSWORD}" ]; }; then
-          echo "REDIS_PASSWORD must be supplied securely in production" >&2; exit 1;
-        fi
-        exec redis-server --requirepass "$${REDIS_PASSWORD}"
-    ports:
-      - "127.0.0.1:${REDIS_PORT:-6379}:6379"
+      - redis-server
+      - --requirepass
+      - ${REDIS_PASSWORD:-dev-only-change-redis-password}
     volumes:
       - redis_data:/data
     networks:
@@ -95,24 +85,12 @@ services:
       JWT_SECRET: ${JWT_SECRET:-dev-only-change-jwt-secret}
       CORS_ORIGIN: ${CORS_ORIGIN:-http://localhost:8080}
       I18N_HOT_RELOAD: ${I18N_HOT_RELOAD:-false}
-    command:
-      - sh
-      - -ec
-      - |
-        if [ "$${NODE_ENV}" = production ]; then
-          [ "$${DB_PASSWORD}" != dev-only-change-db-password ] || { echo "DB_PASSWORD is required in production" >&2; exit 1; }
-          [ "$${REDIS_PASSWORD}" != dev-only-change-redis-password ] || { echo "REDIS_PASSWORD is required in production" >&2; exit 1; }
-          [ "$${JWT_SECRET}" != dev-only-change-jwt-secret ] || { echo "JWT_SECRET is required in production" >&2; exit 1; }
-          [ "$${TELEGRAM_BOT_TOKEN}" != 0:dev-only-invalid-token ] || { echo "TELEGRAM_BOT_TOKEN is required in production" >&2; exit 1; }
-          case "$${CORS_ORIGIN}" in https://*) ;; *) echo "HTTPS CORS_ORIGIN is required in production" >&2; exit 1;; esac
-        fi
-        exec node dist/main
-    ports:
-      - "${USER_SERVICE_PORT:-3001}:3001"
+      MONEY_EGRESS_ENABLED: ${MONEY_EGRESS_ENABLED:-false}
     networks:
       - garant-network
     healthcheck:
-      test: ["CMD-SHELL", "wget -qO- http://localhost:3001/api/health || exit 1"]
+      test:
+        ["CMD-SHELL", "wget -qO- http://localhost:3001/api/health || exit 1"]
       interval: 30s
       timeout: 5s
       retries: 3
@@ -126,8 +104,6 @@ services:
     restart: unless-stopped
     depends_on:
       - user-service
-    ports:
-      - "${MINI_APP_PORT:-8080}:8080"
     networks:
       - garant-network
 

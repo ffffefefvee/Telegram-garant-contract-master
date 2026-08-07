@@ -80,7 +80,10 @@ export class UserService {
     const user = this.userRepository.create({
       ...data,
       status: UserStatus.ACTIVE,
-      roles: data.roles || [UserType.BUYER],
+      // Account creation is reachable from authentication flows. Never trust
+      // a caller-controlled role list here: privileged roles are granted only
+      // through an administrator-controlled workflow.
+      roles: [UserType.BUYER],
       balance: 0,
       reputationScore: 0,
       completedDeals: 0,

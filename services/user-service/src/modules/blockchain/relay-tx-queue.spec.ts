@@ -1,4 +1,8 @@
 import { RelayTxQueue } from './relay-tx-queue';
+import {
+  MoneyMovementDisabledError,
+  MoneyMovementGate,
+} from './money-movement.gate';
 
 /** Resolves after `ms`, recording start/end so we can assert non-overlap. */
 function deferred(ms: number, onStart: () => void, onEnd: () => void) {
@@ -14,9 +18,13 @@ function deferred(ms: number, onStart: () => void, onEnd: () => void) {
 
 describe('RelayTxQueue', () => {
   let queue: RelayTxQueue;
+  let moneyMovementGate: { assertRelayOperationAllowed: jest.Mock };
 
   beforeEach(() => {
-    queue = new RelayTxQueue();
+    moneyMovementGate = {
+      assertRelayOperationAllowed: jest.fn(),
+    };
+    queue = new RelayTxQueue(moneyMovementGate as unknown as MoneyMovementGate);
   });
 
   it('runs tasks one at a time (no overlap) even when submitted concurrently', async () => {
@@ -65,6 +73,19 @@ describe('RelayTxQueue', () => {
 
   it('returns the task result to the caller', async () => {
     await expect(queue.submit('x', async () => 42)).resolves.toBe(42);
+    expect(moneyMovementGate.assertRelayOperationAllowed).toHaveBeenCalledWith('x');
+  });
+
+  it('never invokes a queued task while the money-egress safety stop is active', async () => {
+    moneyMovementGate.assertRelayOperationAllowed.mockImplementation(() => {
+      throw new MoneyMovementDisabledError('erc20.transfer');
+    });
+    const run = jest.fn(async () => 'tx-hash');
+
+    await expect(queue.submit('erc20.transfer 1→0xabc', run)).rejects.toMatchObject({
+      code: 'MONEY_EGRESS_DISABLED',
+    });
+    expect(run).not.toHaveBeenCalled();
   });
 
   it('propagates a task failure to its caller', async () => {

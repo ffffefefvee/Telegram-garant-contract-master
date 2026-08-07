@@ -1,5 +1,6 @@
 import {
   BadRequestException,
+  ServiceUnavailableException,
   Controller,
   Get,
   Patch,
@@ -13,17 +14,12 @@ import {
   HttpStatus,
   ParseUUIDPipe,
   ParseIntPipe,
-  UploadedFile,
-  UseInterceptors,
-} from '@nestjs/common';
-import { FileInterceptor as NestFileInterceptor } from '@nestjs/platform-express';
-import { diskStorage } from 'multer';
-import { extname } from 'path';
-import { ArbitrationService } from './arbitration.service';
-import { DisputeService } from './dispute.service';
-import { EvidenceService } from './evidence.service';
-import { ArbitratorService } from './arbitrator.service';
-import { ArbitrationSettingsService } from './arbitration-settings.service';
+} from "@nestjs/common";
+import { ArbitrationService } from "./arbitration.service";
+import { DisputeService } from "./dispute.service";
+import { EvidenceService } from "./evidence.service";
+import { ArbitratorService } from "./arbitrator.service";
+import { ArbitrationSettingsService } from "./arbitration-settings.service";
 import {
   OpenDisputeDto,
   SubmitEvidenceDto,
@@ -34,18 +30,18 @@ import {
   DealTermsDto,
   EnforceDecisionDto,
   AssignArbitratorDto,
-} from './dto';
+} from "./dto";
 import {
   ArbitratorAvailability,
   DisputeStatus,
-} from './entities/enums/arbitration.enum';
-import { CurrentUser } from '../auth/current-user.decorator';
-import type { UserPayload } from '../auth/auth.middleware';
+} from "./entities/enums/arbitration.enum";
+import { CurrentUser } from "../auth/current-user.decorator";
+import type { UserPayload } from "../auth/auth.middleware";
 
 /**
  * Контроллер для управления арбитражем
  */
-@Controller('arbitration')
+@Controller("arbitration")
 export class ArbitrationController {
   constructor(
     private readonly arbitrationService: ArbitrationService,
@@ -57,58 +53,71 @@ export class ArbitrationController {
 
   // === Deal Terms ===
 
-  @Post('deal-terms/:dealId')
+  @Post("deal-terms/:dealId")
   @HttpCode(HttpStatus.CREATED)
   async createDealTerms(
-    @Param('dealId', ParseUUIDPipe) dealId: string,
+    @Param("dealId", ParseUUIDPipe) dealId: string,
     @Body() dto: DealTermsDto,
-    @CurrentUser() _user: UserPayload,
+    @CurrentUser() user: UserPayload,
   ) {
-    return this.arbitrationService.createOrUpdateDealTerms(dealId, dto);
+    return this.arbitrationService.createOrUpdateDealTerms(
+      dealId,
+      dto,
+      user.id,
+      user.roles,
+    );
   }
 
-  @Get('deal-terms/:dealId')
-  async getDealTerms(@Param('dealId', ParseUUIDPipe) dealId: string) {
-    return this.arbitrationService.getDealTerms(dealId);
+  @Get("deal-terms/:dealId")
+  async getDealTerms(
+    @Param("dealId", ParseUUIDPipe) dealId: string,
+    @CurrentUser() user: UserPayload,
+  ) {
+    return this.arbitrationService.getDealTerms(dealId, user.id, user.roles);
   }
 
   // === Disputes ===
 
-  @Post('disputes')
+  @Post("disputes")
   @HttpCode(HttpStatus.CREATED)
   async openDispute(
     @Body() dto: OpenDisputeDto,
-    @Query('dealId', ParseUUIDPipe) dealId: string,
+    @Query("dealId", ParseUUIDPipe) dealId: string,
     @CurrentUser() user: UserPayload,
   ) {
     return this.disputeService.openDispute(dealId, user.id, dto);
   }
 
-  @Get('disputes')
+  @Get("disputes")
   async getMyDisputes(@CurrentUser() user: UserPayload) {
     return this.disputeService.getUserDisputes(user.id);
   }
 
-  @Get('disputes/:id')
+  @Get("disputes/:id")
   async getDispute(
-    @Param('id', ParseUUIDPipe) id: string,
+    @Param("id", ParseUUIDPipe) id: string,
     @CurrentUser() user: UserPayload,
   ) {
-    return this.disputeService.getDisputeForUser(id, user.id);
+    return this.disputeService.getDisputeForUser(id, user.id, user.roles);
   }
 
-  @Post('disputes/:id/assign-arbitrator')
+  @Post("disputes/:id/assign-arbitrator")
   async assignArbitrator(
-    @Param('id', ParseUUIDPipe) id: string,
+    @Param("id", ParseUUIDPipe) id: string,
     @Body() dto: AssignArbitratorDto,
     @CurrentUser() user: UserPayload,
   ) {
-    return this.disputeService.assignArbitrator(id, dto.arbitratorId, user.id, dto.isAutoAssigned);
+    return this.disputeService.assignArbitrator(
+      id,
+      dto.arbitratorId,
+      user.id,
+      dto.isAutoAssigned,
+    );
   }
 
-  @Put('disputes/:id/status')
+  @Put("disputes/:id/status")
   async updateDisputeStatus(
-    @Param('id', ParseUUIDPipe) id: string,
+    @Param("id", ParseUUIDPipe) id: string,
     @Body() dto: { status: DisputeStatus },
     @CurrentUser() user: UserPayload,
   ) {
@@ -117,68 +126,55 @@ export class ArbitrationController {
 
   // === Evidence ===
 
-  @Get('disputes/:id/evidence')
+  @Get("disputes/:id/evidence")
   async getDisputeEvidence(
-    @Param('id', ParseUUIDPipe) id: string,
+    @Param("id", ParseUUIDPipe) id: string,
     @CurrentUser() user: UserPayload,
   ) {
-    return this.evidenceService.getDisputeEvidence(id, user.id);
+    return this.evidenceService.getDisputeEvidence(id, user.id, user.roles);
   }
 
-  @Post('disputes/:id/evidence')
+  @Post("disputes/:id/evidence")
   @HttpCode(HttpStatus.CREATED)
   async submitEvidence(
-    @Param('id', ParseUUIDPipe) id: string,
+    @Param("id", ParseUUIDPipe) id: string,
     @Body() dto: SubmitEvidenceDto,
     @CurrentUser() user: UserPayload,
   ) {
     return this.evidenceService.submitEvidence(id, user.id, dto);
   }
 
-  @Post('disputes/:id/evidence/upload')
-  @UseInterceptors(
-    NestFileInterceptor('file', {
-      storage: diskStorage({
-        destination: './uploads/evidence',
-        filename: (req: any, file: any, cb: any) => {
-          const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1e9);
-          const ext = extname(file.originalname);
-          cb(null, `${uniqueSuffix}${ext}`);
-        },
-      }),
-    }),
-  )
+  @Post("disputes/:id/evidence/upload")
   @HttpCode(HttpStatus.CREATED)
   async uploadEvidence(
-    @Param('id', ParseUUIDPipe) id: string,
-    @UploadedFile() file: any,
-    @Body('description') description: string,
-    @Body('type') type: string,
-    @CurrentUser() user: UserPayload,
+    @Param("id", ParseUUIDPipe) _id: string,
+    @CurrentUser() _user: UserPayload,
   ) {
-    return this.evidenceService.uploadFileEvidence(id, user.id, file, description, type as any);
+    throw new ServiceUnavailableException(
+      "Evidence file uploads are temporarily unavailable while secure storage is configured",
+    );
   }
 
-  @Get('evidence/:id')
+  @Get("evidence/:id")
   async getEvidence(
-    @Param('id', ParseUUIDPipe) id: string,
+    @Param("id", ParseUUIDPipe) id: string,
     @CurrentUser() user: UserPayload,
   ) {
-    return this.evidenceService.getEvidence(id, user.id);
+    return this.evidenceService.getEvidence(id, user.id, user.roles);
   }
 
-  @Post('evidence/:id/verify')
+  @Post("evidence/:id/verify")
   async verifyEvidence(
-    @Param('id', ParseUUIDPipe) id: string,
+    @Param("id", ParseUUIDPipe) id: string,
     @CurrentUser() user: UserPayload,
   ) {
     return this.evidenceService.verifyEvidence(id, user.id);
   }
 
-  @Delete('evidence/:id')
+  @Delete("evidence/:id")
   @HttpCode(HttpStatus.NO_CONTENT)
   async deleteEvidence(
-    @Param('id', ParseUUIDPipe) id: string,
+    @Param("id", ParseUUIDPipe) id: string,
     @CurrentUser() user: UserPayload,
   ) {
     return this.evidenceService.deleteEvidence(id, user.id);
@@ -186,57 +182,62 @@ export class ArbitrationController {
 
   // === Decisions ===
 
-  @Post('disputes/:id/decision')
+  @Post("disputes/:id/decision")
   @HttpCode(HttpStatus.CREATED)
   async makeDecision(
-    @Param('id', ParseUUIDPipe) id: string,
+    @Param("id", ParseUUIDPipe) id: string,
     @Body() dto: MakeDecisionDto,
     @CurrentUser() user: UserPayload,
   ) {
     return this.arbitrationService.makeDecision(id, user.id, dto);
   }
 
-  @Post('decisions/:id/enforce')
+  @Post("decisions/:id/enforce")
   async enforceDecision(
-    @Param('id', ParseUUIDPipe) id: string,
+    @Param("id", ParseUUIDPipe) id: string,
     @CurrentUser() user: UserPayload,
     @Body() dto?: EnforceDecisionDto,
   ) {
-    return this.arbitrationService.enforceDecision(id, user.id, dto);
+    return this.arbitrationService.enforceDecision(
+      id,
+      user.id,
+      dto,
+      user.roles,
+    );
   }
 
-  @Get('decisions/:id')
+  @Get("decisions/:id")
   async getDecision(
-    @Param('id', ParseUUIDPipe) id: string,
+    @Param("id", ParseUUIDPipe) id: string,
     @CurrentUser() user: UserPayload,
   ) {
-    return this.arbitrationService.getDecision(id, user.id);
+    return this.arbitrationService.getDecision(id, user.id, user.roles);
   }
 
   // === Appeals ===
 
-  @Post('disputes/:id/appeal')
+  @Post("disputes/:id/appeal")
   @HttpCode(HttpStatus.CREATED)
   async fileAppeal(
-    @Param('id', ParseUUIDPipe) id: string,
+    @Param("id", ParseUUIDPipe) id: string,
     @Body() dto: FileAppealDto,
     @CurrentUser() user: UserPayload,
   ) {
-    return this.arbitrationService.fileAppeal(id, user.id, dto);
+    return this.arbitrationService.fileAppeal(id, user.id, dto, user.roles);
   }
 
-  @Post('appeals/:id/review')
+  @Post("appeals/:id/review")
   async reviewAppeal(
-    @Param('id', ParseUUIDPipe) id: string,
+    @Param("id", ParseUUIDPipe) id: string,
     @Body() dto: ReviewAppealDto,
     @CurrentUser() user: UserPayload,
   ) {
-    return this.arbitrationService.reviewAppeal(id, user.id, dto);
+    return this.arbitrationService.reviewAppeal(id, user.id, dto, user.roles);
   }
 
-  @Post('appeals/:id/withdraw')
+  @Post("appeals/:id/withdraw")
   async withdrawAppeal(
-    @Param('id', ParseUUIDPipe) id: string,
+    @Param("id", ParseUUIDPipe) id: string,
     @CurrentUser() user: UserPayload,
   ) {
     return this.arbitrationService.withdrawAppeal(id, user.id);
@@ -244,44 +245,56 @@ export class ArbitrationController {
 
   // === Chat ===
 
-  @Get('disputes/:id/chat')
+  @Get("disputes/:id/chat")
   async getChatMessages(
-    @Param('id', ParseUUIDPipe) id: string,
-    @Query('limit', ParseIntPipe) limit: number = 50,
+    @Param("id", ParseUUIDPipe) id: string,
+    @Query("limit", ParseIntPipe) limit: number = 50,
     @CurrentUser() user: UserPayload,
   ) {
-    const dispute = await this.disputeService.getDisputeForUser(id, user.id);
+    const dispute = await this.disputeService.getDisputeForUser(
+      id,
+      user.id,
+      user.roles,
+    );
     if (!dispute.chat) {
       return [];
     }
     return this.arbitrationService.getChatMessages(dispute.chat.id, limit);
   }
 
-  @Post('disputes/:id/chat')
+  @Post("disputes/:id/chat")
   @HttpCode(HttpStatus.CREATED)
   async sendChatMessage(
-    @Param('id', ParseUUIDPipe) id: string,
+    @Param("id", ParseUUIDPipe) id: string,
     @Body() dto: ArbitrationChatMessageDto,
     @CurrentUser() user: UserPayload,
   ) {
-    return this.arbitrationService.sendChatMessage(id, user.id, dto);
+    return this.arbitrationService.sendChatMessage(
+      id,
+      user.id,
+      dto,
+      user.roles,
+    );
   }
 
   // === Arbitrator ===
 
-  @Get('arbitrators')
-  async getAvailableArbitrators(@Query('limit', ParseIntPipe) limit: number = 10) {
+  @Get("arbitrators")
+  async getAvailableArbitrators(
+    @Query("limit", ParseIntPipe) limit: number = 10,
+  ) {
     return this.arbitratorService.getAvailableArbitrators(limit);
   }
 
-  @Get('arbitrators/me')
+  @Get("arbitrators/me")
   async getMyArbitratorProfile(@CurrentUser() user: UserPayload) {
     return this.arbitratorService.getProfile(user.id);
   }
 
-  @Post('arbitrators/apply')
+  @Post("arbitrators/apply")
   async applyForArbitrator(
-    @Body() dto: { specialization?: string[]; bio?: string; languages?: string[] },
+    @Body()
+    dto: { specialization?: string[]; bio?: string; languages?: string[] },
     @CurrentUser() user: UserPayload,
   ) {
     return this.arbitratorService.applyForArbitrator(
@@ -292,7 +305,7 @@ export class ArbitrationController {
     );
   }
 
-  @Get('arbitrators/me/statistics')
+  @Get("arbitrators/me/statistics")
   async getMyStatistics(@CurrentUser() user: UserPayload) {
     return this.arbitratorService.getStatistics(user.id);
   }
@@ -301,7 +314,7 @@ export class ArbitrationController {
    * Self-service availability toggle for arbitrators.
    * Only ACTIVE arbitrators may flip — service throws Forbidden otherwise.
    */
-  @Patch('arbitrators/me/availability')
+  @Patch("arbitrators/me/availability")
   async setMyAvailability(
     @Body() dto: { availability: ArbitratorAvailability },
     @CurrentUser() user: UserPayload,
@@ -311,7 +324,7 @@ export class ArbitrationController {
       dto.availability !== ArbitratorAvailability.AWAY
     ) {
       throw new BadRequestException(
-        `availability must be one of: ${Object.values(ArbitratorAvailability).join(', ')}`,
+        `availability must be one of: ${Object.values(ArbitratorAvailability).join(", ")}`,
       );
     }
     return this.arbitratorService.setAvailability(user.id, dto.availability);
@@ -319,13 +332,13 @@ export class ArbitrationController {
 
   // === Settings (read-only for users) ===
 
-  @Get('settings')
+  @Get("settings")
   async getAllSettings() {
     return this.settingsService.getAllSettings();
   }
 
-  @Get('settings/:key')
-  async getSetting(@Param('key') key: string) {
+  @Get("settings/:key")
+  async getSetting(@Param("key") key: string) {
     return this.settingsService.getSetting(key);
   }
 }

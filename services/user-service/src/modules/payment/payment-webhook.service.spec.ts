@@ -1,15 +1,22 @@
-import { Test, TestingModule } from '@nestjs/testing';
-import { getRepositoryToken } from '@nestjs/typeorm';
-import { NotFoundException } from '@nestjs/common';
-import { PaymentWebhookService, WebhookStatus } from './payment-webhook.service';
-import { Payment } from './entities/payment.entity';
-import { Deal } from '../deal/entities/deal.entity';
-import { DealStatus } from '../deal/enums/deal.enum';
-import { EscrowService } from '../escrow/escrow.service';
-import { DealService } from '../deal/deal.service';
-import { AuditLogService } from '../ops/audit-log.service';
-import { CryptomusWebhookPayload } from './cryptomus.service';
-import { WebhookIdempotencyService } from './webhook-idempotency.service';
+import { Test, TestingModule } from "@nestjs/testing";
+import { getRepositoryToken } from "@nestjs/typeorm";
+import { NotFoundException } from "@nestjs/common";
+import {
+  PaymentWebhookService,
+  WebhookStatus,
+} from "./payment-webhook.service";
+import { Payment } from "./entities/payment.entity";
+import { Deal } from "../deal/entities/deal.entity";
+import { DealStatus } from "../deal/enums/deal.enum";
+import { EscrowService } from "../escrow/escrow.service";
+import { DealService } from "../deal/deal.service";
+import { AuditLogService } from "../ops/audit-log.service";
+import { CryptomusWebhookPayload } from "./cryptomus.service";
+import { WebhookIdempotencyService } from "./webhook-idempotency.service";
+import { PaymentOperationService } from "./payment-operation.service";
+import { PaymentOperationStatus } from "./entities/payment-operation.entity";
+import { ConfigService } from "@nestjs/config";
+import { MoneyLedgerService } from "../ops/money-ledger.service";
 
 interface InMemoryRepoOptions<T> {
   /** Pre-seed rows. Cloned on save so tests don't share refs by accident. */
@@ -31,7 +38,8 @@ function makeRepo<T extends { id?: string; transactionId?: string }>(
     findOne: jest.fn(async ({ where }: any) => {
       const found = rows.find((r) => {
         if (where.id) return (r as any).id === where.id;
-        if (where.transactionId) return (r as any).transactionId === where.transactionId;
+        if (where.transactionId)
+          return (r as any).transactionId === where.transactionId;
         return false;
       });
       return found ?? null;
@@ -45,43 +53,56 @@ function makeRepo<T extends { id?: string; transactionId?: string }>(
   };
 }
 
-function makePayload(overrides: Partial<CryptomusWebhookPayload> = {}): CryptomusWebhookPayload {
+function makePayload(
+  overrides: Partial<CryptomusWebhookPayload> = {},
+): CryptomusWebhookPayload {
   return {
-    type: 'payment',
-    uuid: 'cm-uuid-1',
-    order_id: 'order-1',
-    amount: '100',
-    currency: 'USDT',
-    currency_amount: '100',
+    type: "payment",
+    uuid: "cm-uuid-1",
+    order_id: "order-1",
+    amount: "100",
+    currency: "USDT",
+    currency_amount: "100",
     status: WebhookStatus.PAID,
-    txid: '0xtx',
-    network: 'polygon',
-    payer_amount: '100',
-    payer_currency: 'USDT',
+    txid: "0xtx",
+    network: "polygon",
+    payer_amount: "100",
+    payer_currency: "USDT",
     ...overrides,
   };
 }
 
-describe('PaymentWebhookService', () => {
+describe("PaymentWebhookService", () => {
   let service: PaymentWebhookService;
   let paymentRepo: any;
   let dealRepo: any;
   let escrow: jest.Mocked<Partial<EscrowService>>;
   let dealService: { confirmPayment: jest.Mock };
-  let idempotency: { isProcessed: jest.Mock; markProcessed: jest.Mock };
+  let idempotency: { markProcessed: jest.Mock };
+  let operations: {
+    claimFunding: jest.Mock;
+    markCompleted: jest.Mock;
+    markRetryableFailure: jest.Mock;
+    markManualReview: jest.Mock;
+    withLease: jest.Mock;
+  };
 
   function setup({
     payment,
     deal,
     escrowEnabled = true,
     alreadyProcessed = false,
+    production = false,
   }: {
     payment?: Partial<Payment> | null;
     deal?: Partial<Deal> | null;
     escrowEnabled?: boolean;
     alreadyProcessed?: boolean;
+    production?: boolean;
   }) {
-    paymentRepo = makeRepo<Payment>({ seed: payment ? [payment as Payment] : [] });
+    paymentRepo = makeRepo<Payment>({
+      seed: payment ? [payment as Payment] : [],
+    });
     dealRepo = makeRepo<Deal>({ seed: deal ? [deal as Deal] : [] });
     escrow = {
       isEnabled: jest.fn(() => escrowEnabled),
@@ -97,9 +118,23 @@ describe('PaymentWebhookService', () => {
         return row;
       }),
     };
-    idempotency = {
-      isProcessed: jest.fn(async () => alreadyProcessed),
-      markProcessed: jest.fn(async () => undefined),
+    idempotency = { markProcessed: jest.fn(async () => undefined) };
+    operations = {
+      claimFunding: jest.fn(async () => ({
+        claimed: !alreadyProcessed,
+        operation: {
+          id: "op-1",
+          status: alreadyProcessed
+            ? PaymentOperationStatus.COMPLETED
+            : PaymentOperationStatus.PROCESSING,
+          transferTxHash: null,
+          notifyTxHash: null,
+        },
+      })),
+      markCompleted: jest.fn(async () => undefined),
+      markRetryableFailure: jest.fn(async () => undefined),
+      markManualReview: jest.fn(async () => undefined),
+      withLease: jest.fn(async (_id, action) => action()),
     };
     return Test.createTestingModule({
       providers: [
@@ -110,6 +145,17 @@ describe('PaymentWebhookService', () => {
         { provide: DealService, useValue: dealService },
         { provide: AuditLogService, useValue: { write: jest.fn() } },
         { provide: WebhookIdempotencyService, useValue: idempotency },
+        { provide: PaymentOperationService, useValue: operations },
+        {
+          provide: MoneyLedgerService,
+          useValue: { recordEscrowFunding: jest.fn() },
+        },
+        {
+          provide: ConfigService,
+          useValue: {
+            get: jest.fn(() => (production ? "production" : "test")),
+          },
+        },
       ],
     })
       .compile()
@@ -118,32 +164,32 @@ describe('PaymentWebhookService', () => {
       });
   }
 
-  it('throws NotFoundException when the order_id has no matching payment', async () => {
+  it("throws NotFoundException when the order_id has no matching payment", async () => {
     await setup({ payment: null });
     await expect(service.handlePaymentWebhook(makePayload())).rejects.toThrow(
       NotFoundException,
     );
   });
 
-  it('parses a decimal crypto amount exactly (no float drift) and stores it', async () => {
+  it("parses a decimal crypto amount exactly (no float drift) and stores it", async () => {
     const seed: any = {
-      id: 'p1',
-      transactionId: 'order-1',
+      id: "p1",
+      transactionId: "order-1",
       dealId: null,
       deal: null,
       cryptomusData: {},
     };
     await setup({ payment: seed });
     await service.handlePaymentWebhook(
-      makePayload({ currency_amount: '123.456789' }),
+      makePayload({ currency_amount: "123.456789" }),
     );
     expect(paymentRepo.rows[0].cryptoAmount).toBeCloseTo(123.456789, 6);
   });
 
-  it('does NOT corrupt cryptoAmount with NaN when currency_amount is malformed', async () => {
+  it("does NOT corrupt cryptoAmount with NaN when currency_amount is malformed", async () => {
     const seed: any = {
-      id: 'p1',
-      transactionId: 'order-1',
+      id: "p1",
+      transactionId: "order-1",
       dealId: null,
       deal: null,
       cryptomusData: {},
@@ -151,35 +197,35 @@ describe('PaymentWebhookService', () => {
     };
     await setup({ payment: seed });
     const result = await service.handlePaymentWebhook(
-      makePayload({ currency_amount: '' }),
+      makePayload({ currency_amount: "" }),
     );
-    expect(result.paymentStatus).toBe('completed');
+    expect(result.paymentStatus).toBe("completed");
     // Left untouched (null), never NaN.
     expect(paymentRepo.rows[0].cryptoAmount).toBeNull();
     expect(Number.isNaN(paymentRepo.rows[0].cryptoAmount)).toBe(false);
   });
 
-  it('marks the payment paid even when no deal is linked (recorded-only case)', async () => {
+  it("marks the payment paid even when no deal is linked (recorded-only case)", async () => {
     await setup({
       payment: {
-        id: 'p1',
-        transactionId: 'order-1',
+        id: "p1",
+        transactionId: "order-1",
         dealId: null,
         deal: null,
         cryptomusData: {},
       },
     });
     const result = await service.handlePaymentWebhook(makePayload());
-    expect(result.paymentStatus).toBe('completed');
+    expect(result.paymentStatus).toBe("completed");
     expect(result.dealId).toBeNull();
     expect(result.forwarded).toBe(false);
     expect(result.notes[0]).toMatch(/no associated deal/);
     expect(escrow.forwardAndFund).not.toHaveBeenCalled();
   });
 
-  it('skips forwarding when wallets are missing and notes the deferral', async () => {
+  it("skips forwarding when wallets are missing and notes the deferral", async () => {
     const deal: Partial<Deal> = {
-      id: 'd1',
+      id: "d1",
       amount: 100,
       status: DealStatus.PENDING_PAYMENT,
       escrowAddress: null,
@@ -188,9 +234,9 @@ describe('PaymentWebhookService', () => {
     };
     await setup({
       payment: {
-        id: 'p1',
-        transactionId: 'order-1',
-        dealId: 'd1',
+        id: "p1",
+        transactionId: "order-1",
+        dealId: "d1",
         deal: deal as Deal,
         cryptomusData: {},
       },
@@ -203,73 +249,81 @@ describe('PaymentWebhookService', () => {
     expect(escrow.forwardAndFund).not.toHaveBeenCalled();
   });
 
-  it('deploys escrow JIT, forwards funds, and transitions deal to IN_PROGRESS on happy path', async () => {
+  it("deploys escrow JIT, forwards funds, and transitions deal to IN_PROGRESS on happy path", async () => {
     const deal: Partial<Deal> = {
-      id: 'd1',
+      id: "d1",
       amount: 100,
       status: DealStatus.PENDING_PAYMENT,
       escrowAddress: null,
-      buyer: { walletAddress: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' } as any,
-      seller: { walletAddress: '0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb' } as any,
+      buyer: {
+        walletAddress: "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      } as any,
+      seller: {
+        walletAddress: "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      } as any,
     };
     await setup({
       payment: {
-        id: 'p1',
-        transactionId: 'order-1',
-        dealId: 'd1',
+        id: "p1",
+        transactionId: "order-1",
+        dealId: "d1",
         deal: deal as Deal,
         cryptomusData: {},
       },
       deal,
     });
     (escrow.createEscrow as jest.Mock).mockResolvedValue({
-      dealId: 'd1',
-      escrowAddress: '0xcccccccccccccccccccccccccccccccccccccccc',
-      transactionHash: '0xdeploy',
+      dealId: "d1",
+      escrowAddress: "0xcccccccccccccccccccccccccccccccccccccccc",
+      transactionHash: "0xdeploy",
       buyerFee: 0n,
       sellerFee: 0n,
     });
     (escrow.forwardAndFund as jest.Mock).mockResolvedValue({
-      dealId: 'd1',
-      transferTxHash: '0xtransfer',
-      notifyTxHash: '0xnotify',
+      dealId: "d1",
+      transferTxHash: "0xtransfer",
+      notifyTxHash: "0xnotify",
     });
 
     const result = await service.handlePaymentWebhook(makePayload());
 
     expect(escrow.createEscrow).toHaveBeenCalledWith(
-      'd1',
-      '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
-      '0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb',
+      "d1",
+      "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
       100,
     );
-    expect(escrow.forwardAndFund).toHaveBeenCalledWith('d1', 100);
+    expect(escrow.forwardAndFund).toHaveBeenCalledWith("d1", 100);
     expect(result.forwarded).toBe(true);
     expect(result.escrowAddress).toMatch(/^0xcccccccc/);
-    expect(result.txHashes.transfer).toBe('0xtransfer');
-    expect(result.txHashes.notify).toBe('0xnotify');
+    expect(result.txHashes.transfer).toBe("0xtransfer");
+    expect(result.txHashes.notify).toBe("0xnotify");
     expect(dealRepo.rows[0].status).toBe(DealStatus.IN_PROGRESS);
     expect(dealRepo.rows[0].escrowAddress).toMatch(/^0xcccccccc/);
     // Funding must be recorded so re-deliveries can be deduped.
     expect(idempotency.markProcessed).toHaveBeenCalledWith(
-      expect.objectContaining({ provider: 'cryptomus', eventKey: 'order-1' }),
+      expect.objectContaining({ provider: "cryptomus", eventKey: "order-1" }),
     );
   });
 
-  it('does NOT forward twice when the event was already processed (idempotent replay)', async () => {
+  it("does NOT forward twice when the event was already processed (idempotent replay)", async () => {
     const deal: Partial<Deal> = {
-      id: 'd1',
+      id: "d1",
       amount: 100,
       status: DealStatus.PENDING_PAYMENT,
-      escrowAddress: '0xcccccccccccccccccccccccccccccccccccccccc',
-      buyer: { walletAddress: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' } as any,
-      seller: { walletAddress: '0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb' } as any,
+      escrowAddress: "0xcccccccccccccccccccccccccccccccccccccccc",
+      buyer: {
+        walletAddress: "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      } as any,
+      seller: {
+        walletAddress: "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      } as any,
     };
     await setup({
       payment: {
-        id: 'p1',
-        transactionId: 'order-1',
-        dealId: 'd1',
+        id: "p1",
+        transactionId: "order-1",
+        dealId: "d1",
         deal: deal as Deal,
         cryptomusData: {},
       },
@@ -283,25 +337,32 @@ describe('PaymentWebhookService', () => {
     expect(escrow.forwardAndFund).not.toHaveBeenCalled();
     expect(result.forwarded).toBe(false);
     expect(result.notes[0]).toMatch(/idempotent/);
+    expect(operations.claimFunding).toHaveBeenCalledWith(
+      expect.objectContaining({ provider: "cryptomus", eventKey: "order-1" }),
+    );
     // The deal still reaches IN_PROGRESS (catch-up if the first pass crashed
     // before the transition).
     expect(dealRepo.rows[0].status).toBe(DealStatus.IN_PROGRESS);
   });
 
-  it('does NOT forward again when the deal already moved past PENDING_PAYMENT', async () => {
+  it("does NOT forward again when the deal already moved past PENDING_PAYMENT", async () => {
     const deal: Partial<Deal> = {
-      id: 'd1',
+      id: "d1",
       amount: 100,
       status: DealStatus.IN_PROGRESS,
-      escrowAddress: '0xcccccccccccccccccccccccccccccccccccccccc',
-      buyer: { walletAddress: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' } as any,
-      seller: { walletAddress: '0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb' } as any,
+      escrowAddress: "0xcccccccccccccccccccccccccccccccccccccccc",
+      buyer: {
+        walletAddress: "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      } as any,
+      seller: {
+        walletAddress: "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      } as any,
     };
     await setup({
       payment: {
-        id: 'p1',
-        transactionId: 'order-1',
-        dealId: 'd1',
+        id: "p1",
+        transactionId: "order-1",
+        dealId: "d1",
         deal: deal as Deal,
         cryptomusData: {},
       },
@@ -312,23 +373,29 @@ describe('PaymentWebhookService', () => {
 
     expect(escrow.forwardAndFund).not.toHaveBeenCalled();
     expect(result.forwarded).toBe(false);
-    expect(result.notes[0]).toMatch(/idempotent/);
+    expect(result.notes[0]).toMatch(/skipping forward/);
+    expect(operations.claimFunding).toHaveBeenCalled();
+    expect(operations.markManualReview).toHaveBeenCalled();
   });
 
-  it('skips forward+notify in stub mode but still transitions the deal', async () => {
+  it("skips forward+notify in stub mode but still transitions the deal", async () => {
     const deal: Partial<Deal> = {
-      id: 'd1',
+      id: "d1",
       amount: 50,
       status: DealStatus.PENDING_PAYMENT,
-      escrowAddress: '0xdddddddddddddddddddddddddddddddddddddddd',
-      buyer: { walletAddress: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' } as any,
-      seller: { walletAddress: '0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb' } as any,
+      escrowAddress: "0xdddddddddddddddddddddddddddddddddddddddd",
+      buyer: {
+        walletAddress: "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      } as any,
+      seller: {
+        walletAddress: "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      } as any,
     };
     await setup({
       payment: {
-        id: 'p1',
-        transactionId: 'order-1',
-        dealId: 'd1',
+        id: "p1",
+        transactionId: "order-1",
+        dealId: "d1",
         deal: deal as Deal,
         cryptomusData: {},
       },
@@ -344,26 +411,67 @@ describe('PaymentWebhookService', () => {
     expect(dealRepo.rows[0].status).toBe(DealStatus.IN_PROGRESS);
   });
 
-  it('records a note when forwardAndFund fails (does not crash)', async () => {
+  it("keeps production settlement pending when the blockchain is unavailable", async () => {
     const deal: Partial<Deal> = {
-      id: 'd1',
-      amount: 100,
+      id: "d1",
+      amount: 50,
       status: DealStatus.PENDING_PAYMENT,
-      escrowAddress: '0xdddddddddddddddddddddddddddddddddddddddd',
-      buyer: { walletAddress: '0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa' } as any,
-      seller: { walletAddress: '0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb' } as any,
+      escrowAddress: "0xdddddddddddddddddddddddddddddddddddddddd",
+      buyer: {
+        walletAddress: "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      } as any,
+      seller: {
+        walletAddress: "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      } as any,
     };
     await setup({
       payment: {
-        id: 'p1',
-        transactionId: 'order-1',
-        dealId: 'd1',
+        id: "p1",
+        transactionId: "order-1",
+        dealId: "d1",
+        deal: deal as Deal,
+        cryptomusData: {},
+      },
+      deal,
+      escrowEnabled: false,
+      production: true,
+    });
+
+    const result = await service.handlePaymentWebhook(makePayload());
+
+    expect(result.notes).toContain(
+      "production settlement remains pending until blockchain is available",
+    );
+    expect(dealRepo.rows[0].status).toBe(DealStatus.PENDING_PAYMENT);
+    expect(operations.markRetryableFailure).toHaveBeenCalled();
+  });
+
+  it("records a note when forwardAndFund fails (does not crash)", async () => {
+    const deal: Partial<Deal> = {
+      id: "d1",
+      amount: 100,
+      status: DealStatus.PENDING_PAYMENT,
+      escrowAddress: "0xdddddddddddddddddddddddddddddddddddddddd",
+      buyer: {
+        walletAddress: "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      } as any,
+      seller: {
+        walletAddress: "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      } as any,
+    };
+    await setup({
+      payment: {
+        id: "p1",
+        transactionId: "order-1",
+        dealId: "d1",
         deal: deal as Deal,
         cryptomusData: {},
       },
       deal,
     });
-    (escrow.forwardAndFund as jest.Mock).mockRejectedValue(new Error('insufficient hot-wallet balance'));
+    (escrow.forwardAndFund as jest.Mock).mockRejectedValue(
+      new Error("insufficient hot-wallet balance"),
+    );
 
     const result = await service.handlePaymentWebhook(makePayload());
 
@@ -373,10 +481,50 @@ describe('PaymentWebhookService', () => {
     expect(dealRepo.rows[0].status).toBe(DealStatus.PENDING_PAYMENT);
   });
 
-  it('records refunds and failures without forwarding', async () => {
+  it("keeps the payment retryable when Web3Signer cannot sign", async () => {
+    const deal: Partial<Deal> = {
+      id: "d1",
+      amount: 100,
+      status: DealStatus.PENDING_PAYMENT,
+      escrowAddress: "0xdddddddddddddddddddddddddddddddddddddddd",
+      buyer: {
+        walletAddress: "0xaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      } as any,
+      seller: {
+        walletAddress: "0xbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+      } as any,
+    };
+    await setup({
+      payment: {
+        id: "p1",
+        transactionId: "order-1",
+        dealId: "d1",
+        deal: deal as Deal,
+        cryptomusData: {},
+      },
+      deal,
+    });
+    operations.withLease.mockRejectedValueOnce(
+      new Error(
+        "Web3Signer request failed for eth_signTransaction: ECONNREFUSED",
+      ),
+    );
+
+    const result = await service.handlePaymentWebhook(makePayload());
+
+    expect(result.forwarded).toBe(false);
+    expect(result.notes[0]).toMatch(/Web3Signer request failed/);
+    expect(operations.markRetryableFailure).toHaveBeenCalledWith(
+      "op-1",
+      expect.objectContaining({ message: expect.stringMatching(/Web3Signer/) }),
+    );
+    expect(dealRepo.rows[0].status).toBe(DealStatus.PENDING_PAYMENT);
+  });
+
+  it("records refunds and failures without forwarding", async () => {
     const seed = {
-      id: 'p1',
-      transactionId: 'order-1',
+      id: "p1",
+      transactionId: "order-1",
       dealId: null,
       deal: null,
       cryptomusData: {},
@@ -385,14 +533,14 @@ describe('PaymentWebhookService', () => {
     const refunded = await service.handlePaymentWebhook(
       makePayload({ status: WebhookStatus.REFUNDED }),
     );
-    expect(refunded.paymentStatus).toBe('refunded');
+    expect(refunded.paymentStatus).toBe("refunded");
     expect(refunded.forwarded).toBe(false);
     expect(escrow.forwardAndFund).not.toHaveBeenCalled();
 
     const cancelled = await service.handlePaymentWebhook(
       makePayload({ status: WebhookStatus.CANCELLED }),
     );
-    expect(cancelled.paymentStatus).toBe('failed');
+    expect(cancelled.paymentStatus).toBe("failed");
     expect(cancelled.forwarded).toBe(false);
   });
 });

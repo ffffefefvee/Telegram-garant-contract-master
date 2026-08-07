@@ -118,6 +118,22 @@ describe('UserService', () => {
 
       await expect(service.create(createDto)).rejects.toThrow('already exists');
     });
+
+    it('ignores caller-supplied privileged roles during account creation', async () => {
+      mockUserRepository.findOne.mockResolvedValue(null);
+      mockUserRepository.create.mockReturnValue(mockUser);
+      mockUserRepository.save.mockResolvedValue(mockUser);
+      mockLanguageRepository.save.mockResolvedValue({});
+
+      await service.create({
+        telegramId: 987654321,
+        roles: [UserType.ADMIN],
+      });
+
+      expect(userRepository.create).toHaveBeenCalledWith(
+        expect.objectContaining({ roles: [UserType.BUYER] }),
+      );
+    });
   });
 
   describe('findByTelegramId', () => {

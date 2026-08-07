@@ -32,6 +32,8 @@ describe('NotificationDispatcher', () => {
     lastError: null,
     availableAt: new Date(),
     deliveredAt: null,
+    leaseOwner: null,
+    leaseExpiresAt: null,
     createdAt: new Date(),
   });
 
