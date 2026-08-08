@@ -1,17 +1,20 @@
-import { Module, forwardRef } from '@nestjs/common';
-import { ConfigModule } from '@nestjs/config';
-import { ScheduleModule } from '@nestjs/schedule';
-import { TypeOrmModule } from '@nestjs/typeorm';
-import { OutboxEvent } from './entities/outbox-event.entity';
-import { AuditLogEntry } from './entities/audit-log.entity';
-import { OutboxService } from './outbox.service';
-import { AuditLogService } from './audit-log.service';
-import { ReconciliationService } from './reconciliation.service';
-import { ReconciliationScheduler } from './reconciliation.scheduler';
-import { Payment } from '../payment/entities/payment.entity';
-import { Deal } from '../deal/entities/deal.entity';
-import { EscrowModule } from '../escrow/escrow.module';
-import { DealModule } from '../deal/deal.module';
+import { Module, forwardRef } from "@nestjs/common";
+import { ConfigModule } from "@nestjs/config";
+import { ScheduleModule } from "@nestjs/schedule";
+import { TypeOrmModule } from "@nestjs/typeorm";
+import { OutboxEvent } from "./entities/outbox-event.entity";
+import { AuditLogEntry } from "./entities/audit-log.entity";
+import { MoneyLedgerEntry } from "./entities/money-ledger-entry.entity";
+import { OutboxService } from "./outbox.service";
+import { AuditLogService } from "./audit-log.service";
+import { MoneyLedgerService } from "./money-ledger.service";
+import { ReconciliationService } from "./reconciliation.service";
+import { ReconciliationScheduler } from "./reconciliation.scheduler";
+import { Payment } from "../payment/entities/payment.entity";
+import { Deal } from "../deal/entities/deal.entity";
+import { EscrowModule } from "../escrow/escrow.module";
+import { DealModule } from "../deal/deal.module";
+import { PaymentModule } from "../payment/payment.module";
 
 /**
  * Operations module — durable side-effects + crash-recovery primitives:
@@ -35,18 +38,26 @@ import { DealModule } from '../deal/deal.module';
     TypeOrmModule.forFeature([
       OutboxEvent,
       AuditLogEntry,
+      MoneyLedgerEntry,
       Payment,
       Deal,
     ]),
     EscrowModule,
     forwardRef(() => DealModule),
+    forwardRef(() => PaymentModule),
   ],
   providers: [
     OutboxService,
     AuditLogService,
+    MoneyLedgerService,
     ReconciliationService,
     ReconciliationScheduler,
   ],
-  exports: [OutboxService, AuditLogService, ReconciliationService],
+  exports: [
+    OutboxService,
+    AuditLogService,
+    MoneyLedgerService,
+    ReconciliationService,
+  ],
 })
 export class OpsModule {}

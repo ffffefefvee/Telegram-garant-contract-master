@@ -1,4 +1,4 @@
-import { createHash } from 'crypto';
+import { createHash } from "crypto";
 import {
   Injectable,
   Logger,
@@ -8,15 +8,15 @@ import {
   BadRequestException,
   Inject,
   forwardRef,
-} from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
-import { InjectRepository } from '@nestjs/typeorm';
-import { DataSource, Repository, Brackets } from 'typeorm';
-import { Deal } from './entities/deal.entity';
-import { DealMessage, MessageType } from './entities/deal-message.entity';
-import { DealAttachment } from './entities/deal-attachment.entity';
-import { DealInvite, InviteStatus } from './entities/deal-invite.entity';
-import { DealEvent } from './entities/deal-event.entity';
+} from "@nestjs/common";
+import { ConfigService } from "@nestjs/config";
+import { InjectRepository } from "@nestjs/typeorm";
+import { DataSource, Repository, Brackets } from "typeorm";
+import { Deal } from "./entities/deal.entity";
+import { DealMessage, MessageType } from "./entities/deal-message.entity";
+import { DealAttachment } from "./entities/deal-attachment.entity";
+import { DealInvite, InviteStatus } from "./entities/deal-invite.entity";
+import { DealEvent } from "./entities/deal-event.entity";
 import {
   DealType,
   DealStatus,
@@ -26,15 +26,15 @@ import {
   Currency,
   DealSubcategory,
   FeeModel,
-} from './enums/deal.enum';
-import { DealStateMachine } from './fsm/deal-state-machine';
-import { User, UserType } from '../user/entities/user.entity';
-import { UserService } from '../user/user.service';
-import { EscrowService } from '../escrow/escrow.service';
-import { OutboxService } from '../ops/outbox.service';
-import { ReputationService } from '../review/reputation.service';
-import { KycLimitsService } from '../user/kyc-limits.service';
-import { DisputeService } from '../arbitration/dispute.service';
+} from "./enums/deal.enum";
+import { DealStateMachine } from "./fsm/deal-state-machine";
+import { User, UserType } from "../user/entities/user.entity";
+import { UserService } from "../user/user.service";
+import { EscrowService } from "../escrow/escrow.service";
+import { OutboxService } from "../ops/outbox.service";
+import { ReputationService } from "../review/reputation.service";
+import { KycLimitsService } from "../user/kyc-limits.service";
+import { DisputeService } from "../arbitration/dispute.service";
 
 /** D6: minimum deal amount in RUB. */
 export const DEAL_MIN_AMOUNT_RUB = 300;
@@ -90,8 +90,34 @@ export interface DealFilterDto {
   search?: string;
   limit?: number;
   offset?: number;
-  sortBy?: 'createdAt' | 'updatedAt' | 'amount' | 'status';
-  sortOrder?: 'ASC' | 'DESC';
+  sortBy?: "createdAt" | "updatedAt" | "amount" | "status";
+  sortOrder?: "ASC" | "DESC";
+}
+
+const DEAL_LIST_SORT_COLUMNS = {
+  createdAt: "deal.createdAt",
+  updatedAt: "deal.updatedAt",
+  amount: "deal.amount",
+  status: "deal.status",
+} as const;
+
+type DealListSortBy = keyof typeof DEAL_LIST_SORT_COLUMNS;
+
+function normalizeListNumber(
+  value: unknown,
+  fallback: number,
+  max: number,
+): number {
+  const parsed = Number(value);
+  if (!Number.isInteger(parsed) || parsed < 0) {
+    return fallback;
+  }
+  return Math.min(parsed, max);
+}
+
+function normalizeListValues<T>(value: T | T[] | undefined): T[] | undefined {
+  if (value == null) return undefined;
+  return Array.isArray(value) ? value : [value];
 }
 
 @Injectable()
@@ -134,7 +160,7 @@ export class DealService {
     // D6: minimum amount validation
     const currency = data.currency || Currency.RUB;
     if (data.amount <= 0) {
-      throw new BadRequestException('Amount must be greater than 0');
+      throw new BadRequestException("Amount must be greater than 0");
     }
     if (currency === Currency.RUB && data.amount < DEAL_MIN_AMOUNT_RUB) {
       throw new BadRequestException(
@@ -144,12 +170,12 @@ export class DealService {
     // D3: subcategory required for digital deals
     if (data.type === DealType.DIGITAL && !data.subcategory) {
       throw new BadRequestException(
-        'subcategory is required for DIGITAL deals (D3)',
+        "subcategory is required for DIGITAL deals (D3)",
       );
     }
 
     const buyerIdForKyc =
-      typeof buyerOrId === 'string' ? buyerOrId : buyerOrId.id;
+      typeof buyerOrId === "string" ? buyerOrId : buyerOrId.id;
     await this.kycLimits.assertCanCreateDeal(buyerIdForKyc, data.amount);
 
     // Buyer can be passed as a full User entity (legacy callers) or as
@@ -157,11 +183,11 @@ export class DealService {
     // payload from middleware, which only has the id). Always resolve
     // to a hydrated User so we can read walletAddress, etc.
     const buyer: User =
-      typeof buyerOrId === 'string'
+      typeof buyerOrId === "string"
         ? await this.userService.findById(buyerOrId)
         : buyerOrId;
     if (!buyer) {
-      throw new BadRequestException('Buyer not found');
+      throw new BadRequestException("Buyer not found");
     }
 
     // Проверка продавца если указан
@@ -174,7 +200,7 @@ export class DealService {
     const dealNumber = await this.generateDealNumber();
 
     // Расчёт комиссии
-    const commissionRate = this.stateMachine['config']?.commissionRate || 0.05;
+    const commissionRate = this.stateMachine["config"]?.commissionRate || 0.05;
     const commissionAmount = data.amount * commissionRate;
 
     const deal = this.dealRepository.create({
@@ -195,9 +221,9 @@ export class DealService {
       const row = await manager.save(deal);
       if (seller) {
         await this.outbox.enqueue({
-          aggregateType: 'deal',
+          aggregateType: "deal",
           aggregateId: row.id,
-          eventType: 'deal.created',
+          eventType: "deal.created",
           payload: {
             dealId: row.id,
             dealTitle: row.title ?? `Deal ${dealNumber}`,
@@ -236,7 +262,10 @@ export class DealService {
           `Escrow deployed: ${escrowResult.escrowAddress} for deal ${savedDeal.id}`,
         );
       } catch (error) {
-        this.logger.error(`Escrow deployment failed for deal ${savedDeal.id}`, error);
+        this.logger.error(
+          `Escrow deployment failed for deal ${savedDeal.id}`,
+          error,
+        );
         // Don't fail the whole deal — the user can re-trigger deployment later.
       }
     } else {
@@ -256,11 +285,11 @@ export class DealService {
   async findById(id: string, relations: string[] = []): Promise<Deal> {
     const deal = await this.dealRepository.findOne({
       where: { id },
-      relations: relations.length > 0 ? relations : ['buyer', 'seller'],
+      relations: relations.length > 0 ? relations : ["buyer", "seller"],
     });
 
     if (!deal) {
-      throw new NotFoundException('Deal not found');
+      throw new NotFoundException("Deal not found");
     }
 
     return deal;
@@ -304,7 +333,7 @@ export class DealService {
       userId,
     );
     if (!assigned) {
-      throw new ForbiddenException('Access denied');
+      throw new ForbiddenException("Access denied");
     }
   }
 
@@ -314,11 +343,11 @@ export class DealService {
   async findByNumber(number: string): Promise<Deal> {
     const deal = await this.dealRepository.findOne({
       where: { dealNumber: number },
-      relations: ['buyer', 'seller'],
+      relations: ["buyer", "seller"],
     });
 
     if (!deal) {
-      throw new NotFoundException('Deal not found');
+      throw new NotFoundException("Deal not found");
     }
 
     return deal;
@@ -330,11 +359,11 @@ export class DealService {
   async findByPublicSlug(slug: string): Promise<Deal> {
     const deal = await this.dealRepository.findOne({
       where: { publicSlug: slug, isPublic: true },
-      relations: ['buyer', 'seller'],
+      relations: ["buyer", "seller"],
     });
 
     if (!deal) {
-      throw new NotFoundException('Deal not found');
+      throw new NotFoundException("Deal not found");
     }
 
     return deal;
@@ -343,61 +372,82 @@ export class DealService {
   /**
    * Фильтрация сделок
    */
-  async findMany(filter: DealFilterDto, userId?: string): Promise<{
+  async findMany(
+    filter: DealFilterDto,
+    userId: string,
+  ): Promise<{
     deals: Deal[];
     total: number;
   }> {
-    const query = this.dealRepository.createQueryBuilder('deal');
+    const query = this.dealRepository.createQueryBuilder("deal");
 
-    query.leftJoinAndSelect('deal.buyer', 'buyer');
-    query.leftJoinAndSelect('deal.seller', 'seller');
+    query.leftJoinAndSelect("deal.buyer", "buyer");
+    query.leftJoinAndSelect("deal.seller", "seller");
 
-    // Фильтры
-    if (filter.status && filter.status.length > 0) {
-      query.andWhere('deal.status IN (:...statuses)', {
-        statuses: filter.status,
+    // Every authenticated list is scoped to the caller. Cross-account
+    // reporting belongs in a dedicated, audited admin query; accepting a
+    // request-supplied userId here would reintroduce BOLA/IDOR.
+    if (filter.userId && filter.userId !== userId) {
+      throw new ForbiddenException("Cannot list another user's deals");
+    }
+    query.andWhere(
+      new Brackets((qb) => {
+        qb.where("deal.buyerId = :currentUserId", {
+          currentUserId: userId,
+        }).orWhere("deal.sellerId = :currentUserId", { currentUserId: userId });
+      }),
+    );
+
+    const statuses = normalizeListValues(filter.status);
+    if (statuses && statuses.length > 0) {
+      query.andWhere("deal.status IN (:...statuses)", {
+        statuses,
       });
     }
 
-    if (filter.type && filter.type.length > 0) {
-      query.andWhere('deal.type IN (:...types)', {
-        types: filter.type,
+    const types = normalizeListValues(filter.type);
+    if (types && types.length > 0) {
+      query.andWhere("deal.type IN (:...types)", {
+        types,
       });
     }
 
-    if (filter.userId) {
-      query.andWhere(
-        new Brackets((qb) => {
-          qb.where('deal.buyerId = :userId', { userId }).orWhere(
-            'deal.sellerId = :userId',
-            { userId },
-          );
-        }),
-      );
+    if (filter.side === DealSide.BUYER) {
+      query.andWhere("deal.buyerId = :currentUserId", {
+        currentUserId: userId,
+      });
+    } else if (filter.side === DealSide.SELLER) {
+      query.andWhere("deal.sellerId = :currentUserId", {
+        currentUserId: userId,
+      });
     }
 
     if (filter.search) {
       query.andWhere(
         new Brackets((qb) => {
-          qb.where('deal.title ILIKE :search', { search: `%${filter.search}%` })
-            .orWhere('deal.description ILIKE :search', {
+          qb.where("deal.title ILIKE :search", { search: `%${filter.search}%` })
+            .orWhere("deal.description ILIKE :search", {
               search: `%${filter.search}%`,
             })
-            .orWhere('deal.dealNumber ILIKE :search', {
+            .orWhere("deal.dealNumber ILIKE :search", {
               search: `%${filter.search}%`,
             });
         }),
       );
     }
 
-    // Сортировка
-    const sortBy = filter.sortBy || 'createdAt';
-    const sortOrder = filter.sortOrder || 'DESC';
-    query.orderBy(`deal.${sortBy}`, sortOrder);
+    const sortBy = filter.sortBy || "createdAt";
+    if (!(sortBy in DEAL_LIST_SORT_COLUMNS)) {
+      throw new BadRequestException("Unsupported sort field");
+    }
+    const sortOrder = filter.sortOrder || "DESC";
+    if (sortOrder !== "ASC" && sortOrder !== "DESC") {
+      throw new BadRequestException("Unsupported sort direction");
+    }
+    query.orderBy(DEAL_LIST_SORT_COLUMNS[sortBy as DealListSortBy], sortOrder);
 
-    // Пагинация
-    const limit = filter.limit || 20;
-    const offset = filter.offset || 0;
+    const limit = normalizeListNumber(filter.limit, 20, 100) || 20;
+    const offset = normalizeListNumber(filter.offset, 0, 10_000);
     query.skip(offset).take(limit);
 
     const [deals, total] = await query.getManyAndCount();
@@ -413,14 +463,14 @@ export class DealService {
 
     // Проверка прав
     if (deal.buyerId !== userId && deal.sellerId !== userId) {
-      throw new ForbiddenException('Access denied');
+      throw new ForbiddenException("Access denied");
     }
 
     // Можно редактировать только черновик или ожидание принятия
     if (
       ![DealStatus.DRAFT, DealStatus.PENDING_ACCEPTANCE].includes(deal.status)
     ) {
-      throw new ConflictException('Cannot edit deal in current status');
+      throw new ConflictException("Cannot edit deal in current status");
     }
 
     Object.assign(deal, data);
@@ -437,14 +487,18 @@ export class DealService {
 
     // Проверка прав
     if (deal.buyerId !== userId && deal.sellerId !== userId) {
-      throw new ForbiddenException('Access denied');
+      throw new ForbiddenException("Access denied");
     }
 
     if (!deal.canBeCancelled) {
-      throw new ConflictException('Cannot cancel deal in current status');
+      throw new ConflictException("Cannot cancel deal in current status");
     }
 
-    const cancelledDeal = await this.stateMachine.transition(deal, DealStatus.CANCELLED, userId);
+    const cancelledDeal = await this.stateMachine.transition(
+      deal,
+      DealStatus.CANCELLED,
+      userId,
+    );
     cancelledDeal.cancelReason = reason || null;
     cancelledDeal.cancelledAt = new Date();
 
@@ -459,9 +513,9 @@ export class DealService {
       deal.buyerId === userId ? deal.sellerId : deal.buyerId;
     if (counterpartyId) {
       await this.outbox.enqueue({
-        aggregateType: 'deal',
+        aggregateType: "deal",
         aggregateId: deal.id,
-        eventType: 'deal.cancelled',
+        eventType: "deal.cancelled",
         payload: {
           dealId: deal.id,
           dealTitle: deal.title ?? `Deal ${deal.id}`,
@@ -482,11 +536,11 @@ export class DealService {
     const deal = await this.findById(id);
 
     if (deal.sellerId !== sellerId) {
-      throw new ForbiddenException('Only seller can accept the deal');
+      throw new ForbiddenException("Only seller can accept the deal");
     }
 
     if (deal.status !== DealStatus.PENDING_ACCEPTANCE) {
-      throw new ConflictException('Deal cannot be accepted in current status');
+      throw new ConflictException("Deal cannot be accepted in current status");
     }
 
     const updated = await this.stateMachine.transition(
@@ -504,14 +558,18 @@ export class DealService {
     const deal = await this.findById(id);
 
     if (deal.sellerId !== sellerId) {
-      throw new ForbiddenException('Only seller can reject the deal');
+      throw new ForbiddenException("Only seller can reject the deal");
     }
 
     if (deal.status !== DealStatus.PENDING_ACCEPTANCE) {
-      throw new ConflictException('Deal cannot be rejected in current status');
+      throw new ConflictException("Deal cannot be rejected in current status");
     }
 
-    const updated = await this.stateMachine.transition(deal, DealStatus.CANCELLED, sellerId);
+    const updated = await this.stateMachine.transition(
+      deal,
+      DealStatus.CANCELLED,
+      sellerId,
+    );
     updated.cancelReason = reason ?? null;
     updated.cancelledAt = new Date();
     return this.dealRepository.save(updated);
@@ -527,12 +585,15 @@ export class DealService {
   ): Promise<Deal> {
     const deal = await this.findById(id);
 
-    if (deal.status === DealStatus.IN_PROGRESS || deal.status === DealStatus.COMPLETED) {
+    if (
+      deal.status === DealStatus.IN_PROGRESS ||
+      deal.status === DealStatus.COMPLETED
+    ) {
       return deal;
     }
 
     if (deal.status !== DealStatus.PENDING_PAYMENT) {
-      throw new ConflictException('Deal is not pending payment');
+      throw new ConflictException("Deal is not pending payment");
     }
 
     const updated = await this.stateMachine.transition(
@@ -549,9 +610,9 @@ export class DealService {
     // Нотификация продавцу — деньги в эскроу, можно отгружать
     if (deal.sellerId) {
       await this.outbox.enqueue({
-        aggregateType: 'deal',
+        aggregateType: "deal",
         aggregateId: deal.id,
-        eventType: 'deal.payment_received',
+        eventType: "deal.payment_received",
         payload: {
           dealId: deal.id,
           dealTitle: deal.title ?? `Deal ${deal.id}`,
@@ -571,10 +632,10 @@ export class DealService {
   async markShipped(id: string, sellerId: string): Promise<Deal> {
     const deal = await this.findById(id);
     if (deal.sellerId !== sellerId) {
-      throw new ForbiddenException('Only seller can mark shipped');
+      throw new ForbiddenException("Only seller can mark shipped");
     }
     if (deal.status !== DealStatus.IN_PROGRESS) {
-      throw new ConflictException('Deal is not in progress');
+      throw new ConflictException("Deal is not in progress");
     }
     const updated = await this.stateMachine.transition(
       deal,
@@ -585,9 +646,9 @@ export class DealService {
 
     if (deal.buyerId) {
       await this.outbox.enqueue({
-        aggregateType: 'deal',
+        aggregateType: "deal",
         aggregateId: deal.id,
-        eventType: 'deal.confirmation_requested',
+        eventType: "deal.confirmation_requested",
         payload: {
           dealId: deal.id,
           dealTitle: deal.title ?? `Deal ${deal.dealNumber ?? deal.id}`,
@@ -608,11 +669,11 @@ export class DealService {
     const deal = await this.findById(id);
 
     if (deal.buyerId !== buyerId) {
-      throw new ForbiddenException('Only buyer can confirm receipt');
+      throw new ForbiddenException("Only buyer can confirm receipt");
     }
 
     if (!deal.canBeConfirmed) {
-      throw new ConflictException('Deal cannot be confirmed in current status');
+      throw new ConflictException("Deal cannot be confirmed in current status");
     }
 
     const updated = await this.stateMachine.transition(
@@ -622,14 +683,14 @@ export class DealService {
     );
 
     if (deal.sellerId) {
-      await this.userService.incrementDealStats(deal.sellerId, 'completed');
+      await this.userService.incrementDealStats(deal.sellerId, "completed");
       await this.reputationService.onDealCompleted(deal.sellerId, deal.id);
       await this.reputationService.onDealCompleted(buyerId, deal.id);
     }
 
     const summary = await this.escrowService.getSummary(deal.id);
     const needsOnChainRelease =
-      this.escrowService.isEnabled() && summary?.status === 'funded';
+      this.escrowService.isEnabled() && summary?.status === "funded";
 
     if (needsOnChainRelease) {
       updated.metadata = {
@@ -643,9 +704,9 @@ export class DealService {
 
     if (needsOnChainRelease && deal.buyerId) {
       await this.outbox.enqueue({
-        aggregateType: 'deal',
+        aggregateType: "deal",
         aggregateId: deal.id,
-        eventType: 'deal.release_required',
+        eventType: "deal.release_required",
         payload: {
           dealId: deal.id,
           dealTitle: deal.title ?? `Deal ${deal.dealNumber ?? deal.id}`,
@@ -657,9 +718,9 @@ export class DealService {
       });
     } else if (deal.sellerId) {
       await this.outbox.enqueue({
-        aggregateType: 'deal',
+        aggregateType: "deal",
         aggregateId: deal.id,
-        eventType: 'deal.completed',
+        eventType: "deal.completed",
         payload: {
           dealId: deal.id,
           dealTitle: deal.title ?? `Deal ${deal.id}`,
@@ -691,13 +752,13 @@ export class DealService {
   }> {
     const deal = await this.findById(dealId);
     if (deal.buyerId !== userId && deal.sellerId !== userId) {
-      throw new ForbiddenException('Access denied');
+      throw new ForbiddenException("Access denied");
     }
 
     const meta = (deal.metadata ?? {}) as Record<string, unknown>;
     const summary = await this.escrowService.getSummary(dealId);
     const chainId = Number.parseInt(
-      this.configService.get<string>('BLOCKCHAIN_CHAIN_ID', '80002'),
+      this.configService.get<string>("BLOCKCHAIN_CHAIN_ID", "80002"),
       10,
     );
 
@@ -709,7 +770,7 @@ export class DealService {
         deal.escrowAddress ??
         summary?.address ??
         null,
-      status: summary?.status ?? 'unknown',
+      status: summary?.status ?? "unknown",
       releaseRequired: Boolean(meta.escrowReleaseRequired),
       releaseTxHash: (meta.escrowReleaseTxHash as string) ?? null,
       buyerWallet: deal.buyer?.walletAddress ?? null,
@@ -728,18 +789,20 @@ export class DealService {
     const deal = await this.findById(dealId);
 
     if (deal.buyerId !== buyerId) {
-      throw new ForbiddenException('Only buyer can confirm escrow release');
+      throw new ForbiddenException("Only buyer can confirm escrow release");
     }
 
     const meta = { ...(deal.metadata ?? {}) } as Record<string, unknown>;
     if (!meta.escrowReleaseRequired) {
-      throw new BadRequestException('Escrow release is not required for this deal');
+      throw new BadRequestException(
+        "Escrow release is not required for this deal",
+      );
     }
 
     const summary = await this.escrowService.getSummary(dealId);
-    if (summary?.status !== 'released') {
+    if (summary?.status !== "released") {
       throw new ConflictException(
-        'Escrow is not released on-chain yet. Sign release() in your wallet first.',
+        "Escrow is not released on-chain yet. Sign release() in your wallet first.",
       );
     }
 
@@ -752,9 +815,9 @@ export class DealService {
 
     if (deal.sellerId) {
       await this.outbox.enqueue({
-        aggregateType: 'deal',
+        aggregateType: "deal",
         aggregateId: deal.id,
-        eventType: 'deal.completed',
+        eventType: "deal.completed",
         payload: {
           dealId: deal.id,
           dealTitle: deal.title ?? `Deal ${deal.dealNumber ?? deal.id}`,
@@ -776,12 +839,12 @@ export class DealService {
     const deal = await this.findById(id);
 
     if (!deal.canBeDisputed) {
-      throw new ConflictException('Cannot open dispute in current status');
+      throw new ConflictException("Cannot open dispute in current status");
     }
 
     // Проверка прав
     if (deal.buyerId !== userId && deal.sellerId !== userId) {
-      throw new ForbiddenException('Access denied');
+      throw new ForbiddenException("Access denied");
     }
 
     const messages = await this.getMessages(deal.id, 500, 0);
@@ -791,9 +854,9 @@ export class DealService {
       senderId: m.senderId,
       content: m.content,
     }));
-    const chatSnapshotHash = createHash('sha256')
+    const chatSnapshotHash = createHash("sha256")
       .update(JSON.stringify(snapshot))
-      .digest('hex');
+      .digest("hex");
 
     // Materialise the Dispute aggregate so downstream flows (evidence upload,
     // arbitrator assignment) have a real disputeId. Idempotent: reuses the
@@ -822,20 +885,19 @@ export class DealService {
     );
 
     // Обновляем статистику
-    await this.userService.incrementDealStats(deal.buyerId, 'disputed');
+    await this.userService.incrementDealStats(deal.buyerId, "disputed");
     if (deal.sellerId) {
-      await this.userService.incrementDealStats(deal.sellerId, 'disputed');
+      await this.userService.incrementDealStats(deal.sellerId, "disputed");
     }
 
     const saved = await this.dealRepository.save(deal);
 
-    const opponentId =
-      deal.buyerId === userId ? deal.sellerId : deal.buyerId;
+    const opponentId = deal.buyerId === userId ? deal.sellerId : deal.buyerId;
     if (opponentId) {
       await this.outbox.enqueue({
-        aggregateType: 'deal',
+        aggregateType: "deal",
         aggregateId: deal.id,
-        eventType: 'dispute.opened',
+        eventType: "dispute.opened",
         payload: {
           dealId: deal.id,
           disputeId: dispute.id,
@@ -856,11 +918,8 @@ export class DealService {
     const deal = await this.findById(data.dealId);
 
     // Проверка прав
-    if (
-      deal.buyerId !== data.senderId &&
-      deal.sellerId !== data.senderId
-    ) {
-      throw new ForbiddenException('Access denied');
+    if (deal.buyerId !== data.senderId && deal.sellerId !== data.senderId) {
+      throw new ForbiddenException("Access denied");
     }
 
     const message = this.messageRepository.create({
@@ -878,7 +937,7 @@ export class DealService {
       type: DealEventType.MESSAGE_SENT,
       dealId: deal.id,
       userId: data.senderId,
-      description: 'Сообщение отправлено',
+      description: "Сообщение отправлено",
     });
 
     return savedMessage;
@@ -900,10 +959,10 @@ export class DealService {
     }
     return this.messageRepository.find({
       where: { dealId, isDeleted: false },
-      order: { createdAt: 'ASC' },
+      order: { createdAt: "ASC" },
       skip: offset,
       take: limit,
-      relations: ['sender'],
+      relations: ["sender"],
     });
   }
 
@@ -944,15 +1003,15 @@ export class DealService {
 
     // Проверка прав
     if (deal.buyerId !== creatorId) {
-      throw new ForbiddenException('Only buyer can create invites');
+      throw new ForbiddenException("Only buyer can create invites");
     }
     if (deal.sellerId || deal.status !== DealStatus.DRAFT) {
-      throw new ConflictException('Deal already accepted');
+      throw new ConflictException("Deal already accepted");
     }
 
     const existingInvite = await this.inviteRepository.findOne({
       where: { dealId: deal.id, status: InviteStatus.PENDING },
-      order: { createdAt: 'DESC' },
+      order: { createdAt: "DESC" },
     });
     if (existingInvite) {
       if (!existingInvite.isExpired) {
@@ -964,7 +1023,7 @@ export class DealService {
 
     const inviteToken = DealInvite.generateToken();
     const inviteUrl = DealInvite.generateInviteUrl(
-      process.env.APP_URL || 'https://t.me/garant_bot',
+      process.env.APP_URL || "https://t.me/garant_bot",
       inviteToken,
     );
 
@@ -994,92 +1053,100 @@ export class DealService {
    * Принятие приглашения
    */
   async acceptInvite(token: string, userId: string): Promise<DealInvite> {
-    const { savedInvite, deal } = await this.dataSource.transaction(async (manager) => {
-      const inviteRepo = manager.getRepository(DealInvite);
-      const dealRepo = manager.getRepository(Deal);
+    const { savedInvite, deal } = await this.dataSource.transaction(
+      async (manager) => {
+        const inviteRepo = manager.getRepository(DealInvite);
+        const dealRepo = manager.getRepository(Deal);
 
-      const invite = await inviteRepo.findOne({
-        where: { inviteToken: token },
-        lock: { mode: 'pessimistic_write' },
-      });
+        const invite = await inviteRepo.findOne({
+          where: { inviteToken: token },
+          lock: { mode: "pessimistic_write" },
+        });
 
-      if (!invite) {
-        throw new NotFoundException('Invite not found');
-      }
+        if (!invite) {
+          throw new NotFoundException("Invite not found");
+        }
 
-      if (!invite.isValid) {
-        throw new ConflictException('Invite is not valid');
-      }
+        if (!invite.isValid) {
+          throw new ConflictException("Invite is not valid");
+        }
 
-      const deal = await dealRepo.findOne({
-        where: { id: invite.dealId },
-        lock: { mode: 'pessimistic_write' },
-      });
-      if (!deal) {
-        throw new NotFoundException('Deal not found');
-      }
+        const deal = await dealRepo.findOne({
+          where: { id: invite.dealId },
+          lock: { mode: "pessimistic_write" },
+        });
+        if (!deal) {
+          throw new NotFoundException("Deal not found");
+        }
 
-      if (deal.buyerId === userId) {
-        throw new ForbiddenException('Buyer cannot accept own invitation');
-      }
-      if (deal.sellerId && deal.sellerId !== userId) {
-        throw new ConflictException('Deal already accepted');
-      }
-      if (deal.status !== DealStatus.DRAFT && deal.status !== DealStatus.PENDING_PAYMENT) {
-        throw new ConflictException('Invite is not valid');
-      }
-      if (deal.status === DealStatus.PENDING_PAYMENT && deal.sellerId === userId) {
-        return { savedInvite: invite, deal };
-      }
+        if (deal.buyerId === userId) {
+          throw new ForbiddenException("Buyer cannot accept own invitation");
+        }
+        if (deal.sellerId && deal.sellerId !== userId) {
+          throw new ConflictException("Deal already accepted");
+        }
+        if (
+          deal.status !== DealStatus.DRAFT &&
+          deal.status !== DealStatus.PENDING_PAYMENT
+        ) {
+          throw new ConflictException("Invite is not valid");
+        }
+        if (
+          deal.status === DealStatus.PENDING_PAYMENT &&
+          deal.sellerId === userId
+        ) {
+          return { savedInvite: invite, deal };
+        }
 
-      const acceptedAt = new Date();
-      const inviteCas = await inviteRepo
-        .createQueryBuilder()
-        .update(DealInvite)
-        .set({
-          status: InviteStatus.ACCEPTED,
-          invitedUserId: userId,
-          acceptedAt,
-        })
-        .where('id = :inviteId', { inviteId: invite.id })
-        .andWhere('status = :status', { status: InviteStatus.PENDING })
-        .execute();
-      if (inviteCas.affected !== 1) {
-        throw new ConflictException('Invite is not valid');
-      }
+        const acceptedAt = new Date();
+        const inviteCas = await inviteRepo
+          .createQueryBuilder()
+          .update(DealInvite)
+          .set({
+            status: InviteStatus.ACCEPTED,
+            invitedUserId: userId,
+            acceptedAt,
+          })
+          .where("id = :inviteId", { inviteId: invite.id })
+          .andWhere("status = :status", { status: InviteStatus.PENDING })
+          .execute();
+        if (inviteCas.affected !== 1) {
+          throw new ConflictException("Invite is not valid");
+        }
 
-      const dealCas = await dealRepo
-        .createQueryBuilder()
-        .update(Deal)
-        .set({
-          sellerId: userId,
-          status: DealStatus.PENDING_PAYMENT,
-          acceptedAt,
-        })
-        .where('id = :dealId', { dealId: deal.id })
-        .andWhere('status = :status', { status: DealStatus.DRAFT })
-        .andWhere('seller_id IS NULL')
-        .execute();
-      if (dealCas.affected !== 1) {
-        throw new ConflictException('Deal already accepted');
-      }
+        const dealCas = await dealRepo
+          .createQueryBuilder()
+          .update(Deal)
+          .set({
+            sellerId: userId,
+            status: DealStatus.PENDING_PAYMENT,
+            acceptedAt,
+          })
+          .where("id = :dealId", { dealId: deal.id })
+          .andWhere("status = :status", { status: DealStatus.DRAFT })
+          .andWhere("seller_id IS NULL")
+          .execute();
+        if (dealCas.affected !== 1) {
+          throw new ConflictException("Deal already accepted");
+        }
 
-      invite.status = InviteStatus.ACCEPTED;
-      invite.invitedUserId = userId;
-      invite.acceptedAt = acceptedAt;
-      const savedInvite = invite;
+        invite.status = InviteStatus.ACCEPTED;
+        invite.invitedUserId = userId;
+        invite.acceptedAt = acceptedAt;
+        const savedInvite = invite;
 
-      await inviteRepo
-        .createQueryBuilder()
-        .update(DealInvite)
-        .set({ status: InviteStatus.CANCELLED })
-        .where('deal_id = :dealId', { dealId: deal.id })
-        .andWhere('id != :inviteId', { inviteId: savedInvite.id })
-        .andWhere('status = :status', { status: InviteStatus.PENDING })
-        .execute();
+        await inviteRepo
+          .createQueryBuilder()
+          .update(DealInvite)
+          .set({ status: InviteStatus.CANCELLED })
+          .where("deal_id = :dealId", { dealId: deal.id })
+          .andWhere("id != :inviteId", { inviteId: savedInvite.id })
+          .andWhere("status = :status", { status: InviteStatus.PENDING })
+          .execute();
 
-      return { savedInvite, deal };
-    });
+        return { savedInvite, deal };
+      },
+    );
 
     // Создаём событие
     await this.createEvent(
@@ -1089,9 +1156,9 @@ export class DealService {
     // Нотификация покупателю — контрагент принял приглашение
     if (deal.buyerId) {
       await this.outbox.enqueue({
-        aggregateType: 'deal',
+        aggregateType: "deal",
         aggregateId: deal.id,
-        eventType: 'invite.accepted',
+        eventType: "invite.accepted",
         payload: {
           dealId: deal.id,
           dealTitle: deal.title ?? `Deal ${deal.id}`,
@@ -1111,11 +1178,11 @@ export class DealService {
   async getInviteByToken(token: string): Promise<DealInvite> {
     const invite = await this.inviteRepository.findOne({
       where: { inviteToken: token },
-      relations: ['deal', 'deal.buyer', 'invitedUser'],
+      relations: ["deal", "deal.buyer", "invitedUser"],
     });
 
     if (!invite) {
-      throw new NotFoundException('Invite not found');
+      throw new NotFoundException("Invite not found");
     }
 
     // Увеличиваем счётчик просмотров
@@ -1137,14 +1204,14 @@ export class DealService {
     asSeller: number;
   }> {
     const query = this.dealRepository
-      .createQueryBuilder('deal')
-      .where('deal.buyerId = :userId OR deal.sellerId = :userId', { userId });
+      .createQueryBuilder("deal")
+      .where("deal.buyerId = :userId OR deal.sellerId = :userId", { userId });
 
     const totalDeals = await query.getCount();
 
     const activeDeals = await query
       .clone()
-      .andWhere('deal.status IN (:...statuses)', {
+      .andWhere("deal.status IN (:...statuses)", {
         statuses: [
           DealStatus.DRAFT,
           DealStatus.PENDING_ACCEPTANCE,
@@ -1157,23 +1224,23 @@ export class DealService {
 
     const completedDeals = await query
       .clone()
-      .andWhere('deal.status = :status', { status: DealStatus.COMPLETED })
+      .andWhere("deal.status = :status", { status: DealStatus.COMPLETED })
       .getCount();
 
     const totalAmountResult = await query
       .clone()
-      .select('SUM(deal.amount)', 'total')
-      .andWhere('deal.status = :status', { status: DealStatus.COMPLETED })
+      .select("SUM(deal.amount)", "total")
+      .andWhere("deal.status = :status", { status: DealStatus.COMPLETED })
       .getRawOne();
 
     const asBuyer = await query
       .clone()
-      .andWhere('deal.buyerId = :userId', { userId })
+      .andWhere("deal.buyerId = :userId", { userId })
       .getCount();
 
     const asSeller = await query
       .clone()
-      .andWhere('deal.sellerId = :userId', { userId })
+      .andWhere("deal.sellerId = :userId", { userId })
       .getCount();
 
     return {
@@ -1192,30 +1259,28 @@ export class DealService {
   private async generateDealNumber(): Promise<string> {
     const date = new Date();
     const year = date.getFullYear().toString().slice(-2);
-    const month = (date.getMonth() + 1).toString().padStart(2, '0');
+    const month = (date.getMonth() + 1).toString().padStart(2, "0");
 
     const lastDeal = await this.dealRepository.findOne({
       where: {
         dealNumber: `${year}${month}-%`,
       },
-      order: { dealNumber: 'DESC' },
+      order: { dealNumber: "DESC" },
     });
 
     let sequence = 1;
     if (lastDeal) {
-      const lastSequence = parseInt(lastDeal.dealNumber.split('-')[2], 10);
+      const lastSequence = parseInt(lastDeal.dealNumber.split("-")[2], 10);
       sequence = lastSequence + 1;
     }
 
-    return `${year}${month}-${sequence.toString().padStart(4, '0')}`;
+    return `${year}${month}-${sequence.toString().padStart(4, "0")}`;
   }
 
   /**
    * Создание события
    */
-  private async createEvent(
-    data: Partial<DealEvent>,
-  ): Promise<DealEvent> {
+  private async createEvent(data: Partial<DealEvent>): Promise<DealEvent> {
     const event = this.eventRepository.create(data);
     return this.eventRepository.save(event);
   }
@@ -1235,9 +1300,9 @@ export class DealService {
     }
     return this.eventRepository.find({
       where: { dealId },
-      order: { createdAt: 'DESC' },
+      order: { createdAt: "DESC" },
       take: limit,
-      relations: ['user'],
+      relations: ["user"],
     });
   }
 
@@ -1246,19 +1311,20 @@ export class DealService {
     limit: number = 20,
     filter?: { status?: string; type?: string },
   ): Promise<{ deals: Deal[]; total: number }> {
-    const query = this.dealRepository.createQueryBuilder('deal')
-      .leftJoinAndSelect('deal.buyer', 'buyer')
-      .leftJoinAndSelect('deal.seller', 'seller');
+    const query = this.dealRepository
+      .createQueryBuilder("deal")
+      .leftJoinAndSelect("deal.buyer", "buyer")
+      .leftJoinAndSelect("deal.seller", "seller");
 
     if (filter?.status) {
-      query.andWhere('deal.status = :status', { status: filter.status });
+      query.andWhere("deal.status = :status", { status: filter.status });
     }
     if (filter?.type) {
-      query.andWhere('deal.type = :type', { type: filter.type });
+      query.andWhere("deal.type = :type", { type: filter.type });
     }
 
     const skip = (page - 1) * limit;
-    query.skip(skip).take(limit).orderBy('deal.createdAt', 'DESC');
+    query.skip(skip).take(limit).orderBy("deal.createdAt", "DESC");
 
     const [deals, total] = await query.getManyAndCount();
     return { deals, total };
@@ -1279,7 +1345,11 @@ export class DealService {
     return this.dealRepository.save(deal);
   }
 
-  async getDealMessages(dealId: string, limit: number = 50, offset: number = 0): Promise<DealMessage[]> {
+  async getDealMessages(
+    dealId: string,
+    limit: number = 50,
+    offset: number = 0,
+  ): Promise<DealMessage[]> {
     return this.getMessages(dealId, limit, offset);
   }
 }

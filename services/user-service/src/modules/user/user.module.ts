@@ -7,13 +7,14 @@ import { Deal } from '../deal/entities/deal.entity';
 import { UserService } from './user.service';
 import { UserController } from './user.controller';
 import { KycLimitsService } from './kyc-limits.service';
+import { RolesGuard } from '../admin/guards/roles.guard';
 
 @Module({
   imports: [
     TypeOrmModule.forFeature([User, UserSession, LanguagePreference, Deal]),
   ],
   controllers: [UserController],
-  providers: [UserService, KycLimitsService],
+  providers: [UserService, KycLimitsService, RolesGuard],
   exports: [UserService, KycLimitsService, TypeOrmModule],
 })
 export class UserModule {}

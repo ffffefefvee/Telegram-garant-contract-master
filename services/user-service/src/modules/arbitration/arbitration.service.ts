@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { ArbitrationDecision } from './entities/arbitration-decision.entity';
@@ -6,6 +6,8 @@ import { Appeal } from './entities/appeal.entity';
 import { ArbitrationChatMessage } from './entities/arbitration-chat-message.entity';
 import { DealTerms } from './entities/deal-terms.entity';
 import { Dispute } from './entities/dispute.entity';
+import { Deal } from '../deal/entities/deal.entity';
+import { UserType } from '../user/entities/user.entity';
 import {
   MakeDecisionDto,
   FileAppealDto,
@@ -37,6 +39,8 @@ export class ArbitrationService {
     private readonly dealTermsRepository: Repository<DealTerms>,
     @InjectRepository(Dispute)
     private readonly disputeRepository: Repository<Dispute>,
+    @InjectRepository(Deal)
+    private readonly dealRepository: Repository<Deal>,
     private readonly settingsService: ArbitrationSettingsService,
     private readonly disputeService: DisputeService,
     private readonly evidenceService: EvidenceService,
@@ -52,7 +56,10 @@ export class ArbitrationService {
   async createOrUpdateDealTerms(
     dealId: string,
     dto: DealTermsDto,
+    userId: string,
+    roles: UserType[] = [],
   ): Promise<DealTerms> {
+    await this.assertDealTermsAccess(dealId, userId, roles);
     let dealTerms = await this.dealTermsRepository.findOne({
       where: { dealId },
     });
@@ -76,7 +83,12 @@ export class ArbitrationService {
   /**
    * Получить условия сделки
    */
-  async getDealTerms(dealId: string): Promise<DealTerms | null> {
+  async getDealTerms(
+    dealId: string,
+    userId: string,
+    roles: UserType[] = [],
+  ): Promise<DealTerms | null> {
+    await this.assertDealTermsAccess(dealId, userId, roles);
     return this.dealTermsRepository.findOne({
       where: { dealId },
     });
@@ -182,6 +194,7 @@ export class ArbitrationService {
     decisionId: string,
     userId: string,
     _dto?: EnforceDecisionDto,
+    roles: UserType[] = [],
   ): Promise<ArbitrationDecision> {
     const decision = await this.decisionRepository.findOne({
       where: { id: decisionId },
@@ -189,7 +202,14 @@ export class ArbitrationService {
     });
 
     if (!decision) {
-      throw new Error('Decision not found');
+      throw new NotFoundException('Decision not found');
+    }
+
+    if (
+      decision.dispute.arbitratorId !== userId &&
+      !this.hasAdministrativeRole(roles)
+    ) {
+      throw new ForbiddenException('Only the assigned arbitrator or an administrator can enforce a decision');
     }
 
     if (decision.isEnforced) {
@@ -224,16 +244,21 @@ export class ArbitrationService {
   /**
    * Получить решение
    */
-  async getDecision(decisionId: string): Promise<ArbitrationDecision> {
+  async getDecision(
+    decisionId: string,
+    userId: string,
+    roles: UserType[] = [],
+  ): Promise<ArbitrationDecision> {
     const decision = await this.decisionRepository.findOne({
       where: { id: decisionId },
       relations: ['dispute', 'arbitrator'],
     });
 
     if (!decision) {
-      throw new Error('Decision not found');
+      throw new NotFoundException('Decision not found');
     }
 
+    await this.disputeService.getDisputeForUser(decision.disputeId, userId, roles);
     return decision;
   }
 
@@ -246,8 +271,20 @@ export class ArbitrationService {
     disputeId: string,
     appellantUserId: string,
     dto: FileAppealDto,
+    roles: UserType[] = [],
   ): Promise<Appeal> {
-    const dispute = await this.disputeService.getDispute(disputeId);
+    const dispute = await this.disputeService.getDisputeForUser(
+      disputeId,
+      appellantUserId,
+      roles,
+    );
+
+    if (
+      dispute.deal?.buyerId !== appellantUserId &&
+      dispute.deal?.sellerId !== appellantUserId
+    ) {
+      throw new ForbiddenException('Only a deal participant can file an appeal');
+    }
 
     if (!dispute.canTransitionToAppeal) {
       throw new Error('This dispute cannot be appealed');
@@ -297,7 +334,11 @@ export class ArbitrationService {
     appealId: string,
     reviewerUserId: string,
     dto: ReviewAppealDto,
+    roles: UserType[] = [],
   ): Promise<Appeal> {
+    if (!this.hasAdministrativeRole(roles)) {
+      throw new ForbiddenException('Only an administrator can review an appeal');
+    }
     const appeal = await this.appealRepository.findOne({
       where: { id: appealId },
       relations: ['dispute'],
@@ -366,8 +407,13 @@ export class ArbitrationService {
     disputeId: string,
     senderId: string,
     dto: ArbitrationChatMessageDto,
+    roles: UserType[] = [],
   ): Promise<ArbitrationChatMessage> {
-    const dispute = await this.disputeService.getDispute(disputeId);
+    const dispute = await this.disputeService.getDisputeForUser(
+      disputeId,
+      senderId,
+      roles,
+    );
 
     if (!dispute.chat) {
       throw new Error('Chat not found');
@@ -406,5 +452,30 @@ export class ArbitrationService {
    */
   async markChatAsRead(_chatId: string, _userId: string, _role: 'buyer' | 'seller' | 'arbitrator'): Promise<void> {
     // Реализация через chatRepository
+  }
+
+  private async assertDealTermsAccess(
+    dealId: string,
+    userId: string,
+    roles: UserType[],
+  ): Promise<void> {
+    const deal = await this.dealRepository.findOne({ where: { id: dealId } });
+    if (!deal) {
+      throw new NotFoundException('Deal not found');
+    }
+
+    if (
+      this.hasAdministrativeRole(roles) ||
+      deal.buyerId === userId ||
+      deal.sellerId === userId
+    ) {
+      return;
+    }
+
+    throw new ForbiddenException('Only a deal participant or administrator can access deal terms');
+  }
+
+  private hasAdministrativeRole(roles: UserType[]): boolean {
+    return roles.includes(UserType.ADMIN) || roles.includes(UserType.SUPER_ADMIN);
   }
 }

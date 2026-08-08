@@ -1,9 +1,15 @@
-import { Injectable, Logger, NotFoundException, ForbiddenException } from '@nestjs/common';
+import {
+  Injectable,
+  Logger,
+  NotFoundException,
+  ForbiddenException,
+  BadRequestException,
+} from '@nestjs/common';
 import { InjectRepository } from '@nestjs/typeorm';
 import { Repository } from 'typeorm';
 import { AdminProfile } from './entities/admin-profile.entity';
 import { AdminLog } from './entities/admin-log.entity';
-import { User } from '../user/entities/user.entity';
+import { User, UserType } from '../user/entities/user.entity';
 import { Role } from './enums/role.enum';
 import { AuditLogService } from '../ops/audit-log.service';
 
@@ -30,9 +36,19 @@ export class AdminService {
     if (!grantor || grantor.role !== Role.SUPER_ADMIN) {
       throw new ForbiddenException('Только Super Admin может назначать администраторов');
     }
+    if (role !== Role.ADMIN && role !== Role.SUPER_ADMIN) {
+      throw new BadRequestException('Only ADMIN and SUPER_ADMIN can be granted by this workflow');
+    }
 
     const user = await this.userRepo.findOne({ where: { id: userId } });
     if (!user) throw new NotFoundException('Пользователь не найден');
+
+    const canonicalRole =
+      role === Role.SUPER_ADMIN ? UserType.SUPER_ADMIN : UserType.ADMIN;
+    if (!user.roles.includes(canonicalRole)) {
+      user.roles = [...user.roles, canonicalRole];
+      await this.userRepo.save(user);
+    }
 
     let profile = await this.adminProfileRepo.findOne({ where: { userId } });
     if (!profile) {

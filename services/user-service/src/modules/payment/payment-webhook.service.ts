@@ -4,29 +4,33 @@ import {
   NotFoundException,
   Inject,
   forwardRef,
-} from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
-import { ethers } from 'ethers';
-import { Payment } from './entities/payment.entity';
-import { CryptomusWebhookPayload } from './cryptomus.service';
-import { Deal } from '../deal/entities/deal.entity';
-import { DealStatus, Currency } from '../deal/enums/deal.enum';
-import { EscrowService } from '../escrow/escrow.service';
-import { DealService } from '../deal/deal.service';
-import { AuditLogService } from '../ops/audit-log.service';
-import { WebhookIdempotencyService } from './webhook-idempotency.service';
-import { normalizeUsdtAmount } from '../escrow/usdt-amount';
+} from "@nestjs/common";
+import { ConfigService } from "@nestjs/config";
+import { InjectRepository } from "@nestjs/typeorm";
+import { Repository } from "typeorm";
+import { ethers } from "ethers";
+import { Payment } from "./entities/payment.entity";
+import { CryptomusWebhookPayload } from "./cryptomus.service";
+import { Deal } from "../deal/entities/deal.entity";
+import { DealStatus, Currency } from "../deal/enums/deal.enum";
+import { EscrowService } from "../escrow/escrow.service";
+import { DealService } from "../deal/deal.service";
+import { AuditLogService } from "../ops/audit-log.service";
+import { WebhookIdempotencyService } from "./webhook-idempotency.service";
+import { normalizeUsdtAmount } from "../escrow/usdt-amount";
+import { PaymentOperationService } from "./payment-operation.service";
+import { PaymentOperationStatus } from "./entities/payment-operation.entity";
+import { MoneyLedgerService } from "../ops/money-ledger.service";
 
 /** Identifies Cryptomus rows in the shared processed-webhook-events ledger. */
-const WEBHOOK_PROVIDER_CRYPTOMUS = 'cryptomus';
+const WEBHOOK_PROVIDER_CRYPTOMUS = "cryptomus";
 
 export enum WebhookStatus {
-  PAID = 'paid',
-  REFUNDED = 'refunded',
-  CANCELLED = 'cancelled',
-  EXPIRED = 'expired',
-  PROCESSING = 'processing',
+  PAID = "paid",
+  REFUNDED = "refunded",
+  CANCELLED = "cancelled",
+  EXPIRED = "expired",
+  PROCESSING = "processing",
 }
 
 /**
@@ -47,6 +51,8 @@ export interface WebhookProcessingResult {
 @Injectable()
 export class PaymentWebhookService {
   private readonly logger = new Logger(PaymentWebhookService.name);
+  /** Production never treats an unavailable chain as a successful funding. */
+  private readonly allowStubSettlement: boolean;
 
   constructor(
     @InjectRepository(Payment)
@@ -59,7 +65,13 @@ export class PaymentWebhookService {
     private readonly dealService: DealService,
     private readonly auditLog: AuditLogService,
     private readonly idempotency: WebhookIdempotencyService,
-  ) {}
+    private readonly operations: PaymentOperationService,
+    private readonly ledger: MoneyLedgerService,
+    config: ConfigService,
+  ) {
+    this.allowStubSettlement =
+      config.get("NODE_ENV", "development") !== "production";
+  }
 
   /**
    * Entry point invoked by `CryptomusWebhookController` after HMAC has been
@@ -77,7 +89,7 @@ export class PaymentWebhookService {
 
     const payment = await this.paymentRepository.findOne({
       where: { transactionId: order_id },
-      relations: ['deal'],
+      relations: ["deal"],
     });
     if (!payment) {
       this.logger.error(`Payment not found: ${order_id}`);
@@ -121,7 +133,7 @@ export class PaymentWebhookService {
   ): Promise<WebhookProcessingResult> {
     const notes: string[] = [];
 
-    payment.status = 'completed' as Payment['status'];
+    payment.status = "completed" as Payment["status"];
     payment.paidAt = payment.paidAt ?? new Date();
     payment.txId = txid;
     // Parse at the money boundary: a malformed/empty amount must not become
@@ -139,24 +151,24 @@ export class PaymentWebhookService {
     await this.paymentRepository.save(payment);
 
     await this.auditLog.write({
-      aggregateType: 'payment',
+      aggregateType: "payment",
       aggregateId: payment.id,
-      action: 'payment.completed',
+      action: "payment.completed",
       details: { orderId: payment.transactionId, txid, dealId: payment.dealId },
     });
 
-    const deal = payment.deal ?? (
-      payment.dealId
+    const deal =
+      payment.deal ??
+      (payment.dealId
         ? await this.dealRepository.findOne({
             where: { id: payment.dealId },
-            relations: ['buyer', 'seller'],
+            relations: ["buyer", "seller"],
           })
-        : null
-    );
+        : null);
     if (!deal) {
-      notes.push('payment has no associated deal — recorded paid only');
+      notes.push("payment has no associated deal — recorded paid only");
       return {
-        paymentStatus: 'completed',
+        paymentStatus: "completed",
         dealId: null,
         escrowAddress: null,
         forwarded: false,
@@ -172,7 +184,7 @@ export class PaymentWebhookService {
         `wallets missing (buyer=${!!buyerWallet} seller=${!!sellerWallet}); reconciliation will retry`,
       );
       return {
-        paymentStatus: 'completed',
+        paymentStatus: "completed",
         dealId: deal.id,
         escrowAddress: deal.escrowAddress,
         forwarded: false,
@@ -183,25 +195,68 @@ export class PaymentWebhookService {
 
     const amountUsdt = await this.lockFundingFx(deal, cryptoAmount);
 
+    // Acquire the durable lease before *any* external operation, including
+    // deterministic escrow deployment. A duplicate delivery can therefore
+    // never race a second worker into forwarding the relay's float.
+    const operationClaim = await this.operations.claimFunding({
+      provider: WEBHOOK_PROVIDER_CRYPTOMUS,
+      eventKey: payment.transactionId,
+      paymentId: payment.id,
+      dealId: deal.id,
+    });
+    if (!operationClaim.claimed) {
+      notes.push(
+        operationClaim.operation.status === PaymentOperationStatus.COMPLETED
+          ? "funding operation already completed — skipping forward (idempotent)"
+          : `funding operation is ${operationClaim.operation.status} — awaiting recovery`,
+      );
+      if (
+        operationClaim.operation.status === PaymentOperationStatus.COMPLETED
+      ) {
+        await this.transitionDealToInProgress(deal, payment);
+      }
+      return {
+        paymentStatus: "completed",
+        dealId: deal.id,
+        escrowAddress: deal.escrowAddress,
+        forwarded: false,
+        txHashes: {
+          transfer: operationClaim.operation.transferTxHash ?? undefined,
+          notify: operationClaim.operation.notifyTxHash ?? undefined,
+        },
+        notes,
+      };
+    }
+
     let escrowAddress = deal.escrowAddress;
     if (!escrowAddress) {
       try {
-        const result = await this.escrow.createEscrow(
-          deal.id,
-          buyerWallet,
-          sellerWallet,
-          amountUsdt,
+        const result = await this.operations.withLease(
+          operationClaim.operation.id,
+          () =>
+            this.escrow.createEscrow(
+              deal.id,
+              buyerWallet,
+              sellerWallet,
+              amountUsdt,
+            ),
         );
         escrowAddress = result.escrowAddress;
         deal.escrowAddress = escrowAddress;
         await this.dealRepository.save(deal);
-        this.logger.log(`Escrow deployed JIT for deal ${deal.id} @ ${escrowAddress}`);
+        this.logger.log(
+          `Escrow deployed JIT for deal ${deal.id} @ ${escrowAddress}`,
+        );
       } catch (err) {
+        await this.operations.markRetryableFailure(
+          operationClaim.operation.id,
+          err,
+        );
         notes.push(
           `JIT escrow deploy failed: ${(err as Error).message}; reconciliation will retry`,
         );
         return {
-          paymentStatus: 'completed',
+          paymentStatus: "completed",
           dealId: deal.id,
           escrowAddress: null,
           forwarded: false,
@@ -212,9 +267,13 @@ export class PaymentWebhookService {
     }
 
     if (escrowAddress === ethers.ZeroAddress) {
-      notes.push('escrow address is zero — cannot forward');
+      await this.operations.markManualReview(
+        operationClaim.operation.id,
+        new Error("escrow address is zero"),
+      );
+      notes.push("escrow address is zero — cannot forward");
       return {
-        paymentStatus: 'completed',
+        paymentStatus: "completed",
         dealId: deal.id,
         escrowAddress,
         forwarded: false,
@@ -224,10 +283,23 @@ export class PaymentWebhookService {
     }
 
     if (!this.escrow.isEnabled()) {
-      notes.push('blockchain disabled (stub mode) — skipping forward+notify');
-      await this.transitionDealToInProgress(deal, payment);
+      notes.push("blockchain disabled (stub mode) — skipping forward+notify");
+      if (this.allowStubSettlement) {
+        await this.operations.markCompleted(operationClaim.operation.id, {});
+        await this.transitionDealToInProgress(deal, payment);
+      } else {
+        await this.operations.markRetryableFailure(
+          operationClaim.operation.id,
+          new Error(
+            "blockchain unavailable; production settlement remains pending",
+          ),
+        );
+        notes.push(
+          "production settlement remains pending until blockchain is available",
+        );
+      }
       return {
-        paymentStatus: 'completed',
+        paymentStatus: "completed",
         dealId: deal.id,
         escrowAddress,
         forwarded: false,
@@ -236,15 +308,16 @@ export class PaymentWebhookService {
       };
     }
 
-    // Idempotency guard: never forward twice for the same order. A duplicate
-    // `paid` webhook (Cryptomus retry / manual replay) or a deal already
-    // funded by reconciliation must NOT trigger a second USDT transfer from
-    // the relay hot-wallet — that would be real money lost.
+    // A terminal/non-pending deal is never resurrected. Leave a durable,
+    // reviewable operation rather than treating unrelated state as success.
     if (deal.status !== DealStatus.PENDING_PAYMENT) {
-      notes.push('deal is not pending payment — skipping forward');
-      await this.transitionDealToInProgress(deal, payment);
+      notes.push("deal is not pending payment — skipping forward");
+      await this.operations.markManualReview(
+        operationClaim.operation.id,
+        new Error(`deal ${deal.id} is ${deal.status}, not pending_payment`),
+      );
       return {
-        paymentStatus: 'completed',
+        paymentStatus: "completed",
         dealId: deal.id,
         escrowAddress,
         forwarded: false,
@@ -253,43 +326,48 @@ export class PaymentWebhookService {
       };
     }
 
-    const claim = {
+    const legacyClaim = {
       provider: WEBHOOK_PROVIDER_CRYPTOMUS,
       eventKey: payment.transactionId,
       orderId: payment.transactionId,
-      status: 'paid',
+      status: "paid",
     };
-    if (!(await this.idempotency.tryClaim(claim))) {
-      notes.push('funding claim already held — skipping forward (idempotent)');
-      await this.transitionDealToInProgress(deal, payment);
-      return {
-        paymentStatus: 'completed', dealId: deal.id, escrowAddress,
-        forwarded: false, txHashes: {}, notes,
-      };
-    }
-
     try {
-      const forwardResult = await this.escrow.forwardAndFund(deal.id, amountUsdt);
+      const forwardResult = await this.operations.withLease(
+        operationClaim.operation.id,
+        () => this.escrow.forwardAndFund(deal.id, amountUsdt),
+      );
       this.logger.log(
         `Escrow funded for deal ${deal.id}: transfer=${forwardResult.transferTxHash} notify=${forwardResult.notifyTxHash}`,
       );
       await this.auditLog.write({
-        aggregateType: 'deal',
+        aggregateType: "deal",
         aggregateId: deal.id,
-        action: 'escrow.funded',
+        action: "escrow.funded",
         details: {
           escrowAddress,
           transferTx: forwardResult.transferTxHash,
           notifyTx: forwardResult.notifyTxHash,
         },
       });
-      // Record the funding so any re-delivery of this `paid` event is a no-op.
-      // Done only after the transfer succeeded — a failure above leaves no
-      // row, so the provider retry (or reconciliation) can still fund later.
-      await this.idempotency.markProcessed(claim);
+      await this.ledger.recordEscrowFunding({
+        operationId: operationClaim.operation.id,
+        dealId: deal.id,
+        paymentId: payment.id,
+        amountUsdt,
+        transferTxHash: forwardResult.transferTxHash,
+        notifyTxHash: forwardResult.notifyTxHash,
+      });
+      await this.operations.markCompleted(operationClaim.operation.id, {
+        transfer: forwardResult.transferTxHash,
+        notify: forwardResult.notifyTxHash,
+      });
+      // Retained for compatibility with Phase 1's audit/dedup ledger. The
+      // payment operation is authoritative for recovery and state changes.
+      await this.idempotency.markProcessed(legacyClaim);
       await this.transitionDealToInProgress(deal, payment);
       return {
-        paymentStatus: 'completed',
+        paymentStatus: "completed",
         dealId: deal.id,
         escrowAddress,
         forwarded: true,
@@ -300,12 +378,18 @@ export class PaymentWebhookService {
         notes,
       };
     } catch (err) {
+      await this.operations.markRetryableFailure(
+        operationClaim.operation.id,
+        err,
+      );
       this.logger.error(
         `Escrow forward+notify failed for deal ${deal.id}: ${(err as Error).message}`,
       );
-      notes.push(`forward+notify failed: ${(err as Error).message}; reconciliation will retry`);
+      notes.push(
+        `forward+notify failed: ${(err as Error).message}; reconciliation will retry`,
+      );
       return {
-        paymentStatus: 'completed',
+        paymentStatus: "completed",
         dealId: deal.id,
         escrowAddress,
         forwarded: false,
@@ -318,7 +402,10 @@ export class PaymentWebhookService {
   /**
    * Lock RUB→USDT (or native USDT) at funding time using Cryptomus snapshot.
    */
-  private async lockFundingFx(deal: Deal, cryptoAmount: string): Promise<number> {
+  private async lockFundingFx(
+    deal: Deal,
+    cryptoAmount: string,
+  ): Promise<number> {
     // Parse the provider string without a float round-trip; null on garbage.
     const fromWebhook = normalizeUsdtAmount(cryptoAmount);
     if (fromWebhook !== null && fromWebhook > 0) {
@@ -328,8 +415,7 @@ export class PaymentWebhookService {
         deal.quoteAmount = Number(deal.amount);
       }
       if (!deal.quoteCurrency) {
-        deal.quoteCurrency =
-          deal.currency === Currency.USDT ? 'USDT' : 'RUB';
+        deal.quoteCurrency = deal.currency === Currency.USDT ? "USDT" : "RUB";
       }
       await this.dealRepository.save(deal);
       this.logger.log(
@@ -342,9 +428,8 @@ export class PaymentWebhookService {
       return Number(deal.amountUsdt);
     }
 
-
     const quote =
-      deal.quoteCurrency === 'USDT' || deal.currency === Currency.USDT
+      deal.quoteCurrency === "USDT" || deal.currency === Currency.USDT
         ? Number(deal.quoteAmount ?? deal.amount)
         : Number(deal.amount);
 
@@ -354,8 +439,7 @@ export class PaymentWebhookService {
       deal.quoteAmount = Number(deal.amount);
     }
     if (!deal.quoteCurrency) {
-      deal.quoteCurrency =
-        deal.currency === Currency.USDT ? 'USDT' : 'RUB';
+      deal.quoteCurrency = deal.currency === Currency.USDT ? "USDT" : "RUB";
     }
     await this.dealRepository.save(deal);
     this.logger.warn(
@@ -375,12 +459,12 @@ export class PaymentWebhookService {
     details: { txId?: string; fundedUsdt?: number },
   ): Promise<void> {
     await this.auditLog.write({
-      aggregateType: 'payment',
+      aggregateType: "payment",
       aggregateId: payment.id,
-      action: 'payment.completed',
+      action: "payment.completed",
       details: {
         orderId: payment.transactionId,
-        method: 'direct_usdt',
+        method: "direct_usdt",
         txid: details.txId ?? null,
         fundedUsdt: details.fundedUsdt ?? null,
         dealId: payment.dealId,
@@ -402,19 +486,22 @@ export class PaymentWebhookService {
     }
 
     await this.auditLog.write({
-      aggregateType: 'deal',
+      aggregateType: "deal",
       aggregateId: deal.id,
-      action: 'escrow.funded',
+      action: "escrow.funded",
       details: {
         escrowAddress: payment.escrowAddress,
         notifyTx: details.txId ?? null,
-        rail: 'direct_usdt',
+        rail: "direct_usdt",
       },
     });
     await this.transitionDealToInProgress(deal, payment);
   }
 
-  private async transitionDealToInProgress(deal: Deal, payment: Payment): Promise<void> {
+  private async transitionDealToInProgress(
+    deal: Deal,
+    payment: Payment,
+  ): Promise<void> {
     if (deal.status !== DealStatus.PENDING_PAYMENT) {
       return;
     }
@@ -431,30 +518,37 @@ export class PaymentWebhookService {
     }
   }
 
-  private async handlePaymentProcessing(payment: Payment): Promise<WebhookProcessingResult> {
-    payment.status = 'processing' as Payment['status'];
+  private async handlePaymentProcessing(
+    payment: Payment,
+  ): Promise<WebhookProcessingResult> {
+    payment.status = "processing" as Payment["status"];
     await this.paymentRepository.save(payment);
-    return this.emptyResult(payment, ['payment processing']);
+    return this.emptyResult(payment, ["payment processing"]);
   }
 
-  private async handlePaymentRefunded(payment: Payment): Promise<WebhookProcessingResult> {
-    payment.status = 'refunded' as Payment['status'];
+  private async handlePaymentRefunded(
+    payment: Payment,
+  ): Promise<WebhookProcessingResult> {
+    payment.status = "refunded" as Payment["status"];
     payment.refundedAt = new Date();
     await this.paymentRepository.save(payment);
-    return this.emptyResult(payment, ['payment refunded']);
+    return this.emptyResult(payment, ["payment refunded"]);
   }
 
   private async handlePaymentFailed(
     payment: Payment,
     status: string,
   ): Promise<WebhookProcessingResult> {
-    payment.status = 'failed' as Payment['status'];
+    payment.status = "failed" as Payment["status"];
     payment.failureReason = `Payment ${status}`;
     await this.paymentRepository.save(payment);
     return this.emptyResult(payment, [`payment ${status}`]);
   }
 
-  private emptyResult(payment: Payment, notes: string[]): WebhookProcessingResult {
+  private emptyResult(
+    payment: Payment,
+    notes: string[],
+  ): WebhookProcessingResult {
     return {
       paymentStatus: payment.status,
       dealId: payment.dealId,

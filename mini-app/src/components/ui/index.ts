@@ -10,4 +10,5 @@ export { Stepper } from './Stepper';
 export { PageHeader } from './PageHeader';
 export { ListRow, Toggle } from './ListRow';
 export { BottomSheet, ConfirmSheet, PromptSheet } from './BottomSheet';
-export { ToastProvider, useToast } from './Toast';
+export { ToastProvider } from './Toast';
+export { useToast } from './ToastContext';

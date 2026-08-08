@@ -1,4 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { MoneyMovementGate } from './money-movement.gate';
 
 /**
  * Serializes every transaction signed by the shared relay hot-wallet.
@@ -31,6 +32,8 @@ export class RelayTxQueue {
    */
   private tail: Promise<void> = Promise.resolve();
 
+  constructor(private readonly moneyMovementGate: MoneyMovementGate) {}
+
   /**
    * Enqueue a relay transaction. `run` must perform the full broadcast +
    * `wait()` so the nonce is consumed on-chain before the next task starts.
@@ -47,7 +50,13 @@ export class RelayTxQueue {
     });
 
     return previous
-      .then(() => this.execute(label, run))
+      .then(() => {
+        // This check is deliberately inside the queued task, immediately
+        // before the signer is used. It protects work that was queued before
+        // a future dynamic safety stop is activated as well as new work.
+        this.moneyMovementGate.assertRelayOperationAllowed(label);
+        return this.execute(label, run);
+      })
       .finally(() => release());
   }
 

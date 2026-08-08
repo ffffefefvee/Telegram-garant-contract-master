@@ -423,16 +423,27 @@ export class DisputeService {
     userId: string,
     roles: UserType[] = [],
   ): Promise<Dispute> {
-    const dispute = await this.getDispute(disputeId);
+    // Load only the fields needed for the authorization decision before
+    // loading evidence, chat, events, and decisions. This avoids exposing
+    // sensitive relations to an unauthorized caller through an accidental
+    // future error/log path.
+    const dispute = await this.disputeRepository.findOne({
+      where: { id: disputeId },
+      relations: ['deal'],
+    });
+    if (!dispute) {
+      throw new NotFoundException('Dispute not found');
+    }
     if (
       !roles.includes(UserType.ADMIN) &&
+      !roles.includes(UserType.SUPER_ADMIN) &&
       dispute.arbitratorId !== userId &&
       dispute.deal?.buyerId !== userId &&
       dispute.deal?.sellerId !== userId
     ) {
       throw new ForbiddenException('Access denied');
     }
-    return dispute;
+    return this.getDispute(disputeId);
   }
 
   /**

@@ -1,12 +1,15 @@
-import { Injectable, Logger, Inject, forwardRef } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { IsNull, Not, Repository } from 'typeorm';
-import { Payment } from '../payment/entities/payment.entity';
-import { PaymentStatus } from '../payment/enums/payment.enum';
-import { Deal } from '../deal/entities/deal.entity';
-import { DealStatus, Currency } from '../deal/enums/deal.enum';
-import { EscrowService } from '../escrow/escrow.service';
-import { DealService } from '../deal/deal.service';
+import { Injectable, Logger, Inject, forwardRef } from "@nestjs/common";
+import { InjectRepository } from "@nestjs/typeorm";
+import { IsNull, Not, Repository } from "typeorm";
+import { Payment } from "../payment/entities/payment.entity";
+import { PaymentStatus } from "../payment/enums/payment.enum";
+import { Deal } from "../deal/entities/deal.entity";
+import { DealStatus, Currency } from "../deal/enums/deal.enum";
+import { EscrowService } from "../escrow/escrow.service";
+import { DealService } from "../deal/deal.service";
+import { PaymentOperationService } from "../payment/payment-operation.service";
+import { PaymentOperationStatus } from "../payment/entities/payment-operation.entity";
+import { MoneyLedgerService } from "./money-ledger.service";
 
 export interface ReconciliationReport {
   payments: {
@@ -48,6 +51,8 @@ export class ReconciliationService {
     private readonly escrow: EscrowService,
     @Inject(forwardRef(() => DealService))
     private readonly dealService: DealService,
+    private readonly operations: PaymentOperationService,
+    private readonly ledger: MoneyLedgerService,
   ) {}
 
   async runOnce(): Promise<ReconciliationReport> {
@@ -57,7 +62,7 @@ export class ReconciliationService {
     };
 
     if (!this.escrow.isEnabled()) {
-      report.notes.push('blockchain disabled — reconciliation skipped');
+      report.notes.push("blockchain disabled — reconciliation skipped");
       return report;
     }
 
@@ -71,7 +76,7 @@ export class ReconciliationService {
         status: PaymentStatus.COMPLETED,
         dealId: Not(IsNull()),
       },
-      relations: ['deal', 'deal.buyer', 'deal.seller'],
+      relations: ["deal", "deal.buyer", "deal.seller"],
       take: 100,
     });
 
@@ -106,6 +111,26 @@ export class ReconciliationService {
         continue;
       }
 
+      const operationClaim = await this.operations.claimFunding({
+        provider: "cryptomus",
+        eventKey: payment.transactionId ?? payment.id,
+        paymentId: payment.id,
+        dealId: deal.id,
+      });
+      if (!operationClaim.claimed) {
+        report.payments.skipped += 1;
+        if (
+          operationClaim.operation.status === PaymentOperationStatus.COMPLETED
+        ) {
+          await this.dealService.confirmPayment(
+            deal.id,
+            Number(payment.amount),
+            payment.currency,
+          );
+        }
+        continue;
+      }
+
       try {
         // Lock FX on the deal if the live webhook path never captured it
         // (e.g. both wallets were attached only AFTER the payment landed).
@@ -114,18 +139,37 @@ export class ReconciliationService {
           deal.fxRateLockedAt = deal.fxRateLockedAt ?? new Date();
         }
         if (!deal.escrowAddress) {
-          const created = await this.escrow.createEscrow(
-            deal.id,
-            buyerWallet,
-            sellerWallet,
-            amountUsdt,
+          const created = await this.operations.withLease(
+            operationClaim.operation.id,
+            () =>
+              this.escrow.createEscrow(
+                deal.id,
+                buyerWallet,
+                sellerWallet,
+                amountUsdt,
+              ),
           );
           deal.escrowAddress = created.escrowAddress;
         }
         // Persist escrowAddress + locked FX before funding so a transient
         // failure below doesn't lose the deployed clone address.
         await this.dealRepo.save(deal);
-        await this.escrow.forwardAndFund(deal.id, amountUsdt);
+        const result = await this.operations.withLease(
+          operationClaim.operation.id,
+          () => this.escrow.forwardAndFund(deal.id, amountUsdt),
+        );
+        await this.ledger.recordEscrowFunding({
+          operationId: operationClaim.operation.id,
+          dealId: deal.id,
+          paymentId: payment.id,
+          amountUsdt,
+          transferTxHash: result.transferTxHash,
+          notifyTxHash: result.notifyTxHash,
+        });
+        await this.operations.markCompleted(operationClaim.operation.id, {
+          transfer: result.transferTxHash,
+          notify: result.notifyTxHash,
+        });
         await this.dealService.confirmPayment(
           deal.id,
           Number(payment.amount),
@@ -136,6 +180,10 @@ export class ReconciliationService {
           `Reconciled payment ${payment.id} → deal ${deal.id} forwarded ${amountUsdt} USDT`,
         );
       } catch (err) {
+        await this.operations.markRetryableFailure(
+          operationClaim.operation.id,
+          err,
+        );
         report.payments.failed += 1;
         this.logger.warn(
           `Reconciliation failed for payment ${payment.id}: ${(err as Error).message}`,
@@ -164,7 +212,7 @@ export class ReconciliationService {
       return paidCrypto;
     }
     const isUsdtQuoted =
-      deal.currency === Currency.USDT || deal.quoteCurrency === 'USDT';
+      deal.currency === Currency.USDT || deal.quoteCurrency === "USDT";
     if (isUsdtQuoted) {
       const quote = Number(deal.quoteAmount ?? deal.amount);
       if (Number.isFinite(quote) && quote > 0) {
@@ -201,10 +249,12 @@ export class ReconciliationService {
 
     const stuck = await this.paymentRepo.find({
       where: { status: PaymentStatus.COMPLETED, dealId: Not(IsNull()) },
-      relations: ['deal'],
+      relations: ["deal"],
       take: 200,
     });
-    const stuckRows = stuck.filter((p) => p.deal?.status === DealStatus.PENDING_PAYMENT);
+    const stuckRows = stuck.filter(
+      (p) => p.deal?.status === DealStatus.PENDING_PAYMENT,
+    );
 
     return {
       generatedAt: new Date().toISOString(),

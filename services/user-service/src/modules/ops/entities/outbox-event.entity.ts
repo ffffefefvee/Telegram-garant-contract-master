@@ -1,11 +1,17 @@
-import { Column, CreateDateColumn, Entity, Index, PrimaryGeneratedColumn } from 'typeorm';
+import {
+  Column,
+  CreateDateColumn,
+  Entity,
+  Index,
+  PrimaryGeneratedColumn,
+} from "typeorm";
 
 export enum OutboxStatus {
-  PENDING = 'pending',
-  IN_FLIGHT = 'in_flight',
-  DELIVERED = 'delivered',
-  FAILED = 'failed',
-  DEAD = 'dead',
+  PENDING = "pending",
+  IN_FLIGHT = "in_flight",
+  DELIVERED = "delivered",
+  FAILED = "failed",
+  DEAD = "dead",
 }
 
 /**
@@ -17,40 +23,47 @@ export enum OutboxStatus {
  * `aggregateType`/`aggregateId` pair lets us correlate events back to the
  * domain object for debugging.
  */
-@Entity({ name: 'outbox_events' })
-@Index(['status', 'availableAt'])
-@Index(['aggregateType', 'aggregateId'])
+@Entity({ name: "outbox_events" })
+@Index(["status", "availableAt"])
+@Index(["aggregateType", "aggregateId"])
 export class OutboxEvent {
-  @PrimaryGeneratedColumn('uuid')
+  @PrimaryGeneratedColumn("uuid")
   id: string;
 
-  @Column({ type: 'varchar', length: 64 })
+  @Column({ type: "varchar", length: 64 })
   aggregateType: string;
 
-  @Column({ type: 'varchar', length: 64 })
+  @Column({ type: "varchar", length: 64 })
   aggregateId: string;
 
-  @Column({ type: 'varchar', length: 96 })
+  @Column({ type: "varchar", length: 96 })
   eventType: string;
 
-  @Column({ type: 'jsonb', default: {} })
+  @Column({ type: "jsonb", default: {} })
   payload: Record<string, unknown>;
 
-  @Column({ type: 'varchar', length: 16, default: OutboxStatus.PENDING })
+  @Column({ type: "varchar", length: 16, default: OutboxStatus.PENDING })
   status: OutboxStatus;
 
-  @Column({ type: 'integer', default: 0 })
+  @Column({ type: "integer", default: 0 })
   attempts: number;
 
-  @Column({ type: 'text', nullable: true })
+  @Column({ type: "text", nullable: true })
   lastError: string | null;
 
-  @Column({ type: 'timestamp', default: () => 'now()' })
+  @Column({ type: "timestamp", default: () => "now()" })
   availableAt: Date;
 
-  @Column({ type: 'timestamp', nullable: true })
+  @Column({ type: "timestamp", nullable: true })
   deliveredAt: Date | null;
 
-  @CreateDateColumn({ type: 'timestamp' })
+  /** Worker lease prevents a crash from stranding an event in flight forever. */
+  @Column({ type: "varchar", length: 64, nullable: true })
+  leaseOwner: string | null;
+
+  @Column({ type: "timestamp", nullable: true })
+  leaseExpiresAt: Date | null;
+
+  @CreateDateColumn({ type: "timestamp" })
   createdAt: Date;
 }

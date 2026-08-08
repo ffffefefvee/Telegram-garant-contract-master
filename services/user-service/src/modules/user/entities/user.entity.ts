@@ -23,6 +23,7 @@ export enum UserType {
   SELLER = 'seller',
   ARBITRATOR = 'arbitrator',
   ADMIN = 'admin',
+  SUPER_ADMIN = 'super_admin',
 }
 
 @Entity('users')

@@ -1,8 +1,8 @@
-import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
-import { Cron, CronExpression, SchedulerRegistry } from '@nestjs/schedule';
-import { OutboxService } from '../ops/outbox.service';
-import { NotificationDispatcher } from './notification-dispatcher.service';
+import { Injectable, Logger, OnModuleInit } from "@nestjs/common";
+import { ConfigService } from "@nestjs/config";
+import { Cron, CronExpression, SchedulerRegistry } from "@nestjs/schedule";
+import { OutboxService } from "../ops/outbox.service";
+import { NotificationDispatcher } from "./notification-dispatcher.service";
 
 /**
  * Polls `outbox_events` every 10 seconds, dispatches each claimed event
@@ -27,23 +27,23 @@ export class NotificationWorkerScheduler implements OnModuleInit {
   ) {}
 
   onModuleInit(): void {
-    const raw = this.config.get<string>('NOTIFICATIONS_ENABLED', 'true');
-    this.enabled = raw !== 'false';
+    const raw = this.config.get<string>("NOTIFICATIONS_ENABLED", "true");
+    this.enabled = raw !== "false";
     if (!this.enabled) {
       try {
-        this.registry.deleteCronJob('notifications.tick');
+        this.registry.deleteCronJob("notifications.tick");
       } catch {
         // not yet registered — fine
       }
       this.logger.log(
-        'Notification worker disabled (NOTIFICATIONS_ENABLED=false)',
+        "Notification worker disabled (NOTIFICATIONS_ENABLED=false)",
       );
     } else {
-      this.logger.log('Notification worker enabled (10s poll interval)');
+      this.logger.log("Notification worker enabled (10s poll interval)");
     }
   }
 
-  @Cron(CronExpression.EVERY_10_SECONDS, { name: 'notifications.tick' })
+  @Cron(CronExpression.EVERY_10_SECONDS, { name: "notifications.tick" })
   async tick(): Promise<void> {
     if (!this.enabled) return;
     if (this.running) return;
@@ -67,7 +67,7 @@ export class NotificationWorkerScheduler implements OnModuleInit {
           // Unhandled events are just absent templates — mark delivered
           // so they don't re-fire forever. If you need a template,
           // register one and replay manually.
-          await this.outbox.markDelivered(event.id);
+          await this.outbox.markDelivered(event);
           if (result.delivered + result.skipped > 0 || result.unhandled) {
             this.logger.debug(
               `Outbox ${event.eventType} id=${event.id}: delivered=${result.delivered} skipped=${result.skipped} unhandled=${result.unhandled}`,
@@ -78,7 +78,7 @@ export class NotificationWorkerScheduler implements OnModuleInit {
           this.logger.error(
             `Outbox ${event.eventType} id=${event.id} delivery failed: ${e.message}`,
           );
-          await this.outbox.markFailed(event.id, e);
+          await this.outbox.markFailed(event, e);
         }
       }
     } catch (err) {

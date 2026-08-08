@@ -1,0 +1,38 @@
+# Production overlay. Use only with managed secrets:
+#   docker compose -f docker-compose.yml -f docker-compose.prod.yml up -d
+#
+# `:?` interpolation deliberately aborts before containers are created when a
+# required secret or public HTTPS origin is absent. The base Compose file does
+# not publish API, database, or Redis ports; put the API behind an authenticated
+# TLS reverse proxy/load balancer on the same Docker network.
+services:
+  postgres:
+    environment:
+      POSTGRES_USER: ${DB_USERNAME:?DB_USERNAME is required in production}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD is required in production}
+      POSTGRES_DB: ${DB_NAME:?DB_NAME is required in production}
+
+  redis:
+    environment:
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?REDIS_PASSWORD is required in production}
+    command:
+      - redis-server
+      - --requirepass
+      - ${REDIS_PASSWORD:?REDIS_PASSWORD is required in production}
+
+  user-service:
+    environment:
+      NODE_ENV: production
+      AUTH_DEV_MODE: "false"
+      DB_USERNAME: ${DB_USERNAME:?DB_USERNAME is required in production}
+      DB_PASSWORD: ${DB_PASSWORD:?DB_PASSWORD is required in production}
+      DB_NAME: ${DB_NAME:?DB_NAME is required in production}
+      REDIS_PASSWORD: ${REDIS_PASSWORD:?REDIS_PASSWORD is required in production}
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET is required in production}
+      TELEGRAM_BOT_TOKEN: ${TELEGRAM_BOT_TOKEN:?TELEGRAM_BOT_TOKEN is required in production}
+      CORS_ORIGIN: ${CORS_ORIGIN:?CORS_ORIGIN is required in production}
+      MONEY_EGRESS_ENABLED: ${MONEY_EGRESS_ENABLED:-false}
+      # The application refuses egress unless both are explicitly true. Keep
+      # them visible here so an overlay cannot accidentally hide their values.
+      DB_MIGRATIONS_RUN: ${DB_MIGRATIONS_RUN:-false}
+      RECONCILIATION_ENABLED: ${RECONCILIATION_ENABLED:-false}

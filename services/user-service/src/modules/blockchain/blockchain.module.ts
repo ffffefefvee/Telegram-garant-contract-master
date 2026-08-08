@@ -9,6 +9,7 @@ import { TreasuryClient } from './treasury.client';
 import { RegistryClient } from './registry.client';
 import { RelayService } from './relay.service';
 import { RelayTxQueue } from './relay-tx-queue';
+import { MoneyMovementGate } from './money-movement.gate';
 
 /**
  * BlockchainModule — single source of truth for on-chain interactions.
@@ -18,7 +19,8 @@ import { RelayTxQueue } from './relay-tx-queue';
  * and per-user signing happens client-side (mini-app) — this module never
  * holds user keys.
  *
- * If the required env vars (BLOCKCHAIN_RPC_URL, BLOCKCHAIN_PRIVATE_KEY,
+ * If the required env vars (BLOCKCHAIN_RPC_URL, a local private key or
+ * Web3Signer JSON-RPC configuration,
  * ESCROW_FACTORY_ADDRESS, PLATFORM_TREASURY_ADDRESS, ARBITRATOR_REGISTRY_ADDRESS,
  * USDT_CONTRACT_ADDRESS) are missing, the module starts in stub mode:
  * `BlockchainProvider.isReady === false`, all clients return zero/empty
@@ -29,6 +31,7 @@ import { RelayTxQueue } from './relay-tx-queue';
   providers: [
     BlockchainConfig,
     BlockchainProvider,
+    MoneyMovementGate,
     RelayTxQueue,
     Erc20Client,
     FactoryClient,
@@ -40,6 +43,7 @@ import { RelayTxQueue } from './relay-tx-queue';
   exports: [
     BlockchainConfig,
     BlockchainProvider,
+    MoneyMovementGate,
     RelayTxQueue,
     Erc20Client,
     FactoryClient,

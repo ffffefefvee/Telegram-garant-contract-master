@@ -1,24 +1,15 @@
-import React, { createContext, useCallback, useContext, useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import { useTelegramWebApp } from '../hooks/useTelegramWebApp';
+import { ThemeContext } from './ThemeContext';
 import {
   readThemePreference,
   resolveTheme,
   THEME_COLORS,
   ThemePreference,
-  ResolvedTheme,
   writeThemePreference,
   applyTelegramThemeParams,
   clearTelegramThemeOverrides,
 } from './theme';
-
-interface ThemeContextValue {
-  preference: ThemePreference;
-  resolvedTheme: ResolvedTheme;
-  setPreference: (preference: ThemePreference) => void;
-  isDark: boolean;
-}
-
-const ThemeContext = createContext<ThemeContextValue | null>(null);
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const { webApp } = useTelegramWebApp();
@@ -70,12 +61,4 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   );
 
   return <ThemeContext.Provider value={value}>{children}</ThemeContext.Provider>;
-}
-
-export function useTheme(): ThemeContextValue {
-  const ctx = useContext(ThemeContext);
-  if (!ctx) {
-    throw new Error('useTheme must be used within ThemeProvider');
-  }
-  return ctx;
 }
