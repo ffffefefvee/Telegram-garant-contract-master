@@ -1,5 +1,6 @@
 export { ContractAddress } from './ContractAddress';
-export { EscrowTrustBadge, escrowStateFromDealStatus } from './EscrowTrustBadge';
+export { EscrowTrustBadge } from './EscrowTrustBadge';
+export { escrowStateFromDealStatus } from './escrowTrust';
 export { NotificationBell } from './NotificationBell';
 export { PaymentVerifyModal } from './PaymentVerifyModal';
 export { ThemeToggle } from './ThemeToggle';

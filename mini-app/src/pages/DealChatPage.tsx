@@ -58,6 +58,9 @@ export const DealChatPage: React.FC = () => {
   const [actionLoading, setActionLoading] = useState(false);
   const [paymentSubmitted, setPaymentSubmitted] = useState(false);
   const [confirmations, setConfirmations] = useState(0);
+  const trackedDealId = deal?.id;
+  const trackedDealStatus = deal?.status;
+  const trackedConfirmationCount = deal?.metadata?.paymentConfirmations ?? 0;
 
   const loadDeal = useCallback(async () => {
     if (!id) return;
@@ -85,14 +88,13 @@ export const DealChatPage: React.FC = () => {
 
   useEffect(() => {
     if (!paymentSubmitted) return;
-    const startFrom = deal?.metadata?.paymentConfirmations ?? 0;
-    setConfirmations(startFrom);
+    setConfirmations(trackedConfirmationCount);
     const interval = setInterval(() => {
       setConfirmations((prev) => {
         if (prev >= 10) {
           clearInterval(interval);
-          if (deal && deal.status === 'pending_payment') {
-            void dealsApi.getById(deal.id).then((updated) => {
+          if (trackedDealId && trackedDealStatus === 'pending_payment') {
+            void dealsApi.getById(trackedDealId).then((updated) => {
               if (updated.status === 'pending_payment') {
                 setDeal((d) =>
                   d
@@ -113,7 +115,7 @@ export const DealChatPage: React.FC = () => {
       });
     }, 2000);
     return () => clearInterval(interval);
-  }, [paymentSubmitted, deal?.id, deal?.metadata?.paymentConfirmations, deal?.status]);
+  }, [paymentSubmitted, trackedDealId, trackedDealStatus, trackedConfirmationCount]);
 
   const handlePay = async () => {
     if (!deal) return;

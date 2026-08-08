@@ -1,1 +1,1 @@
-export { useTheme } from '../theme/ThemeProvider';
+export { useTheme } from '../theme/ThemeContext';

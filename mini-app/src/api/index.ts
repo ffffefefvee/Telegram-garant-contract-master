@@ -183,7 +183,7 @@ const MOCK_SELLER: Deal['seller'] = {
   updatedAt: new Date().toISOString(),
 };
 
-let mockDealsState: Deal[] = [
+const mockDealsState: Deal[] = [
   {
     id: 'mock-deal-1',
     dealNumber: '1042',

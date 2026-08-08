@@ -1,0 +1,2 @@
+# False positive: deterministic JWT secret used only by auth.service.spec.ts.
+ff0525c141bf17f257d2bacf445932aa01aa3644:services/user-service/src/modules/auth/auth.service.spec.ts:generic-api-key:14

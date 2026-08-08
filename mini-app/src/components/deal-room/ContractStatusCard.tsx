@@ -1,12 +1,7 @@
 import React from 'react';
 import { Lock, CheckCircle, AlertTriangle } from 'lucide-react';
+import type { ContractStatusVariant } from './contractStatus';
 import './deal-room.css';
-
-export type ContractStatusVariant =
-  | 'awaiting_payment'
-  | 'funds_locked'
-  | 'completed'
-  | 'dispute';
 
 const STATUS_CONFIG: Record<
   ContractStatusVariant,
@@ -40,24 +35,6 @@ const STATUS_CONFIG: Record<
     icon: <AlertTriangle size={14} />,
   },
 };
-
-export function contractStatusFromDealStatus(status: string): ContractStatusVariant | null {
-  switch (status) {
-    case 'pending_payment':
-      return 'awaiting_payment';
-    case 'in_progress':
-    case 'pending_confirmation':
-      return 'funds_locked';
-    case 'completed':
-    case 'dispute_resolved':
-      return 'completed';
-    case 'disputed':
-    case 'frozen':
-      return 'dispute';
-    default:
-      return null;
-  }
-}
 
 interface ContractStatusCardProps {
   variant: ContractStatusVariant;
