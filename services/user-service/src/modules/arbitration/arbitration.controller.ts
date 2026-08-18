@@ -15,6 +15,7 @@ import {
   ParseUUIDPipe,
   ParseIntPipe,
 } from "@nestjs/common";
+import { Throttle } from "@nestjs/throttler";
 import { ArbitrationService } from "./arbitration.service";
 import { DisputeService } from "./dispute.service";
 import { EvidenceService } from "./evidence.service";
@@ -37,6 +38,7 @@ import {
 } from "./entities/enums/arbitration.enum";
 import { CurrentUser } from "../auth/current-user.decorator";
 import type { UserPayload } from "../auth/auth.middleware";
+import { TonNativeResolutionRequestService } from "./ton-native-resolution-request.service";
 
 /**
  * Контроллер для управления арбитражем
@@ -49,6 +51,7 @@ export class ArbitrationController {
     private readonly evidenceService: EvidenceService,
     private readonly arbitratorService: ArbitratorService,
     private readonly settingsService: ArbitrationSettingsService,
+    private readonly tonNativeResolution: TonNativeResolutionRequestService,
   ) {}
 
   // === Deal Terms ===
@@ -204,6 +207,15 @@ export class ArbitrationController {
       dto,
       user.roles,
     );
+  }
+
+  @Post("decisions/:id/ton-native/resolve-request")
+  @Throttle({ default: { ttl: 60_000, limit: 10 } })
+  async buildTonNativeResolutionRequest(
+    @Param("id", ParseUUIDPipe) id: string,
+    @CurrentUser() user: UserPayload,
+  ) {
+    return this.tonNativeResolution.buildRequest(id, user.id, user.roles ?? []);
   }
 
   @Get("decisions/:id")

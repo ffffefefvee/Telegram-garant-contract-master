@@ -1,13 +1,28 @@
-import { Injectable, Logger, NotFoundException, BadRequestException } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
-import { Payment } from './entities/payment.entity';
-import { PaymentMethod, PaymentStatus, PaymentType } from './enums/payment.enum';
-import { CryptomusService } from './cryptomus.service';
-import { CommissionConfigService } from './commission-config.service';
-import { RailRegistryService, RailDescriptor } from './rails/rail-registry.service';
-import { RailStatusResult } from './rails/payment-rail.types';
-import { PaymentWebhookService } from './payment-webhook.service';
+import {
+  BadRequestException,
+  ForbiddenException,
+  Injectable,
+  Logger,
+  NotFoundException,
+} from "@nestjs/common";
+import { InjectRepository } from "@nestjs/typeorm";
+import { Repository } from "typeorm";
+import { Payment } from "./entities/payment.entity";
+import {
+  PaymentMethod,
+  PaymentStatus,
+  PaymentType,
+} from "./enums/payment.enum";
+import { CryptomusService } from "./cryptomus.service";
+import { CommissionConfigService } from "./commission-config.service";
+import {
+  RailRegistryService,
+  RailDescriptor,
+} from "./rails/rail-registry.service";
+import { RailStatusResult } from "./rails/payment-rail.types";
+import { PaymentWebhookService } from "./payment-webhook.service";
+import { Deal } from "../deal/entities/deal.entity";
+import { assertPaymentMethodMatchesDeal } from "./settlement-payment-policy";
 
 export interface CreatedPaymentResult {
   payment: Payment;
@@ -39,6 +54,8 @@ export class PaymentService {
   constructor(
     @InjectRepository(Payment)
     private readonly paymentRepository: Repository<Payment>,
+    @InjectRepository(Deal)
+    private readonly dealRepository: Repository<Deal>,
     private readonly cryptomusService: CryptomusService,
     private readonly commissionConfig: CommissionConfigService,
     private readonly rails: RailRegistryService,
@@ -67,12 +84,20 @@ export class PaymentService {
     },
   ): Promise<CreatedPaymentResult> {
     const method = options?.method ?? PaymentMethod.CRYPTOMUS;
+    const deal = await this.dealRepository.findOne({ where: { id: dealId } });
+    if (!deal) {
+      throw new NotFoundException(`Deal not found: ${dealId}`);
+    }
+    if (deal.buyerId !== userId) {
+      throw new ForbiddenException("Only the buyer can fund this deal");
+    }
+    assertPaymentMethodMatchesDeal(deal, method);
     const rail = this.rails.get(method);
     const isDirectCrypto =
       method === PaymentMethod.CRYPTO ||
       method === PaymentMethod.CRYPTO_TON ||
       method === PaymentMethod.CRYPTO_TONCOIN;
-    const currency = options?.currency || (isDirectCrypto ? 'USDT' : 'USD');
+    const currency = options?.currency || (isDirectCrypto ? "USDT" : "USD");
     const orderId = `DEAL_${dealId}_${Date.now()}`;
 
     const existingPayment = await this.paymentRepository.findOne({
@@ -82,7 +107,7 @@ export class PaymentService {
         type: PaymentType.DEAL_PAYMENT,
         status: PaymentStatus.PENDING,
       },
-      order: { createdAt: 'DESC' },
+      order: { createdAt: "DESC" },
     });
 
     if (existingPayment) {
@@ -122,7 +147,7 @@ export class PaymentService {
         userId,
         amount,
         currency,
-        description: savedPayment.description ?? '',
+        description: savedPayment.description ?? "",
         orderId,
       });
 
@@ -133,11 +158,15 @@ export class PaymentService {
       }
       savedPayment.expiresAt = invoice.expiresAt;
       if (invoice.metadata) {
-        savedPayment.metadata = { ...savedPayment.metadata, ...invoice.metadata };
-        if (invoice.metadata['cryptomus']) {
-          savedPayment.cryptomusData = invoice.metadata[
-            'cryptomus'
-          ] as Record<string, any>;
+        savedPayment.metadata = {
+          ...savedPayment.metadata,
+          ...invoice.metadata,
+        };
+        if (invoice.metadata["cryptomus"]) {
+          savedPayment.cryptomusData = invoice.metadata["cryptomus"] as Record<
+            string,
+            any
+          >;
         }
       }
       if (invoice.network) {
@@ -186,8 +215,8 @@ export class PaymentService {
     if (isDirect && payment.walletAddress) {
       result.deposit = {
         address: payment.walletAddress,
-        network: (payment.metadata?.network as string) ?? 'polygon',
-        asset: (payment.metadata?.asset as string) ?? 'USDT',
+        network: (payment.metadata?.network as string) ?? "polygon",
+        asset: (payment.metadata?.asset as string) ?? "USDT",
         requiredAmount:
           (payment.metadata?.requiredAmount as string) ??
           String(payment.totalAmount),
@@ -217,7 +246,7 @@ export class PaymentService {
   async findById(id: string): Promise<Payment> {
     const payment = await this.paymentRepository.findOne({
       where: { id },
-      relations: ['deal'],
+      relations: ["deal"],
     });
 
     if (!payment) {
@@ -237,8 +266,8 @@ export class PaymentService {
   ): Promise<{ payments: Payment[]; total: number }> {
     const [payments, total] = await this.paymentRepository.findAndCount({
       where: { userId },
-      relations: ['deal'],
-      order: { createdAt: 'DESC' },
+      relations: ["deal"],
+      order: { createdAt: "DESC" },
       take: limit,
       skip: offset,
     });
@@ -283,7 +312,7 @@ export class PaymentService {
       payment.txId = result.txId ?? payment.txId;
       if (result.fundedUsdt != null) {
         payment.cryptoAmount = result.fundedUsdt;
-        payment.cryptoCurrency = 'USDT';
+        payment.cryptoCurrency = "USDT";
       }
       await this.paymentRepository.save(payment);
 
@@ -301,7 +330,7 @@ export class PaymentService {
 
     if (result.expired) {
       payment.markAsExpired();
-      payment.failureReason = 'Funding deadline passed';
+      payment.failureReason = "Funding deadline passed";
       await this.paymentRepository.save(payment);
       return payment;
     }
@@ -323,28 +352,32 @@ export class PaymentService {
   /** Pending/processing direct-deposit payments for the background watcher. */
   async findOpenDirectPayments(limit = 100): Promise<Payment[]> {
     return this.paymentRepository
-      .createQueryBuilder('payment')
-      .where('payment.paymentMethod IN (:...methods)', {
+      .createQueryBuilder("payment")
+      .where("payment.paymentMethod IN (:...methods)", {
         methods: [
           PaymentMethod.CRYPTO,
           PaymentMethod.CRYPTO_TON,
           PaymentMethod.CRYPTO_TONCOIN,
         ],
       })
-      .andWhere('payment.status IN (:...statuses)', {
+      .andWhere("payment.status IN (:...statuses)", {
         statuses: [PaymentStatus.PENDING, PaymentStatus.PROCESSING],
       })
-      .andWhere('payment.escrowAddress IS NOT NULL')
-      .orderBy('payment.createdAt', 'ASC')
+      .andWhere("payment.escrowAddress IS NOT NULL")
+      .orderBy("payment.createdAt", "ASC")
       .take(limit)
       .getMany();
   }
 
-  async refundPayment(paymentId: string, reason: string, userId: string): Promise<Payment> {
+  async refundPayment(
+    paymentId: string,
+    reason: string,
+    userId: string,
+  ): Promise<Payment> {
     const payment = await this.findById(paymentId);
 
     if (payment.status !== PaymentStatus.COMPLETED) {
-      throw new BadRequestException('Can only refund completed payments');
+      throw new BadRequestException("Can only refund completed payments");
     }
 
     if (payment.cryptomusData?.uuid) {
@@ -373,13 +406,13 @@ export class PaymentService {
     limit: number = 20,
     status?: string,
   ): Promise<{ payments: Payment[]; total: number }> {
-    const where = status ? { status: status as Payment['status'] } : {};
+    const where = status ? { status: status as Payment["status"] } : {};
     const [payments, total] = await this.paymentRepository.findAndCount({
       where,
-      relations: ['user', 'deal'],
+      relations: ["user", "deal"],
       take: limit,
       skip: (page - 1) * limit,
-      order: { createdAt: 'DESC' },
+      order: { createdAt: "DESC" },
     });
     return { payments, total };
   }
@@ -387,11 +420,11 @@ export class PaymentService {
   /** Completed payments whose deal is still awaiting funding (stuck). */
   async findStuckFunding(limit = 50): Promise<Payment[]> {
     return this.paymentRepository
-      .createQueryBuilder('payment')
-      .leftJoinAndSelect('payment.deal', 'deal')
-      .where('payment.status = :status', { status: PaymentStatus.COMPLETED })
-      .andWhere('deal.status = :dealStatus', { dealStatus: 'pending_payment' })
-      .orderBy('payment.paidAt', 'DESC')
+      .createQueryBuilder("payment")
+      .leftJoinAndSelect("payment.deal", "deal")
+      .where("payment.status = :status", { status: PaymentStatus.COMPLETED })
+      .andWhere("deal.status = :dealStatus", { dealStatus: "pending_payment" })
+      .orderBy("payment.paidAt", "DESC")
       .take(limit)
       .getMany();
   }
@@ -403,12 +436,14 @@ export class PaymentService {
 
   async getStats(): Promise<{ totalProcessed: number; totalAmount: number }> {
     const result = await this.paymentRepository
-      .createQueryBuilder('payment')
-      .select('COUNT(*)', 'totalProcessed')
-      .addSelect('SUM(payment.amount)', 'totalAmount')
-      .where('payment.status = :status', { status: PaymentStatus.COMPLETED })
+      .createQueryBuilder("payment")
+      .select("COUNT(*)", "totalProcessed")
+      .addSelect("SUM(payment.amount)", "totalAmount")
+      .where("payment.status = :status", { status: PaymentStatus.COMPLETED })
       .getRawOne();
-    return { totalProcessed: parseInt(result?.totalProcessed || '0'), totalAmount: parseFloat(result?.totalAmount || '0') };
+    return {
+      totalProcessed: parseInt(result?.totalProcessed || "0"),
+      totalAmount: parseFloat(result?.totalAmount || "0"),
+    };
   }
-
 }

@@ -4,11 +4,11 @@ import {
   OnModuleInit,
   Inject,
   forwardRef,
-} from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, LessThan, Between, In } from 'typeorm';
-import { InjectRedis } from '@nestjs-modules/ioredis';
-import Redis from 'ioredis';
+} from "@nestjs/common";
+import { InjectRepository } from "@nestjs/typeorm";
+import { Repository, LessThan, Between, In, IsNull, Not } from "typeorm";
+import { InjectRedis } from "@nestjs-modules/ioredis";
+import Redis from "ioredis";
 import {
   SystemAlert,
   HealthCheck,
@@ -17,26 +17,34 @@ import {
   JobSchedule,
   AlertSeverity,
   AlertType,
-} from './entities/monitoring.entity';
-import { DealService } from '../deal/deal.service';
-import { PaymentService } from '../payment/payment.service';
-import { Deal } from '../deal/entities/deal.entity';
-import { DealStatus } from '../deal/enums/deal.enum';
-import { Payment } from '../payment/entities/payment.entity';
-import { PaymentStatus } from '../payment/enums/payment.enum';
-import { OutboxService } from '../ops/outbox.service';
-import { TelegramBotService } from '../telegram-bot/telegram-bot.service';
-import { ConfigService } from '@nestjs/config';
-import { TreasuryClient } from '../blockchain/treasury.client';
-import { RelayService } from '../blockchain/relay.service';
-import { TonUnmatchedDeposit } from '../payment/entities/ton-unmatched-deposit.entity';
+} from "./entities/monitoring.entity";
+import { DealService } from "../deal/deal.service";
+import { PaymentService } from "../payment/payment.service";
+import { Deal } from "../deal/entities/deal.entity";
+import { DealStatus } from "../deal/enums/deal.enum";
+import { Payment } from "../payment/entities/payment.entity";
+import { PaymentStatus } from "../payment/enums/payment.enum";
+import { OutboxService } from "../ops/outbox.service";
+import { TelegramBotService } from "../telegram-bot/telegram-bot.service";
+import { ConfigService } from "@nestjs/config";
+import { TreasuryClient } from "../blockchain/treasury.client";
+import { RelayService } from "../blockchain/relay.service";
+import { TonUnmatchedDeposit } from "../payment/entities/ton-unmatched-deposit.entity";
 import {
   TonApiService,
   TON_DECIMALS,
   TON_USDT_DECIMALS,
-} from '../payment/rails/ton-api.service';
-import { ethers } from 'ethers';
-import { BlockchainProvider } from '../blockchain/blockchain.provider';
+} from "../payment/rails/ton-api.service";
+import { ethers } from "ethers";
+import { BlockchainProvider } from "../blockchain/blockchain.provider";
+import {
+  TonNativeEscrowWatch,
+  TonNativeEscrowWatchStatus,
+} from "../deal/entities/ton-native-escrow-watch.entity";
+import {
+  TonNativeChainEvent,
+  TonNativeChainEventOutcome,
+} from "../deal/entities/ton-native-chain-event.entity";
 
 @Injectable()
 export class MonitoringService implements OnModuleInit {
@@ -74,11 +82,15 @@ export class MonitoringService implements OnModuleInit {
     private readonly blockchainProvider: BlockchainProvider,
     @Inject(forwardRef(() => TonApiService))
     private readonly tonApi: TonApiService,
+    @InjectRepository(TonNativeEscrowWatch)
+    private readonly tonNativeWatchRepo: Repository<TonNativeEscrowWatch>,
+    @InjectRepository(TonNativeChainEvent)
+    private readonly tonNativeEventRepo: Repository<TonNativeChainEvent>,
   ) {}
 
   async onModuleInit() {
-    this.logger.log('Monitoring service initialized');
-    await this.recordMetric('system.started', 1, 'count');
+    this.logger.log("Monitoring service initialized");
+    await this.recordMetric("system.started", 1, "count");
     this.startMonitoring();
   }
 
@@ -91,16 +103,35 @@ export class MonitoringService implements OnModuleInit {
     setInterval(() => this.checkPendingPayments(), 120000);
     setInterval(
       () => this.checkStuckFunding(),
-      Number(this.config.get<string>('STUCK_FUNDING_CHECK_INTERVAL_MS', '300000')),
+      Number(
+        this.config.get<string>("STUCK_FUNDING_CHECK_INTERVAL_MS", "300000"),
+      ),
     );
     setInterval(() => this.checkTreasuryReserve(), 600000);
     setInterval(() => this.checkTonOps(), 600000);
+    const manualReviewInterval = Number(
+      this.config.get<string>(
+        "TON_NATIVE_MANUAL_REVIEW_CHECK_INTERVAL_MS",
+        "300000",
+      ),
+    );
+    setInterval(
+      () => this.checkTonNativeManualReviews(),
+      Number.isFinite(manualReviewInterval)
+        ? Math.min(3_600_000, Math.max(60_000, manualReviewInterval))
+        : 300_000,
+    );
     setInterval(() => this.cleanupOldAlerts(), 3600000);
 
-    this.logger.log('Background monitoring started');
+    this.logger.log("Background monitoring started");
   }
 
-  async recordMetric(metric: string, value: number, unit = 'unit', service = 'main'): Promise<void> {
+  async recordMetric(
+    metric: string,
+    value: number,
+    unit = "unit",
+    service = "main",
+  ): Promise<void> {
     try {
       await this.metricsRepository.save({
         metric,
@@ -114,30 +145,41 @@ export class MonitoringService implements OnModuleInit {
     }
   }
 
-  async recordDealEvent(event: string, dealId: string, metadata?: Record<string, any>): Promise<void> {
-    await this.recordMetric(`deal.${event}`, 1, 'count');
+  async recordDealEvent(
+    event: string,
+    dealId: string,
+    metadata?: Record<string, any>,
+  ): Promise<void> {
+    await this.recordMetric(`deal.${event}`, 1, "count");
 
     const redisKey = `deal:${dealId}:events`;
-    await this.redis.lpush(redisKey, JSON.stringify({
-      event,
-      timestamp: Date.now(),
-      metadata,
-    }));
+    await this.redis.lpush(
+      redisKey,
+      JSON.stringify({
+        event,
+        timestamp: Date.now(),
+        metadata,
+      }),
+    );
     await this.redis.ltrim(redisKey, 0, 999);
   }
 
-  async recordPaymentEvent(event: string, paymentId: string, amount?: number): Promise<void> {
-    await this.recordMetric(`payment.${event}`, 1, 'count');
+  async recordPaymentEvent(
+    event: string,
+    paymentId: string,
+    amount?: number,
+  ): Promise<void> {
+    await this.recordMetric(`payment.${event}`, 1, "count");
     if (amount) {
-      await this.recordMetric('payment.volume', amount, 'USD');
+      await this.recordMetric("payment.volume", amount, "USD");
     }
   }
 
   async healthCheck(): Promise<void> {
     const checks = [
-      { service: 'database', check: () => this.checkDatabase() },
-      { service: 'redis', check: () => this.checkRedis() },
-      { service: 'telegram', check: () => this.checkTelegram() },
+      { service: "database", check: () => this.checkDatabase() },
+      { service: "redis", check: () => this.checkRedis() },
+      { service: "telegram", check: () => this.checkTelegram() },
     ];
 
     for (const { service, check } of checks) {
@@ -146,28 +188,33 @@ export class MonitoringService implements OnModuleInit {
         await check();
         await this.saveHealthCheck(service, true, Date.now() - start);
       } catch (error) {
-        await this.saveHealthCheck(service, false, Date.now() - start, error.message);
+        await this.saveHealthCheck(
+          service,
+          false,
+          Date.now() - start,
+          error.message,
+        );
       }
     }
   }
 
   private async checkDatabase(): Promise<void> {
-    const result = await this.metricsRepository.query('SELECT 1');
-    if (!result) throw new Error('Database check failed');
+    const result = await this.metricsRepository.query("SELECT 1");
+    if (!result) throw new Error("Database check failed");
   }
 
   private async checkRedis(): Promise<void> {
     const pong = await this.redis.ping();
-    if (pong !== 'PONG') throw new Error('Redis check failed');
+    if (pong !== "PONG") throw new Error("Redis check failed");
   }
 
   private async checkTelegram(): Promise<void> {
     const bot = this.telegramBot.getBot();
     if (!bot) {
-      throw new Error('Telegram bot not configured');
+      throw new Error("Telegram bot not configured");
     }
     await bot.telegram.getMe();
-    await this.recordMetric('health.telegram', 1, 'count');
+    await this.recordMetric("health.telegram", 1, "count");
   }
 
   private async saveHealthCheck(
@@ -176,13 +223,17 @@ export class MonitoringService implements OnModuleInit {
     responseTime: number,
     error?: string,
   ): Promise<void> {
-    const existing = await this.healthRepository.findOne({ where: { service } });
+    const existing = await this.healthRepository.findOne({
+      where: { service },
+    });
 
     if (existing) {
       existing.isHealthy = isHealthy;
       existing.responseTime = responseTime;
       existing.lastCheckAt = new Date();
-      existing.consecutiveFailures = isHealthy ? 0 : existing.consecutiveFailures + 1;
+      existing.consecutiveFailures = isHealthy
+        ? 0
+        : existing.consecutiveFailures + 1;
       if (error) existing.lastError = error;
       await this.healthRepository.save(existing);
     } else {
@@ -226,7 +277,7 @@ export class MonitoringService implements OnModuleInit {
         await this.createAlert(
           AlertType.SYSTEM_ERROR,
           AlertSeverity.WARNING,
-          'Multiple stuck deals detected',
+          "Multiple stuck deals detected",
           `${stuck.length} deals may be stuck`,
         );
       }
@@ -241,20 +292,26 @@ export class MonitoringService implements OnModuleInit {
     }
     try {
       const threshold = BigInt(
-        this.config.get<string>('TREASURY_LOW_RESERVE_RAW', '1000000000'),
+        this.config.get<string>("TREASURY_LOW_RESERVE_RAW", "1000000000"),
       );
       const { reserve } = await this.treasury.balances();
-      await this.recordMetric('treasury.reserve', Number(reserve), 'base_units');
+      await this.recordMetric(
+        "treasury.reserve",
+        Number(reserve),
+        "base_units",
+      );
       if (reserve < threshold) {
         await this.createAlert(
           AlertType.SYSTEM_ERROR,
           AlertSeverity.WARNING,
-          'Treasury reserve below threshold',
+          "Treasury reserve below threshold",
           `Reserve ${reserve.toString()} < ${threshold.toString()} (raw token units)`,
         );
       }
     } catch (error) {
-      this.logger.error(`Treasury reserve check failed: ${(error as Error).message}`);
+      this.logger.error(
+        `Treasury reserve check failed: ${(error as Error).message}`,
+      );
     }
   }
 
@@ -267,12 +324,12 @@ export class MonitoringService implements OnModuleInit {
           createdAt: LessThan(oneHourAgo),
         },
       });
-      await this.recordMetric('monitoring.payments_checked', stale, 'count');
+      await this.recordMetric("monitoring.payments_checked", stale, "count");
       if (stale > 10) {
         await this.createAlert(
           AlertType.ARBITRATION_PENDING,
           AlertSeverity.INFO,
-          'Stale pending payments',
+          "Stale pending payments",
           `${stale} payments pending over 1 hour`,
         );
       }
@@ -295,16 +352,20 @@ export class MonitoringService implements OnModuleInit {
   async checkStuckFunding(): Promise<void> {
     try {
       const threshold = Number(
-        this.config.get<string>('STUCK_FUNDING_ALERT_THRESHOLD', '0'),
+        this.config.get<string>("STUCK_FUNDING_ALERT_THRESHOLD", "0"),
       );
       const stuck = await this.paymentService.findStuckFunding();
-      await this.recordMetric('monitoring.stuck_funding', stuck.length, 'count');
+      await this.recordMetric(
+        "monitoring.stuck_funding",
+        stuck.length,
+        "count",
+      );
 
       if (stuck.length > threshold) {
         await this.createAlertOnce(
           AlertType.PAYMENT_FAILED,
           AlertSeverity.ERROR,
-          'Stuck funding: paid deals without funded escrow',
+          "Stuck funding: paid deals without funded escrow",
           `${stuck.length} completed payment(s) whose deal is still awaiting ` +
             `funding — USDT received but escrow not funded. Investigate: ` +
             `GET /admin/payments/stuck/funding`,
@@ -325,7 +386,7 @@ export class MonitoringService implements OnModuleInit {
         createdAt: LessThan(thirtyDaysAgo),
         isResolved: true,
       });
-      await this.recordMetric('monitoring.alerts_cleaned', 1, 'count');
+      await this.recordMetric("monitoring.alerts_cleaned", 1, "count");
     } catch (error) {
       this.logger.error(`Failed to cleanup old alerts: ${error.message}`);
     }
@@ -347,37 +408,41 @@ export class MonitoringService implements OnModuleInit {
   async checkTonOps(): Promise<void> {
     try {
       const unmatched = await this.tonUnmatchedRepo.count({
-        where: { status: 'unmatched' },
+        where: { status: "unmatched" },
       });
-      await this.recordMetric('ton.unmatched_deposits', unmatched, 'count');
+      await this.recordMetric("ton.unmatched_deposits", unmatched, "count");
       if (unmatched > 0) {
         await this.createAlertOnce(
           AlertType.PAYMENT_FAILED,
           AlertSeverity.ERROR,
-          'Unmatched TON deposits need manual matching',
+          "Unmatched TON deposits need manual matching",
           `${unmatched} incoming TON deposit(s) have no matching payment (missing/typo'd memo). Match or ignore them: GET /admin/payments/ton/unmatched`,
           { unmatched },
         );
       }
     } catch (error) {
-      this.logger.error(`TON unmatched check failed: ${(error as Error).message}`);
+      this.logger.error(
+        `TON unmatched check failed: ${(error as Error).message}`,
+      );
     }
 
     if (!this.blockchainProvider.isReady) return;
     try {
-      const minFloat = Number(this.config.get<string>('TON_MIN_FLOAT_USDT', '500'));
+      const minFloat = Number(
+        this.config.get<string>("TON_MIN_FLOAT_USDT", "500"),
+      );
       const warnFloat = Number(
-        this.config.get<string>('TON_FLOAT_WARN_USDT', String(minFloat * 2)),
+        this.config.get<string>("TON_FLOAT_WARN_USDT", String(minFloat * 2)),
       );
       const balance = await this.relay.hotWalletBalance();
       const floatUsdt = Number(ethers.formatUnits(balance, 6));
-      await this.recordMetric('ton.relay_float_usdt', floatUsdt, 'USDT');
+      await this.recordMetric("ton.relay_float_usdt", floatUsdt, "USDT");
 
       if (floatUsdt < minFloat) {
         await this.createAlertOnce(
           AlertType.SYSTEM_ERROR,
           AlertSeverity.CRITICAL,
-          'TON rail hidden: relay float below minimum',
+          "TON rail hidden: relay float below minimum",
           `Relay float ${floatUsdt.toFixed(2)} USDT < TON_MIN_FLOAT_USDT (${minFloat}). The TON payment method is now hidden from users — rebalance TON→Polygon.`,
           { floatUsdt, minFloat },
         );
@@ -385,7 +450,7 @@ export class MonitoringService implements OnModuleInit {
         await this.createAlertOnce(
           AlertType.SYSTEM_ERROR,
           AlertSeverity.WARNING,
-          'TON relay float running low',
+          "TON relay float running low",
           `Relay float ${floatUsdt.toFixed(2)} USDT < warn threshold (${warnFloat}). Plan a TON→Polygon rebalance before the rail auto-hides at ${minFloat}.`,
           { floatUsdt, warnFloat, minFloat },
         );
@@ -406,21 +471,26 @@ export class MonitoringService implements OnModuleInit {
           ethers.formatUnits(balances.usdtUnits, TON_USDT_DECIMALS),
         );
         const totalUsd = tonValue + usdtValue;
-        await this.recordMetric('ton.wallet_balance_usd', totalUsd, 'USD');
+        await this.recordMetric("ton.wallet_balance_usd", totalUsd, "USD");
 
-        const minFloat = Number(this.config.get<string>('TON_MIN_FLOAT_USDT', '500'));
+        const minFloat = Number(
+          this.config.get<string>("TON_MIN_FLOAT_USDT", "500"),
+        );
         const rebalanceAt = Number(
-          this.config.get<string>('TON_REBALANCE_ALERT_USD', String(minFloat * 2)),
+          this.config.get<string>(
+            "TON_REBALANCE_ALERT_USD",
+            String(minFloat * 2),
+          ),
         );
         if (rebalanceAt > 0 && totalUsd >= rebalanceAt) {
           await this.createAlertOnce(
             AlertType.SYSTEM_ERROR,
             AlertSeverity.WARNING,
-            'TON wallet balance awaiting rebalance',
+            "TON wallet balance awaiting rebalance",
             `Platform TON wallet holds ≈$${totalUsd.toFixed(2)} ` +
               `(${Number(ethers.formatUnits(balances.tonNano, TON_DECIMALS)).toFixed(2)} TON + ` +
               `${usdtValue.toFixed(2)} USDT) ≥ TON_REBALANCE_ALERT_USD (${rebalanceAt}). ` +
-              'Only the rate-lock buffer covers TON/USD movement on these funds — rebalance TON→Polygon.',
+              "Only the rate-lock buffer covers TON/USD movement on these funds — rebalance TON→Polygon.",
             { totalUsd, tonValue, usdtValue, rebalanceAt },
           );
         }
@@ -493,12 +563,12 @@ export class MonitoringService implements OnModuleInit {
     title: string,
     message?: string,
   ): Promise<void> {
-    const chatId = Number(this.config.get<string>('OPS_ALERT_CHAT_ID', ''));
+    const chatId = Number(this.config.get<string>("OPS_ALERT_CHAT_ID", ""));
     if (!chatId) return;
     try {
-      const icon = severity === AlertSeverity.CRITICAL ? '🚨' : '⚠️';
-      const text = `${icon} <b>${escapeHtml(title)}</b>\n${escapeHtml(message ?? '')}`;
-      await this.telegramBot.sendMessage(chatId, text, { parseMode: 'HTML' });
+      const icon = severity === AlertSeverity.CRITICAL ? "🚨" : "⚠️";
+      const text = `${icon} <b>${escapeHtml(title)}</b>\n${escapeHtml(message ?? "")}`;
+      await this.telegramBot.sendMessage(chatId, text, { parseMode: "HTML" });
     } catch (error) {
       this.logger.warn(
         `Failed to push alert to ops chat: ${(error as Error).message}`,
@@ -506,7 +576,11 @@ export class MonitoringService implements OnModuleInit {
     }
   }
 
-  async resolveAlert(alertId: string, resolvedBy: string, resolution: string): Promise<void> {
+  async resolveAlert(
+    alertId: string,
+    resolvedBy: string,
+    resolution: string,
+  ): Promise<void> {
     await this.alertRepository.update(alertId, {
       isResolved: true,
       resolvedBy,
@@ -520,7 +594,7 @@ export class MonitoringService implements OnModuleInit {
     if (severity) where.severity = severity;
     return this.alertRepository.find({
       where,
-      order: { createdAt: 'DESC' },
+      order: { createdAt: "DESC" },
     });
   }
 
@@ -533,7 +607,7 @@ export class MonitoringService implements OnModuleInit {
 
     const recentAlerts = await this.alertRepository.find({
       where: { isResolved: false },
-      order: { createdAt: 'DESC' },
+      order: { createdAt: "DESC" },
       take: 10,
     });
 
@@ -557,7 +631,7 @@ export class MonitoringService implements OnModuleInit {
         // Between (was MoreThan(from)): `to` used to be silently ignored.
         timestamp: Between(from, to),
       },
-      order: { timestamp: 'ASC' },
+      order: { timestamp: "ASC" },
     });
   }
 
@@ -582,9 +656,53 @@ export class MonitoringService implements OnModuleInit {
 
   async getRecoveryHistory(limit = 50): Promise<RecoveryLog[]> {
     return this.recoveryRepository.find({
-      order: { createdAt: 'DESC' },
+      order: { createdAt: "DESC" },
       take: limit,
     });
+  }
+
+  async checkTonNativeManualReviews(): Promise<void> {
+    try {
+      const [manualWatches, stoppedEvents] = await Promise.all([
+        this.tonNativeWatchRepo.count({
+          where: { status: TonNativeEscrowWatchStatus.MANUAL_REVIEW },
+        }),
+        this.tonNativeEventRepo.count({
+          where: {
+            outcome: TonNativeChainEventOutcome.ACCEPTED,
+            appliedAt: IsNull(),
+            automationStoppedAt: Not(IsNull()),
+          },
+        }),
+      ]);
+      await Promise.all([
+        this.recordMetric(
+          "ton_native.manual_review_watches",
+          manualWatches,
+          "count",
+          "ton-native",
+        ),
+        this.recordMetric(
+          "ton_native.stopped_events",
+          stoppedEvents,
+          "count",
+          "ton-native",
+        ),
+      ]);
+      if (manualWatches > 0 || stoppedEvents > 0) {
+        await this.createAlertOnce(
+          AlertType.SYSTEM_ERROR,
+          AlertSeverity.ERROR,
+          "Native TON automation requires manual review",
+          `${manualWatches} watch(es) and ${stoppedEvents} accepted event(s) are fail-closed. Inspect /api/admin/ops/ton-native/manual-reviews.`,
+          { manualWatches, stoppedEvents },
+        );
+      }
+    } catch (error) {
+      this.logger.error(
+        `Native TON manual-review check failed: ${(error as Error).message}`,
+      );
+    }
   }
 
   async getPrometheusStyleMetrics(): Promise<Record<string, number>> {
@@ -595,18 +713,33 @@ export class MonitoringService implements OnModuleInit {
     const pendingPayments = await this.paymentRepo.count({
       where: { status: PaymentStatus.PENDING },
     });
+    const [tonNativeManualReviewWatches, tonNativeStoppedEvents] =
+      await Promise.all([
+        this.tonNativeWatchRepo.count({
+          where: { status: TonNativeEscrowWatchStatus.MANUAL_REVIEW },
+        }),
+        this.tonNativeEventRepo.count({
+          where: {
+            outcome: TonNativeChainEventOutcome.ACCEPTED,
+            appliedAt: IsNull(),
+            automationStoppedAt: Not(IsNull()),
+          },
+        }),
+      ]);
     return {
       outbox_pending: outbox.pending,
       outbox_dead: outbox.dead,
       alerts_active: activeAlerts,
       payments_pending: pendingPayments,
+      ton_native_manual_review_watches: tonNativeManualReviewWatches,
+      ton_native_stopped_events: tonNativeStoppedEvents,
     };
   }
 }
 
 function escapeHtml(text: string): string {
   return text
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;');
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
 }

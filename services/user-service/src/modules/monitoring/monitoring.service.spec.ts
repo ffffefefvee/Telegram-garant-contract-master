@@ -1,9 +1,9 @@
-import { MonitoringService } from './monitoring.service';
+import { MonitoringService } from "./monitoring.service";
 import {
   AlertSeverity,
   AlertType,
   SystemAlert,
-} from './entities/monitoring.entity';
+} from "./entities/monitoring.entity";
 
 /**
  * In-memory stand-in for the SystemAlert repository. Enough to exercise the
@@ -14,16 +14,21 @@ function makeAlertRepo(): any {
   const rows: SystemAlert[] = [];
   return {
     rows,
-    findOne: jest.fn(async ({ where }: any) =>
-      rows.find(
-        (r) =>
-          r.type === where.type &&
-          r.title === where.title &&
-          r.isResolved === where.isResolved,
-      ) ?? null,
+    findOne: jest.fn(
+      async ({ where }: any) =>
+        rows.find(
+          (r) =>
+            r.type === where.type &&
+            r.title === where.title &&
+            r.isResolved === where.isResolved,
+        ) ?? null,
     ),
     save: jest.fn(async (entity: Partial<SystemAlert>) => {
-      const row = { id: `alert-${rows.length + 1}`, isResolved: false, ...entity } as SystemAlert;
+      const row = {
+        id: `alert-${rows.length + 1}`,
+        isResolved: false,
+        ...entity,
+      } as SystemAlert;
       rows.push(row);
       return row;
     }),
@@ -35,22 +40,30 @@ function makeAlertRepo(): any {
  * touches wired up; everything else is a harmless stub. Instantiated directly
  * to avoid standing up the full DI graph (18 constructor deps).
  */
-function makeService(overrides: {
-  alertRepo?: any;
-  paymentService?: any;
-  config?: any;
-} = {}) {
+function makeService(
+  overrides: {
+    alertRepo?: any;
+    paymentService?: any;
+    config?: any;
+    tonNativeWatchRepo?: any;
+    tonNativeEventRepo?: any;
+  } = {},
+) {
   const alertRepo = overrides.alertRepo ?? makeAlertRepo();
   const metricsRepo = { save: jest.fn(async () => ({})) };
   const paymentService = overrides.paymentService ?? {
     findStuckFunding: jest.fn(async () => []),
   };
   // Mimic ConfigService: return the provided default when the key is unset.
-  const config = overrides.config ?? { get: jest.fn((_key: string, def?: any) => def) };
+  const config = overrides.config ?? {
+    get: jest.fn((_key: string, def?: any) => def),
+  };
   const telegramBot = { sendMessage: jest.fn(async () => undefined) };
   const noop = {} as any;
 
-  const ServiceCtor = MonitoringService as unknown as new (...args: any[]) => MonitoringService;
+  const ServiceCtor = MonitoringService as unknown as new (
+    ...args: any[]
+  ) => MonitoringService;
   const service = new ServiceCtor(
     alertRepo, // alertRepository
     noop, // healthRepository
@@ -70,6 +83,8 @@ function makeService(overrides: {
     noop, // relay
     noop, // blockchainProvider
     noop, // tonApi
+    overrides.tonNativeWatchRepo ?? noop,
+    overrides.tonNativeEventRepo ?? noop,
   );
 
   return { service, alertRepo, metricsRepo, paymentService, config };
@@ -79,10 +94,12 @@ function stuckPayments(n: number) {
   return Array.from({ length: n }, (_, i) => ({ id: `pay-${i}` }));
 }
 
-describe('MonitoringService.checkStuckFunding', () => {
-  it('raises an ERROR alert when stuck-funding count exceeds the threshold', async () => {
+describe("MonitoringService.checkStuckFunding", () => {
+  it("raises an ERROR alert when stuck-funding count exceeds the threshold", async () => {
     const { service, alertRepo, paymentService } = makeService({
-      paymentService: { findStuckFunding: jest.fn(async () => stuckPayments(3)) },
+      paymentService: {
+        findStuckFunding: jest.fn(async () => stuckPayments(3)),
+      },
     });
 
     await service.checkStuckFunding();
@@ -92,13 +109,15 @@ describe('MonitoringService.checkStuckFunding', () => {
     expect(alertRepo.rows[0]).toMatchObject({
       type: AlertType.PAYMENT_FAILED,
       severity: AlertSeverity.ERROR,
-      title: 'Stuck funding: paid deals without funded escrow',
+      title: "Stuck funding: paid deals without funded escrow",
     });
   });
 
-  it('does NOT spam: repeated ticks on the same condition create exactly one alert', async () => {
+  it("does NOT spam: repeated ticks on the same condition create exactly one alert", async () => {
     const { service, alertRepo } = makeService({
-      paymentService: { findStuckFunding: jest.fn(async () => stuckPayments(2)) },
+      paymentService: {
+        findStuckFunding: jest.fn(async () => stuckPayments(2)),
+      },
     });
 
     await service.checkStuckFunding();
@@ -108,7 +127,7 @@ describe('MonitoringService.checkStuckFunding', () => {
     expect(alertRepo.rows).toHaveLength(1);
   });
 
-  it('stays silent when no payments are stuck', async () => {
+  it("stays silent when no payments are stuck", async () => {
     const { service, alertRepo } = makeService({
       paymentService: { findStuckFunding: jest.fn(async () => []) },
     });
@@ -118,11 +137,17 @@ describe('MonitoringService.checkStuckFunding', () => {
     expect(alertRepo.rows).toHaveLength(0);
   });
 
-  it('honours a custom STUCK_FUNDING_ALERT_THRESHOLD (no alert at or below it)', async () => {
-    const config = { get: jest.fn((key: string) => (key === 'STUCK_FUNDING_ALERT_THRESHOLD' ? '5' : undefined)) };
+  it("honours a custom STUCK_FUNDING_ALERT_THRESHOLD (no alert at or below it)", async () => {
+    const config = {
+      get: jest.fn((key: string) =>
+        key === "STUCK_FUNDING_ALERT_THRESHOLD" ? "5" : undefined,
+      ),
+    };
     const { service, alertRepo } = makeService({
       config,
-      paymentService: { findStuckFunding: jest.fn(async () => stuckPayments(5)) },
+      paymentService: {
+        findStuckFunding: jest.fn(async () => stuckPayments(5)),
+      },
     });
 
     await service.checkStuckFunding();
@@ -131,15 +156,42 @@ describe('MonitoringService.checkStuckFunding', () => {
     expect(alertRepo.rows).toHaveLength(0);
   });
 
-  it('swallows repository errors without throwing', async () => {
+  it("swallows repository errors without throwing", async () => {
     const { service } = makeService({
       paymentService: {
         findStuckFunding: jest.fn(async () => {
-          throw new Error('db down');
+          throw new Error("db down");
         }),
       },
     });
 
     await expect(service.checkStuckFunding()).resolves.toBeUndefined();
+  });
+});
+
+describe("MonitoringService.checkTonNativeManualReviews", () => {
+  it("publishes counts and raises one deduplicated operator alert", async () => {
+    const tonNativeWatchRepo = { count: jest.fn().mockResolvedValue(2) };
+    const tonNativeEventRepo = { count: jest.fn().mockResolvedValue(1) };
+    const { service, alertRepo, metricsRepo } = makeService({
+      tonNativeWatchRepo,
+      tonNativeEventRepo,
+    });
+
+    await service.checkTonNativeManualReviews();
+    await service.checkTonNativeManualReviews();
+
+    expect(alertRepo.rows).toHaveLength(1);
+    expect(alertRepo.rows[0]).toMatchObject({
+      type: AlertType.SYSTEM_ERROR,
+      severity: AlertSeverity.ERROR,
+      title: "Native TON automation requires manual review",
+    });
+    expect(metricsRepo.save).toHaveBeenCalledWith(
+      expect.objectContaining({
+        metric: "ton_native.stopped_events",
+        value: 1,
+      }),
+    );
   });
 });

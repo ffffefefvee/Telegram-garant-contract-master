@@ -1,5 +1,5 @@
-import { Injectable, Logger } from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
+import { Injectable, Logger } from "@nestjs/common";
+import { InjectRepository } from "@nestjs/typeorm";
 import {
   Between,
   EntityManager,
@@ -7,8 +7,8 @@ import {
   LessThanOrEqual,
   MoreThanOrEqual,
   Repository,
-} from 'typeorm';
-import { AuditLogEntry } from './entities/audit-log.entity';
+} from "typeorm";
+import { AuditLogEntry } from "./entities/audit-log.entity";
 
 export interface AuditWriteInput {
   actorId?: string | null;
@@ -58,6 +58,26 @@ export class AuditLogService {
     }
   }
 
+  /**
+   * Security-sensitive operations use this variant inside their transaction.
+   * If the append-only audit row cannot be persisted, the caller must roll the
+   * operation back instead of leaving an unaudited administrative mutation.
+   */
+  async writeRequired(input: AuditWriteInput): Promise<AuditLogEntry> {
+    const repo = input.manager
+      ? input.manager.getRepository(AuditLogEntry)
+      : this.repo;
+    const row = repo.create({
+      actorId: input.actorId ?? null,
+      actorRole: input.actorRole ?? null,
+      aggregateType: input.aggregateType,
+      aggregateId: input.aggregateId,
+      action: input.action,
+      details: input.details ?? {},
+    });
+    return repo.save(row);
+  }
+
   async findByAggregate(
     aggregateType: string,
     aggregateId: string,
@@ -65,7 +85,7 @@ export class AuditLogService {
   ): Promise<AuditLogEntry[]> {
     return this.repo.find({
       where: { aggregateType, aggregateId } as FindOptionsWhere<AuditLogEntry>,
-      order: { createdAt: 'DESC' },
+      order: { createdAt: "DESC" },
       take: limit,
     });
   }
@@ -73,7 +93,7 @@ export class AuditLogService {
   async findByActor(actorId: string, limit = 100): Promise<AuditLogEntry[]> {
     return this.repo.find({
       where: { actorId } as FindOptionsWhere<AuditLogEntry>,
-      order: { createdAt: 'DESC' },
+      order: { createdAt: "DESC" },
       take: limit,
     });
   }
@@ -92,7 +112,12 @@ export class AuditLogService {
     actorId?: string;
     from?: Date;
     to?: Date;
-  }): Promise<{ items: AuditLogEntry[]; total: number; page: number; limit: number }> {
+  }): Promise<{
+    items: AuditLogEntry[];
+    total: number;
+    page: number;
+    limit: number;
+  }> {
     const page = Math.max(1, opts.page ?? 1);
     const limit = Math.min(200, Math.max(1, opts.limit ?? 50));
 
@@ -111,7 +136,7 @@ export class AuditLogService {
 
     const [items, total] = await this.repo.findAndCount({
       where,
-      order: { createdAt: 'DESC' },
+      order: { createdAt: "DESC" },
       skip: (page - 1) * limit,
       take: limit,
     });

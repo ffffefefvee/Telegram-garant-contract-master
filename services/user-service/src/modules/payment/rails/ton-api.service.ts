@@ -1,12 +1,13 @@
-import { Injectable, Logger } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
+import { Injectable, Logger } from "@nestjs/common";
+import { ConfigService } from "@nestjs/config";
+import { normalizeTonAddress } from "../../escrow/adapters/ton-address";
 
 /**
  * Canonical Tether USDT jetton master on TON mainnet.
  * https://tonviewer.com/EQCxE6mUtQJKFnGfaROTKOt1lZbDiiX1kCixRv7Nw2Id_sDs
  */
 export const TON_USDT_JETTON_MAINNET =
-  'EQCxE6mUtQJKFnGfaROTKOt1lZbDiiX1kCixRv7Nw2Id_sDs';
+  "EQCxE6mUtQJKFnGfaROTKOt1lZbDiiX1kCixRv7Nw2Id_sDs";
 
 /** USDT-TON jetton uses 6 decimals (same as Polygon USDT). */
 export const TON_USDT_DECIMALS = 6;
@@ -25,7 +26,7 @@ export interface TonUsdtIncoming {
 }
 
 /** Asset of an incoming transfer to the platform wallet. */
-export type TonIncomingAsset = 'USDT' | 'TON';
+export type TonIncomingAsset = "USDT" | "TON";
 
 /** One finalized incoming transfer (USDT jetton or native TON). */
 export interface TonIncomingTransfer {
@@ -96,15 +97,15 @@ export class TonApiService {
   private cachedRateAt = 0;
 
   constructor(private readonly config: ConfigService) {
-    this.walletAddress = this.config.get<string>('TON_WALLET_ADDRESS', '');
+    this.walletAddress = this.config.get<string>("TON_WALLET_ADDRESS", "");
     this.jettonMaster = this.config.get<string>(
-      'TON_USDT_JETTON',
+      "TON_USDT_JETTON",
       TON_USDT_JETTON_MAINNET,
     );
     this.baseUrl = (
-      this.config.get<string>('TONAPI_BASE_URL', 'https://tonapi.io') || ''
-    ).replace(/\/+$/, '');
-    this.apiKey = this.config.get<string>('TONAPI_KEY', '');
+      this.config.get<string>("TONAPI_BASE_URL", "https://tonapi.io") || ""
+    ).replace(/\/+$/, "");
+    this.apiKey = this.config.get<string>("TONAPI_KEY", "");
     this.walletRaw = TonApiService.friendlyToRaw(this.walletAddress);
     this.jettonRaw = TonApiService.friendlyToRaw(this.jettonMaster);
   }
@@ -157,7 +158,7 @@ export class TonApiService {
     let receivedUnits = 0n;
     let lastTxHash: string | undefined;
     for (const transfer of this.extractIncomingTransfers(events)) {
-      if (transfer.asset !== 'TON' || transfer.comment !== memo) continue;
+      if (transfer.asset !== "TON" || transfer.comment !== memo) continue;
       receivedUnits += transfer.amountUnits;
       lastTxHash = transfer.eventId;
     }
@@ -171,11 +172,14 @@ export class TonApiService {
    */
   async getTonUsdRate(): Promise<number> {
     const now = Date.now();
-    if (this.cachedRate !== null && now - this.cachedRateAt < RATE_CACHE_TTL_MS) {
+    if (
+      this.cachedRate !== null &&
+      now - this.cachedRateAt < RATE_CACHE_TTL_MS
+    ) {
       return this.cachedRate;
     }
-    const headers: Record<string, string> = { Accept: 'application/json' };
-    if (this.apiKey) headers['Authorization'] = `Bearer ${this.apiKey}`;
+    const headers: Record<string, string> = { Accept: "application/json" };
+    if (this.apiKey) headers["Authorization"] = `Bearer ${this.apiKey}`;
     const response = await fetch(
       `${this.baseUrl}/v2/rates?tokens=ton&currencies=usd`,
       { headers },
@@ -188,9 +192,9 @@ export class TonApiService {
     const body = (await response.json()) as {
       rates?: Record<string, { prices?: Record<string, number> }>;
     };
-    const rate = body.rates?.['TON']?.prices?.['USD'];
-    if (typeof rate !== 'number' || !isFinite(rate) || rate <= 0) {
-      throw new Error('tonapi rates response missing TON/USD price');
+    const rate = body.rates?.["TON"]?.prices?.["USD"];
+    if (typeof rate !== "number" || !isFinite(rate) || rate <= 0) {
+      throw new Error("tonapi rates response missing TON/USD price");
     }
     this.cachedRate = rate;
     this.cachedRateAt = now;
@@ -224,8 +228,8 @@ export class TonApiService {
   } | null> {
     if (!this.isEnabled()) return null;
 
-    const headers: Record<string, string> = { Accept: 'application/json' };
-    if (this.apiKey) headers['Authorization'] = `Bearer ${this.apiKey}`;
+    const headers: Record<string, string> = { Accept: "application/json" };
+    if (this.apiKey) headers["Authorization"] = `Bearer ${this.apiKey}`;
     const account = encodeURIComponent(this.walletAddress);
 
     const accountResponse = await fetch(
@@ -237,7 +241,9 @@ export class TonApiService {
         `tonapi account request failed: ${accountResponse.status} ${accountResponse.statusText}`,
       );
     }
-    const accountBody = (await accountResponse.json()) as { balance?: number | string };
+    const accountBody = (await accountResponse.json()) as {
+      balance?: number | string;
+    };
     const tonNano = BigInt(accountBody.balance ?? 0);
 
     // Jetton wallet may simply not exist yet — that's a zero balance.
@@ -248,7 +254,7 @@ export class TonApiService {
     );
     if (jettonResponse.ok) {
       const jettonBody = (await jettonResponse.json()) as { balance?: string };
-      usdtUnits = BigInt(jettonBody.balance ?? '0');
+      usdtUnits = BigInt(jettonBody.balance ?? "0");
     } else if (jettonResponse.status !== 404) {
       throw new Error(
         `tonapi jetton balance request failed: ${jettonResponse.status} ${jettonResponse.statusText}`,
@@ -263,8 +269,8 @@ export class TonApiService {
       `${this.baseUrl}/v2/accounts/${encodeURIComponent(this.walletAddress)}` +
       `/events?limit=100&start_date=${Math.max(0, Math.floor(sinceUnix))}`;
 
-    const headers: Record<string, string> = { Accept: 'application/json' };
-    if (this.apiKey) headers['Authorization'] = `Bearer ${this.apiKey}`;
+    const headers: Record<string, string> = { Accept: "application/json" };
+    if (this.apiKey) headers["Authorization"] = `Bearer ${this.apiKey}`;
 
     const response = await fetch(url, { headers });
     if (!response.ok) {
@@ -282,7 +288,7 @@ export class TonApiService {
     let lastTxHash: string | undefined;
 
     for (const transfer of this.extractIncomingTransfers(events)) {
-      if (transfer.asset !== 'USDT' || transfer.comment !== memo) continue;
+      if (transfer.asset !== "USDT" || transfer.comment !== memo) continue;
       receivedUnits += transfer.amountUnits;
       lastTxHash = transfer.eventId;
     }
@@ -296,22 +302,22 @@ export class TonApiService {
     for (const event of events) {
       if (event.in_progress) continue; // not finalized yet
       (event.actions ?? []).forEach((action, actionIndex) => {
-        if (action.status !== 'ok') return;
+        if (action.status !== "ok") return;
 
-        if (action.type === 'JettonTransfer') {
+        if (action.type === "JettonTransfer") {
           const t = action.JettonTransfer;
           if (!t?.amount || !t.recipient?.address || !t.jetton?.address) return;
           if (!this.sameAddress(t.recipient.address, this.walletRaw)) return;
           if (!this.sameAddress(t.jetton.address, this.jettonRaw)) return;
           try {
             transfers.push({
-              asset: 'USDT',
+              asset: "USDT",
               eventId: event.event_id,
               actionIndex,
               timestamp: event.timestamp,
-              sender: t.sender?.address ?? 'unknown',
+              sender: t.sender?.address ?? "unknown",
               amountUnits: BigInt(t.amount),
-              comment: (t.comment ?? '').trim(),
+              comment: (t.comment ?? "").trim(),
             });
           } catch {
             this.logger.warn(
@@ -321,19 +327,19 @@ export class TonApiService {
           return;
         }
 
-        if (action.type === 'TonTransfer') {
+        if (action.type === "TonTransfer") {
           const t = action.TonTransfer;
           if (t?.amount == null || !t.recipient?.address) return;
           if (!this.sameAddress(t.recipient.address, this.walletRaw)) return;
           try {
             transfers.push({
-              asset: 'TON',
+              asset: "TON",
               eventId: event.event_id,
               actionIndex,
               timestamp: event.timestamp,
-              sender: t.sender?.address ?? 'unknown',
+              sender: t.sender?.address ?? "unknown",
               amountUnits: BigInt(String(t.amount)),
-              comment: (t.comment ?? '').trim(),
+              comment: (t.comment ?? "").trim(),
             });
           } catch {
             this.logger.warn(
@@ -357,22 +363,6 @@ export class TonApiService {
    * (`0:abc…`) is passed through normalized.
    */
   static friendlyToRaw(address: string): string | null {
-    if (!address) return null;
-    const trimmed = address.trim();
-    if (/^-?\d+:[0-9a-fA-F]{64}$/.test(trimmed)) {
-      const [wc, hash] = trimmed.split(':');
-      return `${parseInt(wc, 10)}:${hash.toLowerCase()}`;
-    }
-    try {
-      const base64 = trimmed.replace(/-/g, '+').replace(/_/g, '/');
-      const bytes = Buffer.from(base64, 'base64');
-      if (bytes.length !== 36) return null;
-      // bytes: [tag][workchain][32-byte hash][2-byte crc16]
-      const workchain = bytes.readInt8(1);
-      const hash = bytes.subarray(2, 34).toString('hex');
-      return `${workchain}:${hash}`;
-    } catch {
-      return null;
-    }
+    return normalizeTonAddress(address);
   }
 }

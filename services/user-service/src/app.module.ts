@@ -10,11 +10,18 @@ import { TelegramBotModule } from "./modules/telegram-bot/telegram-bot.module";
 import { User } from "./modules/user/entities/user.entity";
 import { UserSession } from "./modules/user/entities/user-session.entity";
 import { LanguagePreference } from "./modules/user/entities/language-preference.entity";
+import { TonProofChallenge } from "./modules/user/entities/ton-proof-challenge.entity";
+import { TonWalletBinding } from "./modules/user/entities/ton-wallet-binding.entity";
 import { Deal } from "./modules/deal/entities/deal.entity";
 import { DealMessage } from "./modules/deal/entities/deal-message.entity";
 import { DealAttachment } from "./modules/deal/entities/deal-attachment.entity";
 import { DealInvite } from "./modules/deal/entities/deal-invite.entity";
 import { DealEvent } from "./modules/deal/entities/deal-event.entity";
+import { TonNativeEscrowPreparation } from "./modules/deal/entities/ton-native-escrow-preparation.entity";
+import { TonNativeEscrowWatch } from "./modules/deal/entities/ton-native-escrow-watch.entity";
+import { TonNativeChainEvent } from "./modules/deal/entities/ton-native-chain-event.entity";
+import { TonNativeLifecycleIntent } from "./modules/deal/entities/ton-native-lifecycle-intent.entity";
+import { TonNativeRecoveryRequest } from "./modules/deal/entities/ton-native-recovery-request.entity";
 import { DealModule } from "./modules/deal/deal.module";
 import { Payment } from "./modules/payment/entities/payment.entity";
 import { CommissionRate } from "./modules/payment/entities/commission-rate.entity";
@@ -103,11 +110,18 @@ import { validateEnvironment } from "./config/environment.validation";
               User,
               UserSession,
               LanguagePreference,
+              TonProofChallenge,
+              TonWalletBinding,
               Deal,
               DealMessage,
               DealAttachment,
               DealInvite,
               DealEvent,
+              TonNativeEscrowPreparation,
+              TonNativeEscrowWatch,
+              TonNativeChainEvent,
+              TonNativeLifecycleIntent,
+              TonNativeRecoveryRequest,
               Payment,
               CommissionRate,
               CurrencyRate,
@@ -155,11 +169,18 @@ import { validateEnvironment } from "./config/environment.validation";
             User,
             UserSession,
             LanguagePreference,
+            TonProofChallenge,
+            TonWalletBinding,
             Deal,
             DealMessage,
             DealAttachment,
             DealInvite,
             DealEvent,
+            TonNativeEscrowPreparation,
+            TonNativeEscrowWatch,
+            TonNativeChainEvent,
+            TonNativeLifecycleIntent,
+            TonNativeRecoveryRequest,
             Payment,
             CommissionRate,
             CurrencyRate,

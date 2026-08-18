@@ -42,6 +42,60 @@ export function validateEnvironment(
   if (environment.TELEGRAM_TEST_INJECT_ENABLED === "true") {
     failures.push("TELEGRAM_TEST_INJECT_ENABLED must be false in production");
   }
+  if (environment.TON_CONNECT_ENABLED === "true") {
+    if (!isTonProofDomain(environment.TON_CONNECT_PROOF_DOMAIN)) {
+      failures.push(
+        "TON_CONNECT_PROOF_DOMAIN must be an explicit host without scheme or path",
+      );
+    }
+    if (!["-239", "-3"].includes(environment.TON_CONNECT_NETWORK ?? "")) {
+      failures.push(
+        "TON_CONNECT_NETWORK must be -239 (mainnet) or -3 (testnet)",
+      );
+    }
+  }
+  if (environment.TON_NATIVE_INGESTION_ENABLED === "true") {
+    if (environment.DB_MIGRATIONS_RUN !== "true") {
+      failures.push(
+        "DB_MIGRATIONS_RUN must be true before native TON ingestion can be enabled",
+      );
+    }
+    if (isUnsafeSecret(environment.TONCENTER_API_KEY)) {
+      failures.push(
+        "TONCENTER_API_KEY must be a non-placeholder production secret when native TON ingestion is enabled",
+      );
+    }
+    const tonCenterUrl = environment.TONCENTER_V3_BASE_URL?.trim();
+    if (tonCenterUrl && !isHttpsBaseUrl(tonCenterUrl)) {
+      failures.push(
+        "TONCENTER_V3_BASE_URL must be an explicit HTTPS URL in production",
+      );
+    }
+    if (environment.TON_NATIVE_RECONCILIATION_REQUIRED !== "true") {
+      failures.push(
+        "TON_NATIVE_RECONCILIATION_REQUIRED must be true before native TON ingestion can be enabled in production",
+      );
+    }
+    if (!isIndependentTonV2Url(environment.TON_LITESERVER_V2_BASE_URL)) {
+      failures.push(
+        "TON_LITESERVER_V2_BASE_URL must be an explicit independent HTTPS API v2 URL in production",
+      );
+    }
+    if (
+      !/^[a-zA-Z0-9._-]{3,64}$/.test(
+        environment.TON_LITESERVER_V2_SOURCE?.trim() ?? "",
+      )
+    ) {
+      failures.push(
+        "TON_LITESERVER_V2_SOURCE must identify the independent operator",
+      );
+    }
+    if (isUnsafeSecret(environment.TON_LITESERVER_V2_API_KEY)) {
+      failures.push(
+        "TON_LITESERVER_V2_API_KEY must be a non-placeholder production secret when native TON ingestion is enabled",
+      );
+    }
+  }
   if (
     environment.MONEY_EGRESS_ENABLED === "true" &&
     environment.DB_MIGRATIONS_RUN !== "true"
@@ -58,6 +112,18 @@ export function validateEnvironment(
       "RECONCILIATION_ENABLED must be true before money egress can be enabled",
     );
   }
+  if (
+    environment.TON_NATIVE_MANUAL_REVIEW_CHECK_INTERVAL_MS !== undefined &&
+    !isIntegerInRange(
+      environment.TON_NATIVE_MANUAL_REVIEW_CHECK_INTERVAL_MS,
+      60_000,
+      3_600_000,
+    )
+  ) {
+    failures.push(
+      "TON_NATIVE_MANUAL_REVIEW_CHECK_INTERVAL_MS must be 60000-3600000",
+    );
+  }
 
   if (failures.length > 0) {
     throw new Error(
@@ -66,6 +132,16 @@ export function validateEnvironment(
   }
 
   return environment;
+}
+
+function isTonProofDomain(value: string | undefined): boolean {
+  if (!value) return false;
+  const domain = value.trim();
+  return (
+    domain.length > 0 &&
+    Buffer.byteLength(domain, "utf8") <= 128 &&
+    !/:\/\/|[\s/?#]/.test(domain)
+  );
 }
 
 function isUnsafeSecret(value: string | undefined): boolean {
@@ -93,4 +169,30 @@ function hasOnlyHttpsOrigins(value: string | undefined): boolean {
     .split(",")
     .map((origin) => origin.trim())
     .every((origin) => /^https:\/\/[^/\s]+(?:\/.*)?$/i.test(origin));
+}
+
+function isHttpsBaseUrl(value: string): boolean {
+  try {
+    const url = new URL(value);
+    return (
+      url.protocol === "https:" &&
+      !!url.hostname &&
+      !url.username &&
+      !url.password
+    );
+  } catch {
+    return false;
+  }
+}
+
+function isIndependentTonV2Url(value: string | undefined): boolean {
+  if (!value || !isHttpsBaseUrl(value.trim())) return false;
+  const hostname = new URL(value.trim()).hostname;
+  return !/(^|\.)toncenter\.com$/i.test(hostname);
+}
+
+function isIntegerInRange(value: string, minimum: number, maximum: number) {
+  if (!/^\d+$/.test(value)) return false;
+  const parsed = Number(value);
+  return Number.isSafeInteger(parsed) && parsed >= minimum && parsed <= maximum;
 }

@@ -1,0 +1,36 @@
+{
+  "name": "telegram-garant-ton-contracts",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Native TON escrow contracts for Telegram Garant",
+  "license": "UNLICENSED",
+  "scripts": {
+    "build": "ts-node scripts/build.ts",
+    "release:verify-cross-build": "ts-node scripts/verify-cross-build.ts",
+    "release:verify-approval": "ts-node scripts/verify-release-approval.ts",
+    "release:authorize-deployment": "ts-node scripts/authorize-deployment.ts",
+    "test": "jest --runInBand",
+    "test:coverage": "jest --runInBand --coverage",
+    "typecheck": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@ton/core": "0.63.1"
+  },
+  "devDependencies": {
+    "@ton/blueprint": "0.45.0",
+    "@ton/crypto": "3.3.0",
+    "@ton/sandbox": "0.40.0",
+    "@ton/test-utils": "0.12.0",
+    "@ton/tolk-js": "1.4.1",
+    "@ton/ton": "16.3.0",
+    "@types/jest": "30.0.0",
+    "@types/node": "20.19.10",
+    "jest": "30.0.5",
+    "ts-jest": "29.4.1",
+    "ts-node": "10.9.2",
+    "typescript": "5.9.2"
+  },
+  "overrides": {
+    "protobufjs": "7.6.5"
+  }
+}

@@ -2,15 +2,15 @@ import { Payment } from '../entities/payment.entity';
 import { PaymentMethod } from '../enums/payment.enum';
 
 /**
- * A payment rail is one way for a buyer to get funds into a deal's escrow.
- * The Polygon escrow contract stays the single settlement layer; rails only
- * differ in how money arrives:
+ * A payment rail is one way for a buyer to fund a deal. It must declare its
+ * real funding and settlement behavior; settlement is never inferred from a
+ * marketing label or silently bridged across chains.
  *
  *  - CRYPTOMUS    — hosted checkout → relay hot-wallet → forwardAndFund()
  *  - DIRECT_USDT  — buyer sends USDT (Polygon) straight to the escrow clone
  *                   address → watcher confirms → notifyFunded() (no custody)
- *  - TON (Stage 2)— USDT-TON to platform TON wallet w/ deal-id comment →
- *                   relay funds escrow from Polygon float
+ *  - TON legacy   — historical USDT-TON/TON ingress backed by Polygon float;
+ *                   never offered for new native TON settlement deals
  */
 export interface RailInvoice {
   /** Hosted checkout URL (gateway rails). */
@@ -18,8 +18,8 @@ export interface RailInvoice {
   /** On-chain deposit address (direct rails). */
   depositAddress?: string;
   /**
-   * Polygon escrow clone backing this payment (settlement layer). May differ
-   * from `depositAddress` for rails where money arrives elsewhere (TON).
+   * Escrow backing this payment. Historical hybrid rails may differ from the
+   * funding address and are explicitly classified as legacy.
    */
   escrowAddress?: string;
   /** Transfer comment the buyer MUST attach (TON rail). */

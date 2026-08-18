@@ -5,6 +5,13 @@ import { CryptomusRail } from './cryptomus.rail';
 import { DirectUsdtRail } from './direct-usdt.rail';
 import { TonUsdtRail } from './ton-usdt.rail';
 import { ToncoinRail } from './toncoin.rail';
+import {
+  ClientChannel,
+  SettlementAsset,
+  SettlementMode,
+  SettlementNetwork,
+} from '../../deal/enums/deal.enum';
+import { PAYMENT_ROUTE_PROFILES } from '../settlement-payment-policy';
 
 export interface RailDescriptor {
   method: PaymentMethod;
@@ -14,6 +21,11 @@ export interface RailDescriptor {
   kind: 'hosted' | 'direct';
   /** Network the buyer pays on (direct rails), e.g. 'polygon' | 'ton'. */
   network?: string;
+  /** Actual settlement behavior, including legacy hybrid routes. */
+  settlementNetwork?: SettlementNetwork;
+  settlementAsset?: SettlementAsset;
+  settlementMode?: SettlementMode;
+  channels: ClientChannel[];
 }
 
 /**
@@ -57,13 +69,20 @@ export class RailRegistryService {
    */
   async list(): Promise<RailDescriptor[]> {
     return Promise.all(
-      Array.from(this.rails.values()).map(async (rail) => ({
-        method: rail.method,
-        label: rail.label,
-        available: await Promise.resolve(rail.isAvailable()),
-        kind: rail.kind,
-        network: this.networkOf(rail.method),
-      })),
+      Array.from(this.rails.values()).map(async (rail) => {
+        const profile = PAYMENT_ROUTE_PROFILES[rail.method];
+        return {
+          method: rail.method,
+          label: rail.label,
+          available: await Promise.resolve(rail.isAvailable()),
+          kind: rail.kind,
+          network: this.networkOf(rail.method),
+          settlementNetwork: profile?.settlementNetwork,
+          settlementAsset: profile?.settlementAsset,
+          settlementMode: profile?.settlementMode,
+          channels: profile?.channels ?? [],
+        };
+      }),
     );
   }
 

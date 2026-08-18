@@ -3,14 +3,20 @@ import {
   Logger,
   NotFoundException,
   BadRequestException,
-} from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository } from 'typeorm';
-import { Dispute } from './entities/dispute.entity';
-import { Deal } from '../deal/entities/deal.entity';
-import { User } from '../user/entities/user.entity';
-import { EscrowService } from '../escrow/escrow.service';
-import { DealStatus } from '../deal/enums/deal.enum';
+  ForbiddenException,
+  ServiceUnavailableException,
+} from "@nestjs/common";
+import { InjectRepository } from "@nestjs/typeorm";
+import { Repository } from "typeorm";
+import { Dispute } from "./entities/dispute.entity";
+import { Deal } from "../deal/entities/deal.entity";
+import { User } from "../user/entities/user.entity";
+import { EscrowService } from "../escrow/escrow.service";
+import {
+  DealStatus,
+  SettlementMode,
+  SettlementNetwork,
+} from "../deal/enums/deal.enum";
 
 /**
  * Recorded on-chain side-effects for a dispute. Stored under
@@ -82,7 +88,9 @@ export class DisputeBlockchainService {
   async syncArbitratorAssignmentOnChain(
     disputeId: string,
   ): Promise<AssignArbitratorOnChainResult> {
-    const dispute = await this.disputeRepo.findOne({ where: { id: disputeId } });
+    const dispute = await this.disputeRepo.findOne({
+      where: { id: disputeId },
+    });
     if (!dispute) {
       throw new NotFoundException(`Dispute ${disputeId} not found`);
     }
@@ -108,7 +116,7 @@ export class DisputeBlockchainService {
 
     const notes: string[] = [];
     if (!this.escrow.isEnabled()) {
-      notes.push('blockchain disabled (stub mode) — assignment not synced');
+      notes.push("blockchain disabled (stub mode) — assignment not synced");
       await this.persistOnChain(dispute, {
         assignArbitratorPending: true,
       });
@@ -170,9 +178,10 @@ export class DisputeBlockchainService {
   async recordResolutionTx(
     disputeId: string,
     input: RecordResolutionInput,
+    actorUserId: string,
   ): Promise<{ disputeId: string; dealId: string; txHash: string }> {
     if (!input.txHash || !/^0x[0-9a-fA-F]{64}$/.test(input.txHash)) {
-      throw new BadRequestException('txHash must be a 32-byte hex (0x…)');
+      throw new BadRequestException("txHash must be a 32-byte hex (0x…)");
     }
     const total = input.buyerSharePct + input.sellerSharePct;
     if (total !== 100) {
@@ -181,9 +190,26 @@ export class DisputeBlockchainService {
       );
     }
 
-    const dispute = await this.disputeRepo.findOne({ where: { id: disputeId } });
+    const dispute = await this.disputeRepo.findOne({
+      where: { id: disputeId },
+    });
     if (!dispute) {
       throw new NotFoundException(`Dispute ${disputeId} not found`);
+    }
+    if (dispute.arbitratorId !== actorUserId) {
+      throw new ForbiddenException(
+        "Only the assigned arbitrator can record a resolution",
+      );
+    }
+
+    const deal = await this.dealRepo.findOne({ where: { id: dispute.dealId } });
+    if (
+      deal?.settlementNetwork === SettlementNetwork.TON &&
+      deal.settlementMode === SettlementMode.NATIVE
+    ) {
+      throw new ServiceUnavailableException(
+        "Native TON resolution is applied only from finalized chain ingestion",
+      );
     }
 
     await this.persistOnChain(dispute, {
@@ -193,7 +219,6 @@ export class DisputeBlockchainService {
       resolveRecordedAt: new Date().toISOString(),
     });
 
-    const deal = await this.dealRepo.findOne({ where: { id: dispute.dealId } });
     if (deal && deal.status !== DealStatus.DISPUTE_RESOLVED) {
       deal.status = DealStatus.DISPUTE_RESOLVED;
       await this.dealRepo.save(deal);

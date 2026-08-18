@@ -10,7 +10,17 @@ import {
   JoinColumn,
 } from 'typeorm';
 import { User } from '../../user/entities/user.entity';
-import { DealType, DealStatus, DealSide, Currency, DealSubcategory, FeeModel } from '../enums/deal.enum';
+import {
+  DealType,
+  DealStatus,
+  DealSide,
+  Currency,
+  DealSubcategory,
+  FeeModel,
+  SettlementAsset,
+  SettlementMode,
+  SettlementNetwork,
+} from '../enums/deal.enum';
 import { DealMessage } from './deal-message.entity';
 import { DealAttachment } from './deal-attachment.entity';
 import { DealInvite } from './deal-invite.entity';
@@ -185,6 +195,76 @@ export class Deal {
 
   @Column({ type: 'varchar', length: 64, nullable: true, name: 'escrow_address' })
   escrowAddress: string | null;
+
+  /** Immutable settlement selection once the deal receives funding. */
+  @Column({
+    type: 'enum',
+    enum: SettlementNetwork,
+    nullable: true,
+    name: 'settlement_network',
+  })
+  @Index()
+  settlementNetwork: SettlementNetwork | null;
+
+  @Column({
+    type: 'varchar',
+    length: 64,
+    nullable: true,
+    name: 'settlement_chain_id',
+  })
+  settlementChainId: string | null;
+
+  @Column({
+    type: 'enum',
+    enum: SettlementAsset,
+    nullable: true,
+    name: 'settlement_asset',
+  })
+  settlementAsset: SettlementAsset | null;
+
+  @Column({
+    type: 'varchar',
+    length: 128,
+    nullable: true,
+    name: 'asset_contract',
+  })
+  assetContract: string | null;
+
+  @Column({
+    type: 'enum',
+    enum: SettlementMode,
+    nullable: true,
+    name: 'settlement_mode',
+  })
+  settlementMode: SettlementMode | null;
+
+  @Column({ type: 'uuid', nullable: true, name: 'quote_id' })
+  quoteId: string | null;
+
+  @Column({ type: 'integer', default: 1, name: 'terms_version' })
+  termsVersion: number;
+
+  @Column({ type: 'varchar', length: 64, nullable: true, name: 'terms_hash' })
+  termsHash: string | null;
+
+  @Column({
+    type: 'varchar',
+    length: 128,
+    nullable: true,
+    name: 'buyer_wallet_address',
+  })
+  buyerWalletAddress: string | null;
+
+  @Column({
+    type: 'varchar',
+    length: 128,
+    nullable: true,
+    name: 'seller_wallet_address',
+  })
+  sellerWalletAddress: string | null;
+
+  @Column({ type: 'timestamp', nullable: true, name: 'funded_at' })
+  fundedAt: Date | null;
 
   // Геттеры для вычисляемых полей
 

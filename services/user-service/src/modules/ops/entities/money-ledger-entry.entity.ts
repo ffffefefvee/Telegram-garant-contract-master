@@ -30,7 +30,7 @@ export class MoneyLedgerEntry {
   @Column({ type: "varchar", length: 64 })
   creditAccount: string;
 
-  @Column({ type: "decimal", precision: 24, scale: 8 })
+  @Column({ type: "decimal", precision: 36, scale: 18 })
   amount: string;
 
   @Column({ type: "varchar", length: 12 })

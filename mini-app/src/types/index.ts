@@ -6,6 +6,17 @@ export const UserRole = {
 } as const;
 export type UserRole = (typeof UserRole)[keyof typeof UserRole];
 
+export type SettlementNetwork = 'ton' | 'polygon';
+export type SettlementAsset = 'ton_usdt' | 'ton_native' | 'polygon_usdt';
+export type SettlementMode = 'native' | 'legacy_ton_to_polygon';
+export type ClientChannel = 'telegram_mini_app' | 'web' | 'admin_web';
+
+export interface SettlementSelection {
+  network: SettlementNetwork;
+  chainId: string;
+  asset: SettlementAsset;
+}
+
 export interface User {
   id: string;
   telegramId: number;
@@ -47,6 +58,16 @@ export interface Deal {
   paidAt?: string;
   completedAt?: string;
   escrowAddress?: string;
+  settlementNetwork?: SettlementNetwork | null;
+  settlementChainId?: string | null;
+  settlementAsset?: SettlementAsset | null;
+  settlementMode?: SettlementMode | null;
+  assetContract?: string | null;
+  termsVersion?: number;
+  termsHash?: string | null;
+  buyerWalletAddress?: string | null;
+  sellerWalletAddress?: string | null;
+  fundedAt?: string | null;
   metadata?: {
     escrowAddress?: string;
     escrowReleaseRequired?: boolean;
@@ -100,6 +121,11 @@ export interface PaymentMethodInfo {
   kind: 'hosted' | 'direct';
   /** Network the buyer pays on (direct rails): 'polygon' | 'ton'. */
   network?: string;
+  /** Actual settlement behavior; legacy TON rails currently settle on Polygon. */
+  settlementNetwork?: SettlementNetwork;
+  settlementAsset?: SettlementAsset;
+  settlementMode?: SettlementMode;
+  channels: ClientChannel[];
 }
 
 /** Response of POST /payments. */

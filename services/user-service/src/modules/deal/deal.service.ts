@@ -26,15 +26,26 @@ import {
   Currency,
   DealSubcategory,
   FeeModel,
+  ClientChannel,
+  SettlementMode,
+  SettlementNetwork,
 } from "./enums/deal.enum";
+import {
+  assertSettlementCanChange,
+  SettlementSelection,
+  settlementSelectionChanged,
+  validateSettlementSelection,
+} from "./settlement-policy";
 import { DealStateMachine } from "./fsm/deal-state-machine";
 import { User, UserType } from "../user/entities/user.entity";
 import { UserService } from "../user/user.service";
 import { EscrowService } from "../escrow/escrow.service";
+import { SettlementAdapterRegistry } from "../escrow/adapters/settlement-adapter.registry";
 import { OutboxService } from "../ops/outbox.service";
 import { ReputationService } from "../review/reputation.service";
 import { KycLimitsService } from "../user/kyc-limits.service";
 import { DisputeService } from "../arbitration/dispute.service";
+import { TonNativeLifecycleAction } from "./ton-native-lifecycle";
 
 /** D6: minimum deal amount in RUB. */
 export const DEAL_MIN_AMOUNT_RUB = 300;
@@ -52,6 +63,8 @@ export interface CreateDealDto {
   terms?: string;
   deadline?: Date;
   sellerId?: string;
+  /** Immutable network/asset selection once the deal is funded. */
+  settlement?: SettlementSelection;
   metadata?: Record<string, any>;
 }
 
@@ -60,7 +73,12 @@ export interface UpdateDealDto {
   description?: string;
   terms?: string;
   deadline?: Date;
+  settlement?: SettlementSelection;
   metadata?: Record<string, any>;
+}
+
+export interface DealRequestContext {
+  channel: ClientChannel;
 }
 
 export interface CreateMessageDto {
@@ -138,6 +156,7 @@ export class DealService {
     private eventRepository: Repository<DealEvent>,
     private userService: UserService,
     private escrowService: EscrowService,
+    private settlementAdapters: SettlementAdapterRegistry,
     private outbox: OutboxService,
     private dataSource: DataSource,
     private reputationService: ReputationService,
@@ -156,7 +175,13 @@ export class DealService {
   /**
    * Создание новой сделки
    */
-  async create(data: CreateDealDto, buyerOrId: User | string): Promise<Deal> {
+  async create(
+    data: CreateDealDto,
+    buyerOrId: User | string,
+    context: DealRequestContext = {
+      channel: ClientChannel.TELEGRAM_MINI_APP,
+    },
+  ): Promise<Deal> {
     // D6: minimum amount validation
     const currency = data.currency || Currency.RUB;
     if (data.amount <= 0) {
@@ -173,6 +198,10 @@ export class DealService {
         "subcategory is required for DIGITAL deals (D3)",
       );
     }
+
+    const settlement = data.settlement
+      ? validateSettlementSelection(data.settlement, context.channel)
+      : null;
 
     const buyerIdForKyc =
       typeof buyerOrId === "string" ? buyerOrId : buyerOrId.id;
@@ -203,8 +232,30 @@ export class DealService {
     const commissionRate = this.stateMachine["config"]?.commissionRate || 0.05;
     const commissionAmount = data.amount * commissionRate;
 
+    const feeModel = data.feeModel ?? FeeModel.BUYER_PAYS;
+    const termsVersion = 1;
+    const termsHash = this.hashTerms({
+      type: data.type,
+      subcategory: data.subcategory ?? null,
+      amount: data.amount,
+      currency,
+      feeModel,
+      description: data.description,
+      title: data.title ?? null,
+      terms: data.terms ?? null,
+      deadline: data.deadline ?? null,
+      settlement,
+      termsVersion,
+    });
+
     const deal = this.dealRepository.create({
-      ...data,
+      type: data.type,
+      amount: data.amount,
+      description: data.description,
+      title: data.title,
+      terms: data.terms,
+      deadline: data.deadline,
+      sellerId: data.sellerId,
       dealNumber,
       buyer,
       seller,
@@ -212,9 +263,24 @@ export class DealService {
       commissionRate: commissionRate * 100,
       commissionAmount,
       subcategory: data.subcategory ?? null,
-      feeModel: data.feeModel ?? FeeModel.BUYER_PAYS,
+      feeModel,
       status: seller ? DealStatus.PENDING_ACCEPTANCE : DealStatus.DRAFT,
       metadata: data.metadata || {},
+      settlementNetwork: settlement?.network ?? null,
+      settlementChainId: settlement?.chainId ?? null,
+      settlementAsset: settlement?.asset ?? null,
+      settlementMode: settlement ? SettlementMode.NATIVE : null,
+      assetContract: null,
+      termsVersion,
+      termsHash,
+      buyerWalletAddress:
+        settlement?.network === SettlementNetwork.POLYGON
+          ? (buyer.walletAddress ?? null)
+          : null,
+      sellerWalletAddress:
+        settlement?.network === SettlementNetwork.POLYGON
+          ? (seller?.walletAddress ?? null)
+          : null,
     });
 
     const savedDeal = await this.dataSource.transaction(async (manager) => {
@@ -248,15 +314,39 @@ export class DealService {
     // Otherwise the deal stays in DRAFT/PENDING_ACCEPTANCE; the wallet
     // attachment endpoint will retry deployment when the missing side
     // attaches their wallet.
-    if (buyer.walletAddress && seller?.walletAddress) {
+    const polygonOrLegacyDeal =
+      !settlement || settlement.network === SettlementNetwork.POLYGON;
+    if (polygonOrLegacyDeal && buyer.walletAddress && seller?.walletAddress) {
       try {
-        const escrowResult = await this.escrowService.createEscrow(
-          savedDeal.id,
-          buyer.walletAddress,
-          seller.walletAddress,
-          Number(savedDeal.amount),
-        );
+        const escrowResult = settlement
+          ? await this.settlementAdapters
+              .get(settlement.network)
+              .prepareEscrow({
+                dealId: savedDeal.id,
+                chainId: settlement.chainId,
+                asset: settlement.asset,
+                buyerAddress: buyer.walletAddress,
+                sellerAddress: seller.walletAddress,
+                amount: Number(savedDeal.amount),
+                feeModel: savedDeal.feeModel,
+              })
+          : await this.escrowService.createEscrow(
+              savedDeal.id,
+              buyer.walletAddress,
+              seller.walletAddress,
+              Number(savedDeal.amount),
+            );
         savedDeal.escrowAddress = escrowResult.escrowAddress;
+        if (settlement && "assetContract" in escrowResult) {
+          savedDeal.assetContract = escrowResult.assetContract;
+          const adapter = this.settlementAdapters.get(settlement.network);
+          savedDeal.buyerWalletAddress = adapter.normalizeAddress(
+            buyer.walletAddress,
+          );
+          savedDeal.sellerWalletAddress = adapter.normalizeAddress(
+            seller.walletAddress,
+          );
+        }
         await this.dealRepository.save(savedDeal);
         this.logger.log(
           `Escrow deployed: ${escrowResult.escrowAddress} for deal ${savedDeal.id}`,
@@ -458,7 +548,14 @@ export class DealService {
   /**
    * Обновление сделки
    */
-  async update(id: string, data: UpdateDealDto, userId: string): Promise<Deal> {
+  async update(
+    id: string,
+    data: UpdateDealDto,
+    userId: string,
+    context: DealRequestContext = {
+      channel: ClientChannel.TELEGRAM_MINI_APP,
+    },
+  ): Promise<Deal> {
     const deal = await this.findById(id);
 
     // Проверка прав
@@ -473,7 +570,64 @@ export class DealService {
       throw new ConflictException("Cannot edit deal in current status");
     }
 
-    Object.assign(deal, data);
+    const { settlement: requestedSettlement, ...changes } = data;
+    let termsChanged = Object.keys(changes).some((key) =>
+      ["title", "description", "terms", "deadline"].includes(key),
+    );
+
+    if (requestedSettlement) {
+      const settlement = validateSettlementSelection(
+        requestedSettlement,
+        context.channel,
+      );
+      const current =
+        deal.settlementNetwork && deal.settlementChainId && deal.settlementAsset
+          ? {
+              network: deal.settlementNetwork,
+              chainId: deal.settlementChainId,
+              asset: deal.settlementAsset,
+            }
+          : null;
+      if (!current || settlementSelectionChanged(current, settlement)) {
+        assertSettlementCanChange(deal);
+        deal.settlementNetwork = settlement.network;
+        deal.settlementChainId = settlement.chainId;
+        deal.settlementAsset = settlement.asset;
+        deal.settlementMode = SettlementMode.NATIVE;
+        deal.assetContract = null;
+        deal.escrowAddress = null;
+        deal.buyerWalletAddress = null;
+        deal.sellerWalletAddress = null;
+        termsChanged = true;
+      }
+    }
+
+    Object.assign(deal, changes);
+    if (termsChanged) {
+      deal.termsVersion = Number(deal.termsVersion || 1) + 1;
+      deal.termsHash = this.hashTerms({
+        type: deal.type,
+        subcategory: deal.subcategory,
+        amount: Number(deal.amount),
+        currency: deal.currency,
+        feeModel: deal.feeModel,
+        description: deal.description,
+        title: deal.title,
+        terms: deal.terms,
+        deadline: deal.deadline,
+        settlement:
+          deal.settlementNetwork &&
+          deal.settlementChainId &&
+          deal.settlementAsset
+            ? {
+                network: deal.settlementNetwork,
+                chainId: deal.settlementChainId,
+                asset: deal.settlementAsset,
+              }
+            : null,
+        termsVersion: deal.termsVersion,
+      });
+    }
     deal.updatedAt = new Date();
 
     return this.dealRepository.save(deal);
@@ -548,6 +702,12 @@ export class DealService {
       DealStatus.PENDING_PAYMENT,
       sellerId,
     );
+    if (
+      deal.settlementNetwork === SettlementNetwork.POLYGON &&
+      deal.seller?.walletAddress
+    ) {
+      updated.sellerWalletAddress = deal.seller.walletAddress;
+    }
     return this.dealRepository.save(updated);
   }
 
@@ -585,10 +745,7 @@ export class DealService {
   ): Promise<Deal> {
     const deal = await this.findById(id);
 
-    if (
-      deal.status === DealStatus.IN_PROGRESS ||
-      deal.status === DealStatus.COMPLETED
-    ) {
+    if (deal.fundedAt || deal.status === DealStatus.COMPLETED) {
       return deal;
     }
 
@@ -600,6 +757,7 @@ export class DealService {
       deal,
       DealStatus.IN_PROGRESS,
     );
+    updated.fundedAt = updated.fundedAt ?? new Date();
 
     await this.createEvent(
       DealEvent.createPaymentReceived(updated.id, amount, currency),
@@ -624,6 +782,35 @@ export class DealService {
     }
 
     return saved;
+  }
+
+  private hashTerms(input: {
+    type: DealType;
+    subcategory: DealSubcategory | null;
+    amount: number;
+    currency: Currency;
+    feeModel: FeeModel;
+    description: string;
+    title: string | null;
+    terms: string | null;
+    deadline: Date | null;
+    settlement: SettlementSelection | null;
+    termsVersion: number;
+  }): string {
+    const canonical = {
+      type: input.type,
+      subcategory: input.subcategory,
+      amount: String(input.amount),
+      currency: input.currency,
+      feeModel: input.feeModel,
+      description: input.description,
+      title: input.title,
+      terms: input.terms,
+      deadline: input.deadline ? new Date(input.deadline).toISOString() : null,
+      settlement: input.settlement,
+      termsVersion: input.termsVersion,
+    };
+    return createHash("sha256").update(JSON.stringify(canonical)).digest("hex");
   }
 
   /**
@@ -660,6 +847,127 @@ export class DealService {
     }
 
     return saved;
+  }
+
+  /** Apply only an independently validated, finalized native-TON action. */
+  async applyFinalizedNativeTonLifecycle(
+    id: string,
+    action: TonNativeLifecycleAction,
+    requesterUserId: string,
+    reason?: string | null,
+    resolution?: {
+      decisionId: string;
+      decisionHash: string;
+      buyerAwardAtomic: string;
+      sellerAwardAtomic: string;
+      transactionHash: string;
+    },
+  ): Promise<Deal> {
+    const deal = await this.findById(id);
+    switch (action) {
+      case TonNativeLifecycleAction.MARK_DELIVERED:
+        if (deal.status === DealStatus.PENDING_CONFIRMATION) return deal;
+        return this.markShipped(id, deal.sellerId!);
+      case TonNativeLifecycleAction.RELEASE:
+      case TonNativeLifecycleAction.RELEASE_AFTER_BUYER_TIMEOUT:
+        if (deal.status === DealStatus.COMPLETED) return deal;
+        return this.confirmReceipt(id, deal.buyerId);
+      case TonNativeLifecycleAction.OPEN_DISPUTE:
+        if (deal.status === DealStatus.DISPUTED) return deal;
+        return this.openDispute(
+          id,
+          requesterUserId,
+          reason ?? "Native TON dispute",
+        );
+      case TonNativeLifecycleAction.REFUND_BUYER:
+      case TonNativeLifecycleAction.REFUND_AFTER_SELLER_TIMEOUT:
+        if (deal.status === DealStatus.REFUNDED) return deal;
+        if (
+          deal.status !== DealStatus.IN_PROGRESS &&
+          deal.status !== DealStatus.PENDING_CONFIRMATION
+        ) {
+          throw new ConflictException(
+            "Deal state does not match finalized TON refund",
+          );
+        }
+        const updated = await this.stateMachine.transition(
+          deal,
+          DealStatus.REFUNDED,
+          requesterUserId,
+        );
+        updated.refundReason = reason ?? "Finalized native TON refund";
+        await this.createEvent(
+          DealEvent.createDealRefunded(
+            updated.id,
+            requesterUserId,
+            updated.refundReason,
+          ),
+        );
+        const saved = await this.dealRepository.save(updated);
+        await this.outbox.enqueue({
+          aggregateType: "deal",
+          aggregateId: saved.id,
+          eventType: "deal.refunded",
+          payload: {
+            dealId: saved.id,
+            buyerUserId: saved.buyerId,
+            sellerUserId: saved.sellerId,
+            reason: saved.refundReason,
+          },
+        });
+        return saved;
+      case TonNativeLifecycleAction.RESOLVE: {
+        if (!resolution) {
+          throw new BadRequestException(
+            "Native TON resolution data is missing",
+          );
+        }
+        if (
+          deal.status !== DealStatus.DISPUTED &&
+          deal.status !== DealStatus.DISPUTE_RESOLVED
+        ) {
+          throw new ConflictException(
+            "Deal state does not match finalized TON resolution",
+          );
+        }
+        await this.disputeService.applyFinalizedNativeTonResolution({
+          ...resolution,
+          dealId: deal.id,
+          enforcedByUserId: requesterUserId,
+        });
+        if (deal.status === DealStatus.DISPUTE_RESOLVED) return deal;
+        const updated = await this.stateMachine.transition(
+          deal,
+          DealStatus.DISPUTE_RESOLVED,
+          requesterUserId,
+        );
+        await this.createEvent(
+          DealEvent.createDisputeResolved(
+            updated.id,
+            requesterUserId,
+            resolution.decisionHash,
+          ),
+        );
+        const saved = await this.dealRepository.save(updated);
+        await this.outbox.enqueue({
+          aggregateType: "deal",
+          aggregateId: saved.id,
+          eventType: "deal.dispute_resolved_on_ton",
+          payload: {
+            dealId: saved.id,
+            decisionId: resolution.decisionId,
+            buyerAwardAtomic: resolution.buyerAwardAtomic,
+            sellerAwardAtomic: resolution.sellerAwardAtomic,
+            transactionHash: resolution.transactionHash,
+          },
+        });
+        return saved;
+      }
+      default:
+        throw new BadRequestException(
+          "Unsupported native TON lifecycle action",
+        );
+    }
   }
 
   /**
