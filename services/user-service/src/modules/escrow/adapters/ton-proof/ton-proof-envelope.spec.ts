@@ -9,6 +9,7 @@ import {
   TonTrustedNetworkConfig,
   validateTonProofEnvelope,
 } from "./ton-proof-envelope";
+import { serializeBocRoots } from "./ton-proof-test-utils";
 
 const NOW = 1_800_000_000;
 const MC_SHARD = "-9223372036854775808";
@@ -29,6 +30,15 @@ function proofCell(seed: number, nested = false): { inner: Cell; boc: Buffer } {
   return {
     inner,
     boc: convertToMerkleProof(inner).toBoc({ idx: false, crc32: false }),
+  };
+}
+
+function accountProof(block: Cell, state: Cell): { boc: Buffer } {
+  return {
+    boc: serializeBocRoots([
+      convertToMerkleProof(block),
+      convertToMerkleProof(state),
+    ]),
   };
 }
 
@@ -103,8 +113,8 @@ function validFixture() {
     masterchain,
     proofCell(2),
     proofCell(3),
-    proofCell(4),
-    proofCell(5),
+    accountProof(proofCell(4).inner, proofCell(40).inner),
+    accountProof(proofCell(5).inner, proofCell(50).inner),
   ];
   const config: TonTrustedNetworkConfig = {
     policyVersion: "phase1-envelope-v1",
@@ -284,7 +294,7 @@ describe("TON proof envelope foundation", () => {
 
   it("rejects unused bytes inside the declared cell-data section", () => {
     const { config, bundle, proofs } = validFixture();
-    const original = proofs[4].boc;
+    const original = proofs[2].boc;
     expect(original[5]).toBe(1);
     const totalCellSizeOffset = 9;
     const cellDataEnd = original.length;
@@ -293,16 +303,26 @@ describe("TON proof envelope foundation", () => {
       Buffer.from([0]),
     ]);
     unusedCellData[totalCellSizeOffset] += 1;
-    bundle.proofs.walletAccountProofBocBase64 =
-      unusedCellData.toString("base64");
+    bundle.proofs.shardBlockProofBocBase64 = unusedCellData.toString("base64");
     expect(validateTonProofEnvelope(config, bundle, NOW).detail).toContain(
       "unused bytes",
     );
   });
 
+  it("rejects serialized cells unreachable from every declared root", () => {
+    const { config, bundle, proofs } = validFixture();
+    const unreachable = Buffer.concat([proofs[2].boc, Buffer.from([0, 2, 0])]);
+    unreachable[6] += 1;
+    unreachable[9] += 3;
+    bundle.proofs.shardBlockProofBocBase64 = unreachable.toString("base64");
+    expect(validateTonProofEnvelope(config, bundle, NOW).detail).toContain(
+      "unreachable",
+    );
+  });
+
   it("rejects multiple BOC roots before deserialization", () => {
     const { config, bundle, proofs } = validFixture();
-    const original = proofs[4].boc;
+    const original = proofs[2].boc;
     expect(original.readUInt32BE(0)).toBe(0xb5ee9c72);
     expect(original[7]).toBe(1);
     const multipleRoots = Buffer.concat([
@@ -312,22 +332,29 @@ describe("TON proof envelope foundation", () => {
       Buffer.from([0]),
       original.subarray(11),
     ]);
-    bundle.proofs.walletAccountProofBocBase64 =
-      multipleRoots.toString("base64");
+    bundle.proofs.shardBlockProofBocBase64 = multipleRoots.toString("base64");
     expect(validateTonProofEnvelope(config, bundle, NOW).detail).toContain(
-      "one complete root",
+      "exactly 1 complete root",
+    );
+  });
+
+  it("rejects a one-root account proof", () => {
+    const { config, bundle } = validFixture();
+    bundle.proofs.walletAccountProofBocBase64 =
+      proofCell(9).boc.toString("base64");
+    expect(validateTonProofEnvelope(config, bundle, NOW).detail).toContain(
+      "exactly 2 complete roots",
     );
   });
 
   it("rejects an ordinary root in place of a Merkle proof", () => {
     const { config, bundle } = validFixture();
-    bundle.proofs.walletAccountProofBocBase64 = beginCell()
-      .storeUint(7, 8)
-      .endCell()
-      .toBoc({ idx: false, crc32: false })
-      .toString("base64");
+    bundle.proofs.walletAccountProofBocBase64 = serializeBocRoots([
+      beginCell().storeUint(7, 8).endCell(),
+      convertToMerkleProof(proofCell(8).inner),
+    ]).toString("base64");
     expect(validateTonProofEnvelope(config, bundle, NOW).detail).toContain(
-      "MerkleProof root",
+      "only MerkleProof roots",
     );
   });
 
@@ -337,7 +364,7 @@ describe("TON proof envelope foundation", () => {
       beginCell().storeUint(99, 32).endCell(),
     ).toBoc({ idx: false, crc32: true });
     crcProof[crcProof.length - 5] ^= 1;
-    bundle.proofs.walletAccountProofBocBase64 = crcProof.toString("base64");
+    bundle.proofs.shardBlockProofBocBase64 = crcProof.toString("base64");
     expect(validateTonProofEnvelope(config, bundle, NOW).detail).toContain(
       "Invalid CRC32C",
     );
@@ -354,7 +381,10 @@ describe("TON proof envelope foundation", () => {
   it("rejects proofs over the configured depth", () => {
     const { config, bundle } = validFixture();
     const nested = proofCell(8, true);
-    bundle.proofs.walletAccountProofBocBase64 = nested.boc.toString("base64");
+    bundle.proofs.walletAccountProofBocBase64 = accountProof(
+      nested.inner,
+      proofCell(9).inner,
+    ).boc.toString("base64");
     config.limits.maxDepth = 1;
     expect(validateTonProofEnvelope(config, bundle, NOW).detail).toContain(
       "depth limit",

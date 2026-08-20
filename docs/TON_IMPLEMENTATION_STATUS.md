@@ -266,6 +266,17 @@ enable any production flag.
   The eight proof-kernel suites pass 125 focused tests and the full backend
   passes 81 suites / 767 tests. See
   `ADR-009-TON-FINALIZED-SHARD-BLOCK.md`.
+- Canonical account proofs now require exactly two Merkle roots and reject
+  unreachable cells. The account verifier binds the header/state roots to the
+  finalized shard block, validates the complete `ShardStateUnsplit` identity and
+  shard prefix, traverses `HashmapAugE 256 ShardAccount` with explicit
+  absent/pruned semantics, and binds a separate active account root, address,
+  last transaction LT and code/data. Its 26 tests include a complete requested
+  path with an unrelated pruned sibling; the corrected envelope has 28 tests.
+  The result keeps transaction inclusion and authorization false and verification
+  evidence null and remains pure/unwired. The nine proof-kernel suites pass 153
+  focused tests and the full backend passes 82 suites / 795 tests. See
+  `ADR-010-TON-FINALIZED-ACCOUNT-STATE.md`.
 
 The current local development code-cell hash is
 `1c4ce3fe43382378c3b472d64f8237a19c4e08c696149ebaf5bec501debe3da6`.
