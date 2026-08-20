@@ -42,8 +42,18 @@ exact wallet address, escrow owner, allowlisted master, active pinned code hash
 and embedded wallet-code hash. Its audit composition hash is not seal evidence,
 and the result keeps sealing authorization false.
 
-Seal authorization remains blocked until captured mainnet/testnet proofs
-reproduce offline, the executor policy is independently reviewed, and the separate
-verification-evidence commitment plus threshold initializer workflow are
-complete. No signer, broadcaster, adapter wiring, or durable ingestion is
-included here.
+The separate verification-evidence and threshold approval primitives are now
+implemented but remain pure and unwired. The seal wrapper re-runs the local
+getter plus proven-wallet composition, commits its exact network, finalized
+anchor, wallet and proof composition under a policy that pins the fixture
+manifest and independent review, then requires a distinct Ed25519 threshold
+approval before it can express `sealingAuthorized: true`. Scope-separated
+signatures cannot authorize settlement evidence. No private-key custody,
+contract-message composer, broadcaster, adapter wiring or durable production
+ingestion is included.
+
+Production seal authorization remains blocked until captured mainnet/testnet
+proofs reproduce offline, one-bit corruption coverage passes, the executor and
+proof policy are independently reviewed, approved evidence is persisted
+immutably, and an audited composer consumes only the exact scope-correct
+approval artifact.

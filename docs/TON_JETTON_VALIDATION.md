@@ -116,6 +116,16 @@ and the sender/recipient pre/post account hashes. It may report reconciliation
 finality, but still fixes settlement authorization false and verification
 evidence null. Both modules remain test-only.
 
+A separate evidence layer now re-runs that finalized composition before
+emitting a domain-separated `verificationEvidenceHash`. Its policy binds the
+network, finalized-anchor floor, trusted-network configuration, captured
+fixture manifest and independent review. Settlement authorization is expressed
+only by a second artifact after a distinct Ed25519 threshold signs the exact
+scope, subject, verification hash and immutable approval-policy hash. Wallet
+seal approvals use a different scope and cannot be replayed. These primitives
+remain pure and unwired; they do not persist evidence, mutate payout state,
+compose messages or broadcast.
+
 The v2 reconciliation suite has 27 raw-BOC and adversarial tests. The combined
 reconciliation, funding, notification and payout-state focused run passes 4
 suites / 90 tests. These passing tests do not satisfy the missing finality proof
@@ -131,7 +141,8 @@ caller/integration must additionally provide:
 - durable transaction/message identity, replay and evidence-conflict handling;
 - immutable `TonJettonEscrow` code/config/state commitments;
 - a two-source, finalized canonical-wallet seal verifier and threshold-approved
-  initializer workflow;
+  initializer workflow, including immutable approval/evidence persistence and
+  the audited contract-message composition boundary;
 - an asynchronous lifecycle contract with `SETTLEMENT_PENDING`, finalized
   leg-mask confirmation and failed-leg-only retries using fresh query IDs; and
 - durable ingestion, transactional ledger/FSM application, scheduler/backfill,
