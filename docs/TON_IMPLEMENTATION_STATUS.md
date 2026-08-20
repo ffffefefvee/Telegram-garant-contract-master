@@ -304,6 +304,14 @@ enable any production flag.
   evidence null. The thirteen proof-kernel suites pass 219 focused tests, and
   the full backend passes 86 suites / 861 tests. See
   `ADR-013-TON-FINALIZED-TRANSACTION-INCLUSION.md`.
+- The raw Jetton payout result can now be composed with exact finalized proofs
+  for its owner, sender and recipient transactions at one network/anchor. The
+  composer binds every block fingerprint and sender/recipient transaction state
+  update, so it may report reconciliation finality while keeping settlement
+  authorization false and verification evidence null. Its 21 adversarial tests
+  remain synthetic and the module is pure/unwired. The full backend passes 87
+  suites / 882 tests. See
+  `ADR-014-TON-FINALIZED-JETTON-RECONCILIATION-COMPOSITION.md`.
 
 The current local development code-cell hash is
 `1c4ce3fe43382378c3b472d64f8237a19c4e08c696149ebaf5bec501debe3da6`.

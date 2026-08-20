@@ -27,7 +27,7 @@ must let eligible users choose TON or Polygon.
 - Release candidate, Ed25519 threshold approval and deployment-input locks are
   implemented. The deployment lock re-verifies the original policy/signatures;
   it does not trust an unsigned approval JSON or possess deploy/signing access.
-- The current backend suite passes 86 suites / 861 tests, including the
+- The current backend suite passes 87 suites / 882 tests, including the
   unwired durable-ingestion and corrected raw-evidence reconciliation slices.
   Both npm dependency audits reported zero vulnerabilities.
 
@@ -158,10 +158,17 @@ match the reference committed by the proof; unrelated pruning is allowed, while
 an unproven target path fails closed. The result keeps settlement authorization
 false and remains unwired. See `ADR-013-TON-FINALIZED-TRANSACTION-INCLUSION.md`.
 
-The thirteen proof-kernel suites currently pass 219 focused tests.
+The raw payout reconciler can now be composed with finalized inclusion proofs
+for its exact owner, sender-wallet and recipient-wallet transactions. The
+composer requires one network/anchor, binds every structural block fingerprint
+and sender/recipient pre/post state hash, and can report reconciliation finality
+without settlement authorization. Its composition hash remains audit-only. See
+`ADR-014-TON-FINALIZED-JETTON-RECONCILIATION-COMPOSITION.md`.
 
-Complete the proof pipeline before lifecycle work: compose proven transactions
-and account states into every payout reconciliation leg; capture
+The thirteen proof-kernel suites currently pass 219 focused tests; finalized
+reconciliation composition adds 21 adversarial tests.
+
+Complete the proof pipeline before lifecycle work: capture
 offline-replayable mainnet/testnet proofs and validate the local executor policy;
 define a separate domain-separated verification commitment; and require an
 audited threshold or multisig initializer approval. The structural or local
