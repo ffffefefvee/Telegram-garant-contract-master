@@ -164,7 +164,7 @@ export function verifyTonMasterchainHeaderCell(
   if (virtualRoot.type !== CellType.Ordinary) {
     reject("Merkle proof virtual root must be an ordinary Block cell");
   }
-  const rootHash = virtualRoot.hash().toString("hex");
+  const rootHash = virtualRoot.hash(0).toString("hex");
   if (rootHash !== expectation.targetBlock.rootHash) {
     reject("Merkle proof virtual root does not match targetBlock.rootHash");
   }
