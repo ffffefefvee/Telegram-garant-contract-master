@@ -295,6 +295,15 @@ enable any production flag.
   evidence null. The twelve proof-kernel suites pass 201 focused tests, and the
   full backend passes 85 suites / 843 tests. See
   `ADR-012-TON-PROVEN-CANONICAL-WALLET-COMPOSITION.md`.
+- Finalized shard blocks can now prove exact transaction inclusion through
+  `BlockExtra.account_blocks`, `HashmapAugE 256 AccountBlock` and the nested
+  `HashmapAug 64 ^Transaction`. The complete transaction BOC must decode locally
+  and match the proven reference; target pruning, absence, wrong shard/account/LT
+  and substituted hashes fail closed while unrelated pruned siblings are
+  accepted. Its 18 tests preserve settlement authorization false and verification
+  evidence null. The thirteen proof-kernel suites pass 219 focused tests, and
+  the full backend passes 86 suites / 861 tests. See
+  `ADR-013-TON-FINALIZED-TRANSACTION-INCLUSION.md`.
 
 The current local development code-cell hash is
 `1c4ce3fe43382378c3b472d64f8237a19c4e08c696149ebaf5bec501debe3da6`.
