@@ -221,6 +221,13 @@ function fixture(options: FixtureOptions = {}) {
     authorizationAllowed: false,
     verificationEvidenceHash: null,
     networkGlobalId: GLOBAL_ID,
+    finalizedByMasterchainBlock: {
+      workchain: -1,
+      shard: FULL_SHARD,
+      seqno: 120,
+      rootHash: "a".repeat(64),
+      fileHash: "b".repeat(64),
+    },
     block: {
       workchain: 0,
       shard: blockShard,

@@ -30,8 +30,15 @@ domain-separated `structuralEvidenceHash` for audit/deduplication, but
 placed in `SealCanonicalJettonWallet`, because the contract can only test that
 the supplied hash is nonzero.
 
-Seal authorization remains blocked until the backend verifies the masterchain
-block proof, shard-block inclusion, account-state proof, and locally executes
-`get_wallet_address` against the proven master state. Only that completed proof
-pipeline may define and emit the separate verification-evidence commitment.
-No signer, broadcaster, adapter wiring, or durable ingestion is included here.
+The isolated proof kernel can now verify masterchain finality, shard-block and
+active-account inclusion, authenticate a complete TVM configuration from the
+same finalized anchor, and locally execute `get_wallet_address` against proven
+master code/data. That local component still fixes authorization false and uses
+a synthetic execution fixture.
+
+Seal authorization remains blocked until the canonical wallet account is
+composed with that result, captured mainnet/testnet proofs reproduce offline,
+the executor policy is independently reviewed, and the separate
+verification-evidence commitment plus threshold initializer workflow are
+complete. No signer, broadcaster, adapter wiring, or durable ingestion is
+included here.

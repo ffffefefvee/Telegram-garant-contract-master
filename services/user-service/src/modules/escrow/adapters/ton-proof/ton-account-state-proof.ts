@@ -34,7 +34,10 @@ export interface TonProvenActiveAccountState {
   authorizationAllowed: false;
   verificationEvidenceHash: null;
   networkGlobalId: number;
+  finalizedByMasterchainBlock: TonProofBlockId;
   block: TonProofBlockId;
+  generatedAtUnix: number;
+  blockEndLt: string;
   accountAddress: string;
   shardStateHash: string;
   shardStateProofRootHash: string;
@@ -341,7 +344,10 @@ export function verifyTonAccountStateProof(
       authorizationAllowed: false,
       verificationEvidenceHash: null,
       networkGlobalId: block.networkGlobalId,
+      finalizedByMasterchainBlock: { ...block.finalizedByMasterchainBlock },
       block: { ...block.block },
+      generatedAtUnix: block.generatedAtUnix,
+      blockEndLt: block.endLt,
       accountAddress: address.toRawString(),
       shardStateHash: block.newStateHash,
       shardStateProofRootHash: stateProof.rootHash,
