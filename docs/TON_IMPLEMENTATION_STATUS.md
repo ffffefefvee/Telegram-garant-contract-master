@@ -206,7 +206,7 @@ enable any production flag.
   validator-set derivation, weighted Ed25519 signatures and key-block
   transitions are still absent, so all public results remain non-authorizing
   and unwired. The two proof-kernel suites pass 44 focused tests and the full
-  backend passes 78 suites / 739 tests. See
+  backend passes 79 suites / 747 tests. See
   `ADR-003-TON-MASTERCHAIN-HEADER-PROOF.md`.
 - A pure ordinary-signature primitive now strictly decodes raw LiteServer
   `partialBlockProof` TL bytes, validates contiguous masterchain links, derives
@@ -237,6 +237,14 @@ enable any production flag.
   signatures. Its 15 focused tests pass. A successful artifact proves one link
   only and therefore fixes `finalityProven: false`; it remains pure, unwired and
   non-authorizing. See `ADR-006-TON-FORWARD-LINK-CONFIG-PROOF.md`.
+- A complete-chain verifier now composes strict raw `partialBlockProof`
+  decoding with authenticated forward links from the exact trusted key block,
+  requires proven key-block intermediates and an exact fresh endpoint, and
+  rejects incomplete, backward, stale/future or endpoint-drifted paths. Its 8
+  focused tests include a two-link validator rotation. Only the complete chain
+  sets `masterchainFinalityProven: true`; it keeps `authorizationAllowed: false`
+  and `verificationEvidenceHash: null` and remains pure and unwired. See
+  `ADR-007-TON-MASTERCHAIN-CHECKPOINT-FINALITY.md`.
 
 The current local development code-cell hash is
 `1c4ce3fe43382378c3b472d64f8237a19c4e08c696149ebaf5bec501debe3da6`.

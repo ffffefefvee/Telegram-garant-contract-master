@@ -27,7 +27,7 @@ must let eligible users choose TON or Polygon.
 - Release candidate, Ed25519 threshold approval and deployment-input locks are
   implemented. The deployment lock re-verifies the original policy/signatures;
   it does not trust an unsigned approval JSON or possess deploy/signing access.
-- The current backend suite passes 78 suites / 739 tests, including the
+- The current backend suite passes 79 suites / 747 tests, including the
   unwired durable-ingestion and corrected raw-evidence reconciliation slices.
   Both npm dependency audits reported zero vulnerabilities.
 
@@ -98,7 +98,16 @@ upgrades proof and validator provenance for one link, but deliberately keeps
 `finalityProven: false`; complete checkpoint-chain validation is still absent.
 See `ADR-006-TON-FORWARD-LINK-CONFIG-PROOF.md`.
 
-The five proof-kernel suites currently pass 97 focused tests.
+Complete forward-only ordinary checkpoint paths can now be composed from the
+exact trusted key block through proven intermediate key blocks to the exact
+fresh target. Only this complete artifact sets `masterchainFinalityProven` and
+`finalityProven` true; it still fixes `authorizationAllowed: false` and keeps
+`verificationEvidenceHash` null. Backward links fail closed because their
+distinct source-state/old-block proof path is outside the trusted-key-block
+policy, and Simplex remains unsupported. See
+`ADR-007-TON-MASTERCHAIN-CHECKPOINT-FINALITY.md`.
+
+The six proof-kernel suites currently pass 105 focused tests.
 
 Complete the proof pipeline before lifecycle work: verify the masterchain block
 proof, shard inclusion and account-state proof; locally execute
