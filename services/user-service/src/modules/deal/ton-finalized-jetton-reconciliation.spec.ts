@@ -4,6 +4,8 @@ import {
   composeTonFinalizedJettonReconciliation,
   TonFinalizedJettonReconciliationError,
 } from "./ton-finalized-jetton-reconciliation";
+import { createTonSettlementVerificationEvidence } from "./ton-settlement-verification-evidence";
+import type { TonVerificationEvidencePolicy } from "../escrow/adapters/ton-proof/ton-verification-evidence";
 import type {
   TonJettonReconciliationExpectation,
   TonJettonReconciliationValidation,
@@ -188,6 +190,19 @@ function structural(input = proofs()): TonJettonReconciliationValidation {
   };
 }
 
+function evidencePolicy(): TonVerificationEvidencePolicy {
+  return {
+    schemaVersion: 1,
+    policyId: "ton-testnet-settlement-evidence-v1",
+    verifierVersion: "ton-proof-kernel-v1",
+    networkGlobalId: -3,
+    minimumMasterchainSeqno: 100,
+    trustedNetworkConfigHash: "d1".repeat(32),
+    proofFixtureManifestHash: "d2".repeat(32),
+    independentReviewHash: "d3".repeat(32),
+  };
+}
+
 describe("TON finalized Jetton reconciliation composition", () => {
   it("binds all structural transactions and states to one finalized anchor", () => {
     const input = proofs();
@@ -356,5 +371,36 @@ describe("TON finalized Jetton reconciliation composition", () => {
     expect(() =>
       composeTonFinalizedJettonReconciliation(value, expectation(), input),
     ).toThrow(TonFinalizedJettonReconciliationError);
+  });
+
+  it("re-runs final reconciliation before emitting verification evidence", () => {
+    const input = proofs();
+    const result = createTonSettlementVerificationEvidence(
+      structural(input),
+      expectation(),
+      input,
+      evidencePolicy(),
+    );
+    expect(result).toMatchObject({
+      scope: "settlement_reconciliation",
+      subjectId: "settlement-1:seller:1",
+      proofVerificationSucceeded: true,
+      settlementAuthorized: false,
+      authorizationAllowed: false,
+      remainingRequirement: "THRESHOLD_APPROVAL_REQUIRED",
+    });
+  });
+
+  it("does not emit settlement evidence from a forged transaction proof", () => {
+    const input = proofs();
+    input.senderWallet.authorizationAllowed = true as false;
+    expect(() =>
+      createTonSettlementVerificationEvidence(
+        structural(input),
+        expectation(),
+        input,
+        evidencePolicy(),
+      ),
+    ).toThrow("sender proof provenance");
   });
 });

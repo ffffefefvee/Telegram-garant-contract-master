@@ -165,8 +165,18 @@ and sender/recipient pre/post state hash, and can report reconciliation finality
 without settlement authorization. Its composition hash remains audit-only. See
 `ADR-014-TON-FINALIZED-JETTON-RECONCILIATION-COMPOSITION.md`.
 
-The thirteen proof-kernel suites currently pass 219 focused tests; finalized
-reconciliation composition adds 21 adversarial tests.
+The proof outputs now have a separate verification-evidence and threshold
+approval boundary. Wallet-seal and settlement wrappers re-run their complete
+proof compositions, then commit the exact network, finalized anchor, subject
+and proof hash under a policy that also pins the trusted-network configuration,
+minimum sequence, captured-fixture manifest and independent review. A distinct
+immutable Ed25519 authority must reach its threshold over a scope-separated
+payload before the pure result can express authorization. No key custody,
+message composition, broadcast, persistence or adapter wiring is included.
+See `ADR-015-TON-VERIFICATION-EVIDENCE-AND-THRESHOLD-APPROVAL.md`.
+
+The fourteen proof-kernel/evidence suites currently pass 236 focused tests;
+finalized reconciliation composition adds 23 adversarial tests.
 
 Complete the proof pipeline before lifecycle work: capture
 offline-replayable mainnet/testnet proofs and validate the local executor policy;

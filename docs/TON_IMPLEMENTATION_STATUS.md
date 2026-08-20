@@ -312,6 +312,16 @@ enable any production flag.
   remain synthetic and the module is pure/unwired. The full backend passes 87
   suites / 882 tests. See
   `ADR-014-TON-FINALIZED-JETTON-RECONCILIATION-COMPOSITION.md`.
+- Verification evidence and approval are now separate, domain-separated
+  artifacts. Seal and settlement wrappers re-run their complete proof
+  compositions under a policy pinned to network, trusted configuration,
+  minimum masterchain sequence, fixture manifest and independent review. Only
+  a scope-correct immutable Ed25519 threshold can produce an authorization
+  artifact; structural and composition hashes remain non-authorizing. The new
+  15-test approval suite plus four wrapper tests bring the backend to 88 suites
+  / 901 tests. The code is pure and unwired, with no key custody, persistence,
+  message composition or broadcast. See
+  `ADR-015-TON-VERIFICATION-EVIDENCE-AND-THRESHOLD-APPROVAL.md`.
 
 The current local development code-cell hash is
 `1c4ce3fe43382378c3b472d64f8237a19c4e08c696149ebaf5bec501debe3da6`.

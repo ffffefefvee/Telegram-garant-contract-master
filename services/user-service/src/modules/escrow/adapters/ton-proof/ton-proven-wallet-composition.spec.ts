@@ -5,6 +5,8 @@ import {
   composeTonProvenCanonicalWallet,
   TonProvenWalletCompositionError,
 } from "./ton-proven-wallet-composition";
+import { createTonWalletSealVerificationEvidence } from "./ton-wallet-seal-verification-evidence";
+import type { TonVerificationEvidencePolicy } from "./ton-verification-evidence";
 
 const MASTERCHAIN_SHARD = "-9223372036854775808";
 const owner = Address.parseRaw(`0:${"11".repeat(32)}`);
@@ -125,6 +127,19 @@ function expectation() {
     masterAddress: master.toRawString(),
     candidateWalletAddress: walletAddress.toRawString(),
     pinnedWalletCodeHash: walletCode.hash(0).toString("hex"),
+  };
+}
+
+function evidencePolicy(): TonVerificationEvidencePolicy {
+  return {
+    schemaVersion: 1,
+    policyId: "ton-testnet-seal-evidence-v1",
+    verifierVersion: "ton-proof-kernel-v1",
+    networkGlobalId: -3,
+    minimumMasterchainSeqno: 100,
+    trustedNetworkConfigHash: "a1".repeat(32),
+    proofFixtureManifestHash: "a2".repeat(32),
+    independentReviewHash: "a3".repeat(32),
   };
 }
 
@@ -300,6 +315,36 @@ describe("TON proven canonical-wallet composition", () => {
     input.transactionInclusionVerified = true as false;
     expect(() =>
       composeTonProvenCanonicalWallet(getter(), input, expectation()),
+    ).toThrow("wallet-account proof provenance");
+  });
+
+  it("re-runs seal proof composition before emitting verification evidence", () => {
+    const result = createTonWalletSealVerificationEvidence(
+      getter(),
+      wallet(),
+      expectation(),
+      evidencePolicy(),
+    );
+    expect(result).toMatchObject({
+      scope: "wallet_seal",
+      subjectId: walletAddress.toRawString(),
+      proofVerificationSucceeded: true,
+      sealingAuthorized: false,
+      authorizationAllowed: false,
+      remainingRequirement: "THRESHOLD_APPROVAL_REQUIRED",
+    });
+  });
+
+  it("does not emit seal evidence from forged proof provenance", () => {
+    const input = wallet();
+    input.authorizationAllowed = true as false;
+    expect(() =>
+      createTonWalletSealVerificationEvidence(
+        getter(),
+        input,
+        expectation(),
+        evidencePolicy(),
+      ),
     ).toThrow("wallet-account proof provenance");
   });
 });
