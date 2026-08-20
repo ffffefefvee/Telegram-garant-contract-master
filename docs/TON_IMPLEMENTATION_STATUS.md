@@ -208,6 +208,16 @@ enable any production flag.
   and unwired. The two proof-kernel suites pass 43 focused tests and the full
   backend passes 75 suites / 685 tests. See
   `ADR-003-TON-MASTERCHAIN-HEADER-PROOF.md`.
+- A pure ordinary-signature primitive now strictly decodes raw LiteServer
+  `partialBlockProof` TL bytes, validates contiguous masterchain links, derives
+  validator node IDs from Ed25519 public keys, reproduces TON's internal signed
+  block-ID bytes, rejects duplicate/unknown/invalid signers and enforces the
+  protocol's strict more-than-two-thirds weight threshold. Non-ordinary
+  (including Simplex) signature sets fail closed. The 21 focused tests pass.
+  Because key-block configuration, validator selection and set-hash provenance
+  are not yet proven, its result fixes `validatorSetProven` and
+  `finalityProven` to false and remains unwired. See
+  `ADR-004-TON-ORDINARY-SIGNATURE-PROOF.md`.
 
 The current local development code-cell hash is
 `1c4ce3fe43382378c3b472d64f8237a19c4e08c696149ebaf5bec501debe3da6`.

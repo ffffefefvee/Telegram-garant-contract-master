@@ -70,7 +70,16 @@ layer, but it still cannot establish finality: validator-set derivation,
 signature weight and key-block transitions remain mandatory. See
 `ADR-003-TON-MASTERCHAIN-HEADER-PROOF.md`.
 
-The two proof-kernel suites currently pass 43 focused tests.
+A strict LiteServer signature primitive is now also isolated and unwired. It
+decodes raw `partialBlockProof` TL bytes with exact consumption and bounded
+links/signatures/proof blobs, validates contiguous masterchain paths, reproduces
+TON's `ton.blockId` signed bytes and Ed25519 node IDs, and requires unique known
+signers with strictly more than two-thirds weight. Its typed result deliberately
+keeps `validatorSetProven: false` and `finalityProven: false`, because the supplied
+validator set is not yet derived from a proven key-block configuration. Simplex
+sets fail closed. See `ADR-004-TON-ORDINARY-SIGNATURE-PROOF.md`.
+
+The three proof-kernel suites currently pass 64 focused tests.
 
 Complete the proof pipeline before lifecycle work: verify the masterchain block
 proof, shard inclusion and account-state proof; locally execute
