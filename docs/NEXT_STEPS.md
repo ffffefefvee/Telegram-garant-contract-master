@@ -27,7 +27,7 @@ must let eligible users choose TON or Polygon.
 - Release candidate, Ed25519 threshold approval and deployment-input locks are
   implemented. The deployment lock re-verifies the original policy/signatures;
   it does not trust an unsigned approval JSON or possess deploy/signing access.
-- The current backend suite passes 79 suites / 747 tests, including the
+- The current backend suite passes 80 suites / 755 tests, including the
   unwired durable-ingestion and corrected raw-evidence reconciliation slices.
   Both npm dependency audits reported zero vulnerabilities.
 
@@ -107,7 +107,15 @@ distinct source-state/old-block proof path is outside the trusted-key-block
 policy, and Simplex remains unsupported. See
 `ADR-007-TON-MASTERCHAIN-CHECKPOINT-FINALITY.md`.
 
-The six proof-kernel suites currently pass 105 focused tests.
+The finalized target can now authenticate a basechain shard descriptor. The
+state proof is bound to the header's `newStateHash`; exact authenticated
+Patricia/BinTree traversal selects the workchain and shard prefix, including
+split children, and parses both descriptor layouts. This proves the shard top
+block ID recorded by finalized masterchain state, but keeps
+`shardBlockProofVerified: false`, authorization false and verification evidence
+null. See `ADR-008-TON-FINALIZED-SHARD-DESCRIPTOR.md`.
+
+The seven proof-kernel suites currently pass 113 focused tests.
 
 Complete the proof pipeline before lifecycle work: verify the masterchain block
 proof, shard inclusion and account-state proof; locally execute

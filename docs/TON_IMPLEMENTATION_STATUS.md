@@ -206,7 +206,7 @@ enable any production flag.
   validator-set derivation, weighted Ed25519 signatures and key-block
   transitions are still absent, so all public results remain non-authorizing
   and unwired. The two proof-kernel suites pass 44 focused tests and the full
-  backend passes 79 suites / 747 tests. See
+  backend passes 80 suites / 755 tests. See
   `ADR-003-TON-MASTERCHAIN-HEADER-PROOF.md`.
 - A pure ordinary-signature primitive now strictly decodes raw LiteServer
   `partialBlockProof` TL bytes, validates contiguous masterchain links, derives
@@ -245,6 +245,15 @@ enable any production flag.
   sets `masterchainFinalityProven: true`; it keeps `authorizationAllowed: false`
   and `verificationEvidenceHash: null` and remains pure and unwired. See
   `ADR-007-TON-MASTERCHAIN-CHECKPOINT-FINALITY.md`.
+- The finalized masterchain target can now authenticate its state and exact
+  basechain `ShardHashes` descriptor. The verifier binds the state proof to the
+  header state-update hash, proves the workchain Patricia path, enforces exact
+  split-tree prefix traversal and parses both descriptor layouts. Its 8 tests
+  cover full/split shards, scheduling, pruning and metadata/provenance drift.
+  The result proves the recorded shard block ID only; it keeps
+  `shardBlockProofVerified: false`, authorization false and verification
+  evidence null and remains pure/unwired. See
+  `ADR-008-TON-FINALIZED-SHARD-DESCRIPTOR.md`.
 
 The current local development code-cell hash is
 `1c4ce3fe43382378c3b472d64f8237a19c4e08c696149ebaf5bec501debe3da6`.
