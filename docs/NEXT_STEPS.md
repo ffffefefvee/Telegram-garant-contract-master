@@ -27,7 +27,7 @@ must let eligible users choose TON or Polygon.
 - Release candidate, Ed25519 threshold approval and deployment-input locks are
   implemented. The deployment lock re-verifies the original policy/signatures;
   it does not trust an unsigned approval JSON or possess deploy/signing access.
-- The current backend suite passes 74 suites / 666 tests, including the
+- The current backend suite passes 75 suites / 685 tests, including the
   unwired durable-ingestion and corrected raw-evidence reconciliation slices.
   Both npm dependency audits reported zero vulnerabilities.
 
@@ -59,6 +59,18 @@ wrong cell types and CRC corruption. This module is not cryptographic proof
 verification: its type cannot express authorization, it remains unwired, and
 it emits no `verificationEvidenceHash`. See
 `ADR-002-TON-PROOF-KERNEL-FOUNDATION.md`.
+
+The next isolated slice locally verifies the masterchain header carried by the
+Merkle proof. It binds the virtual root to the extended block ID and parses the
+TON `Block`, `BlockInfo`, predecessor, key-block anchor, catchain/validator
+identifiers, logical time, generation time and state-update hashes. Envelope
+freshness now applies to the parsed block time as well as the provider
+observation time. This closes provider-metadata substitution at the header
+layer, but it still cannot establish finality: validator-set derivation,
+signature weight and key-block transitions remain mandatory. See
+`ADR-003-TON-MASTERCHAIN-HEADER-PROOF.md`.
+
+The two proof-kernel suites currently pass 43 focused tests.
 
 Complete the proof pipeline before lifecycle work: verify the masterchain block
 proof, shard inclusion and account-state proof; locally execute

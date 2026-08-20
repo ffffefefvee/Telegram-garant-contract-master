@@ -1,4 +1,9 @@
-import { beginCell, Cell, convertToMerkleProof } from "@ton/core";
+import {
+  beginCell,
+  Cell,
+  convertToMerkleProof,
+  storeShardIdent,
+} from "@ton/core";
 import {
   TonProofBundle,
   TonTrustedNetworkConfig,
@@ -27,8 +32,73 @@ function proofCell(seed: number, nested = false): { inner: Cell; boc: Buffer } {
   };
 }
 
+function masterchainHeaderProof(input?: {
+  globalId?: number;
+  generatedAtUnix?: number;
+}): { inner: Cell; boc: Buffer } {
+  const previous = beginCell()
+    .storeUint(900n, 64)
+    .storeUint(100, 32)
+    .storeBuffer(Buffer.from("a".repeat(64), "hex"))
+    .storeBuffer(Buffer.from("b".repeat(64), "hex"))
+    .endCell();
+  const info = beginCell()
+    .storeUint(0x9bc7a987, 32)
+    .storeUint(0, 32)
+    .storeBit(false)
+    .storeBit(false)
+    .storeBit(false)
+    .storeBit(false)
+    .storeBit(false)
+    .storeBit(false)
+    .storeBit(false)
+    .storeBit(false)
+    .storeUint(0, 8)
+    .storeUint(101, 32)
+    .storeUint(0, 32)
+    .store(
+      storeShardIdent({
+        shardPrefixBits: 0,
+        workchainId: -1,
+        shardPrefix: 1n << 63n,
+      }),
+    )
+    .storeUint(input?.generatedAtUnix ?? NOW - 20, 32)
+    .storeUint(1_000n, 64)
+    .storeUint(2_000n, 64)
+    .storeUint(0x11223344, 32)
+    .storeUint(7, 32)
+    .storeUint(100, 32)
+    .storeUint(100, 32)
+    .storeRef(previous)
+    .endCell();
+  const oldState = beginCell().storeUint(1, 8).endCell();
+  const newState = beginCell().storeUint(2, 8).endCell();
+  const update = beginCell()
+    .storeUint(4, 8)
+    .storeBuffer(oldState.hash())
+    .storeBuffer(newState.hash())
+    .storeUint(oldState.depth(), 16)
+    .storeUint(newState.depth(), 16)
+    .storeRef(oldState)
+    .storeRef(newState)
+    .endCell({ exotic: true });
+  const inner = beginCell()
+    .storeUint(0x11ef55aa, 32)
+    .storeInt(input?.globalId ?? -3, 32)
+    .storeRef(info)
+    .storeRef(beginCell().storeUint(0, 1).endCell())
+    .storeRef(update)
+    .storeRef(beginCell().storeUint(0, 1).endCell())
+    .endCell();
+  return {
+    inner,
+    boc: convertToMerkleProof(inner).toBoc({ idx: false, crc32: false }),
+  };
+}
+
 function validFixture() {
-  const masterchain = proofCell(1);
+  const masterchain = masterchainHeaderProof();
   const proofs = [
     masterchain,
     proofCell(2),
@@ -297,6 +367,37 @@ describe("TON proof envelope foundation", () => {
     expect(validateTonProofEnvelope(config, bundle, NOW).detail).toContain(
       "target root hash",
     );
+  });
+
+  it("rejects a Merkle-valid masterchain header from another network", () => {
+    const { config, bundle } = validFixture();
+    const wrongNetwork = masterchainHeaderProof({ globalId: -239 });
+    bundle.proofs.masterchainBlockProofBocBase64 =
+      wrongNetwork.boc.toString("base64");
+    bundle.targetMasterchainBlock.rootHash = wrongNetwork.inner
+      .hash()
+      .toString("hex");
+    expect(validateTonProofEnvelope(config, bundle, NOW).detail).toContain(
+      "global_id",
+    );
+  });
+
+  it("rejects a stale or future masterchain header independently of bundle time", () => {
+    for (const [generatedAtUnix, expected] of [
+      [NOW - 301, "stale"],
+      [NOW + 6, "future"],
+    ] as const) {
+      const { config, bundle } = validFixture();
+      const proof = masterchainHeaderProof({ generatedAtUnix });
+      bundle.proofs.masterchainBlockProofBocBase64 =
+        proof.boc.toString("base64");
+      bundle.targetMasterchainBlock.rootHash = proof.inner
+        .hash()
+        .toString("hex");
+      const result = validateTonProofEnvelope(config, bundle, NOW);
+      expect(result.reasonCode).toBe("STALE_PROOF_BUNDLE");
+      expect(result.detail).toContain(expected);
+    }
   });
 
   it("rejects invalid caller time without throwing", () => {

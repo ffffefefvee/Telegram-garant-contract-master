@@ -197,6 +197,17 @@ enable any production flag.
   `verificationEvidenceHash` remains null, and no production component imports
   it. The invariant, threat model, observability, evidence and rollback rules
   are recorded in `ADR-002-TON-PROOF-KERNEL-FOUNDATION.md`.
+- The envelope now invokes a local masterchain header-proof verifier. It checks
+  the Merkle virtual-root hash, canonical TON `Block`/`BlockInfo` tags, network
+  global ID, masterchain shard identity, exact sequence and predecessor,
+  previous trusted key block, logical and generation times, catchain/validator
+  identifiers, and exotic state-update hashes. The parsed block time has an
+  independent stale/future policy. This typed header artifact is not finality:
+  validator-set derivation, weighted Ed25519 signatures and key-block
+  transitions are still absent, so all public results remain non-authorizing
+  and unwired. The two proof-kernel suites pass 43 focused tests and the full
+  backend passes 75 suites / 685 tests. See
+  `ADR-003-TON-MASTERCHAIN-HEADER-PROOF.md`.
 
 The current local development code-cell hash is
 `1c4ce3fe43382378c3b472d64f8237a19c4e08c696149ebaf5bec501debe3da6`.
