@@ -1,5 +1,7 @@
 import { createHash } from "crypto";
 import { Cell, CellType } from "@ton/core";
+import { verifyTonMasterchainHeaderCell } from "./ton-masterchain-header-proof";
+import type { TonProvenMasterchainHeader } from "./ton-masterchain-header-proof";
 
 export type TonProofNetwork = "mainnet" | "testnet";
 
@@ -101,6 +103,8 @@ interface ParsedProof {
   virtualRootHash: string;
   cells: number;
   depth: number;
+  virtualRoot: Cell;
+  masterchainHeader?: TonProvenMasterchainHeader;
 }
 
 class EnvelopeValidationError extends Error {
@@ -573,7 +577,7 @@ function parseMerkleProof(
   const type = slice.loadUint(8);
   const virtualRootHash = slice.loadBuffer(32).toString("hex");
   slice.loadUint(16);
-  slice.loadRef();
+  const virtualRoot = slice.loadRef();
   slice.endParse();
   if (type !== CellType.MerkleProof) {
     throw new EnvelopeValidationError(
@@ -587,6 +591,7 @@ function parseMerkleProof(
     virtualRootHash,
     cells: header.cells,
     depth,
+    virtualRoot,
   };
 }
 
@@ -660,6 +665,42 @@ function validateBundle(
       "masterchain proof does not commit to the target root hash",
     );
   }
+  try {
+    const masterchainHeader = verifyTonMasterchainHeaderCell(
+      parsedProofs.masterchainBlockProofBocBase64.virtualRoot,
+      {
+        globalId: config.globalId,
+        targetBlock: targetMasterchainBlock,
+        trustedKeyBlockSeqno: config.trustedKeyBlock.seqno,
+      },
+    );
+    if (
+      masterchainHeader.generatedAtUnix >
+      observedAtUnix + config.maxFutureSkewSeconds
+    ) {
+      throw new EnvelopeValidationError(
+        "STALE_PROOF_BUNDLE",
+        "masterchain block generation time is from the future",
+      );
+    }
+    if (
+      nowUnix - masterchainHeader.generatedAtUnix >
+      config.maxProofAgeSeconds
+    ) {
+      throw new EnvelopeValidationError(
+        "STALE_PROOF_BUNDLE",
+        "masterchain block is stale",
+      );
+    }
+    parsedProofs.masterchainBlockProofBocBase64.masterchainHeader =
+      masterchainHeader;
+  } catch (error) {
+    if (error instanceof EnvelopeValidationError) throw error;
+    throw new EnvelopeValidationError(
+      reasonCode,
+      `masterchain header proof is invalid: ${error instanceof Error ? error.message : "unknown error"}`,
+    );
+  }
   return {
     bundle: {
       network: config.network,
@@ -685,7 +726,18 @@ function structuralCommitment(
     trustedKeyBlock: config.trustedKeyBlock,
     targetMasterchainBlock: bundle.targetMasterchainBlock,
     observedAtUnix: bundle.observedAtUnix,
-    proofs: PROOF_KEYS.map((key) => ({ role: key, ...parsedProofs[key] })),
+    proofs: PROOF_KEYS.map((key) => {
+      const proof = parsedProofs[key];
+      return {
+        role: key,
+        bocHash: proof.bocHash,
+        rootHash: proof.rootHash,
+        virtualRootHash: proof.virtualRootHash,
+        cells: proof.cells,
+        depth: proof.depth,
+        masterchainHeader: proof.masterchainHeader ?? null,
+      };
+    }),
   };
   return createHash("sha256").update(JSON.stringify(commitment)).digest("hex");
 }
