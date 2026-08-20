@@ -6,7 +6,7 @@ Date: 2026-08-20
 
 - Stabilized branch: `agent/multichain-ton-readiness`
 - Rollback point before stabilization: `eeda00d9bcd5da4d0b6e99beb55681aac6bb25ff`
-- Stabilized baseline: `8d26f32`
+- Hosted-CI-verified baseline: `f7ec945ee33ae22a1939d1f0e389fe869a4e38f3`
 - All real-funds and adapter readiness flags remain disabled.
 
 Reviewable implementation commits:
@@ -20,6 +20,7 @@ Gate-restoration commits:
 
 - `1f7cce6` — remove two unused imports that broke blocking backend lint.
 - `8d26f32` — suppress three reviewed documentation-only gitleaks false positives by exact historical fingerprint.
+- `f7ec945` — synchronize backend and TON lockfiles with CI's npm 10 peer-dependency model.
 
 ## Toolchain
 
@@ -28,7 +29,7 @@ Gate-restoration commits:
 - TON compatibility compiler: `@ton/tolk-js 1.4.1` (lockfile-pinned).
 - Authoritative TON compiler/test runner: Acton `1.1.0` (`9cf4d1f`, container digest `sha256:b7f187fc6a8ccac23195d3bd7f0d7dee9108a07f7b43bdb928839828dbc539e2`).
 - Gitleaks: `8.24.2` (container digest `sha256:b5918eb91b8d2473cec722f066abb4352e4ffdc4ec9f4283ec143aba9ec9ebc4`).
-- Local host differs from hosted CI's Node 20 runner; hosted CI remains required before merge.
+- Hosted compatibility runner: Node.js `20.20.2`; npm `10.8.2`.
 
 ## Verification evidence
 
@@ -46,12 +47,21 @@ Gate-restoration commits:
 - Secret scan: all 36 commits / approximately 10.47 MB scanned; no leaks after exact suppression of three reviewed security-prose false positives.
 - Primary Git worktree was clean after the commits. Generated builds, generated Acton wrappers, dependency directories, and release evidence remain ignored.
 
-## Checks requiring hosted CI
+## Hosted CI evidence
 
-The local run could not reproduce these checks and does not claim them as passed:
+GitHub Actions CI run 39 (`32384958063`) completed successfully against
+`f7ec945ee33ae22a1939d1f0e389fe869a4e38f3` on 2026-08-20. All seven jobs
+passed:
 
-- Backend, Mini App, and TON `npm audit` calls: the sandbox blocked disclosure of dependency metadata to the public npm advisory endpoint. Polygon audit completed successfully.
-- Slither `0.10.4`: not installed in the Windows environment.
-- Exact Node 20 runner parity and GitHub artifact upload/download jobs.
+- backend install, production audit, blocking lint, build, and 642 tests;
+- Mini App install, production audit, blocking lint, typecheck, and build;
+- Polygon install, production audit, blocking lint, compile, 114 tests, and Slither `0.10.4`;
+- TON compatibility install, complete dependency audit, typecheck, deterministic build, and 66 sandbox/Jest tests;
+- authoritative Acton build, format/lint, 26 tests, gas, fuzz, and both mutation gates;
+- independent TON artifact download and exact cross-build hash verification; and
+- full-history gitleaks scan.
 
-Phase 0 is therefore stabilized and locally green for every executable build/test/mutation/gas/secret gate, but its final merge exit remains conditional on the hosted CI jobs above succeeding at this exact commit.
+The Phase 0 technical merge gate is satisfied. This does not satisfy Phase 1
+cryptographic proof verification, Phase 2 Jetton lifecycle, external audit,
+testnet, operational, legal, policy, staging, or beta gates, and it does not
+authorize enabling any real-funds flag.
