@@ -1,7 +1,7 @@
-import { Test, TestingModule } from '@nestjs/testing';
-import { getRepositoryToken } from '@nestjs/typeorm';
-import { AuditLogService } from './audit-log.service';
-import { AuditLogEntry } from './entities/audit-log.entity';
+import { Test, TestingModule } from "@nestjs/testing";
+import { getRepositoryToken } from "@nestjs/typeorm";
+import { AuditLogService } from "./audit-log.service";
+import { AuditLogEntry } from "./entities/audit-log.entity";
 
 function makeRepo(): any {
   const rows: AuditLogEntry[] = [];
@@ -11,7 +11,7 @@ function makeRepo(): any {
       // Naive treatment of TypeORM operators (Between/MoreThanOrEqual etc.) — we
       // skip filtering on them in tests; assert ordering/pagination at the
       // logical level instead.
-      if (v && typeof v === 'object' && '_type' in (v as any)) return true;
+      if (v && typeof v === "object" && "_type" in (v as any)) return true;
       return rv === v;
     });
   return {
@@ -35,7 +35,7 @@ function makeRepo(): any {
   };
 }
 
-describe('AuditLogService', () => {
+describe("AuditLogService", () => {
   let service: AuditLogService;
   let repo: any;
 
@@ -50,91 +50,113 @@ describe('AuditLogService', () => {
     service = moduleRef.get(AuditLogService);
   });
 
-  it('writes a row with sane defaults', async () => {
+  it("writes a row with sane defaults", async () => {
     const row = await service.write({
-      actorId: 'u1',
-      aggregateType: 'deal',
-      aggregateId: 'd1',
-      action: 'deal.created',
+      actorId: "u1",
+      aggregateType: "deal",
+      aggregateId: "d1",
+      action: "deal.created",
     });
     expect(row).not.toBeNull();
     expect(repo.rows).toHaveLength(1);
     expect(repo.rows[0].details).toEqual({});
   });
 
-  it('returns null and does not throw when the underlying save fails', async () => {
-    repo.save.mockRejectedValue(new Error('db down'));
+  it("returns null and does not throw when the underlying save fails", async () => {
+    repo.save.mockRejectedValue(new Error("db down"));
     const row = await service.write({
-      aggregateType: 'deal',
-      aggregateId: 'd1',
-      action: 'deal.created',
+      aggregateType: "deal",
+      aggregateId: "d1",
+      action: "deal.created",
     });
     expect(row).toBeNull();
   });
 
-  it('lists rows by aggregate', async () => {
-    await service.write({
-      aggregateType: 'deal',
-      aggregateId: 'd1',
-      action: 'deal.created',
-    });
-    await service.write({
-      aggregateType: 'deal',
-      aggregateId: 'd2',
-      action: 'deal.created',
-    });
-    const list = await service.findByAggregate('deal', 'd1');
-    expect(list).toHaveLength(1);
-    expect(list[0].aggregateId).toBe('d1');
+  it("propagates required audit failures so sensitive transactions can roll back", async () => {
+    repo.save.mockRejectedValue(new Error("audit unavailable"));
+    await expect(
+      service.writeRequired({
+        actorId: "u1",
+        aggregateType: "ton_native_chain_event",
+        aggregateId: "event-1",
+        action: "TON_NATIVE_EVENT_REQUEUED",
+      }),
+    ).rejects.toThrow("audit unavailable");
   });
 
-  it('lists rows by actor', async () => {
+  it("lists rows by aggregate", async () => {
     await service.write({
-      actorId: 'u1',
-      aggregateType: 'deal',
-      aggregateId: 'd1',
-      action: 'deal.created',
+      aggregateType: "deal",
+      aggregateId: "d1",
+      action: "deal.created",
     });
     await service.write({
-      actorId: 'u2',
-      aggregateType: 'deal',
-      aggregateId: 'd2',
-      action: 'deal.created',
+      aggregateType: "deal",
+      aggregateId: "d2",
+      action: "deal.created",
     });
-    const list = await service.findByActor('u1');
+    const list = await service.findByAggregate("deal", "d1");
     expect(list).toHaveLength(1);
-    expect(list[0].actorId).toBe('u1');
+    expect(list[0].aggregateId).toBe("d1");
   });
 
-  it('paginates with filters', async () => {
+  it("lists rows by actor", async () => {
+    await service.write({
+      actorId: "u1",
+      aggregateType: "deal",
+      aggregateId: "d1",
+      action: "deal.created",
+    });
+    await service.write({
+      actorId: "u2",
+      aggregateType: "deal",
+      aggregateId: "d2",
+      action: "deal.created",
+    });
+    const list = await service.findByActor("u1");
+    expect(list).toHaveLength(1);
+    expect(list[0].actorId).toBe("u1");
+  });
+
+  it("paginates with filters", async () => {
     for (let i = 0; i < 5; i++) {
       await service.write({
-        actorId: 'u1',
-        aggregateType: 'deal',
+        actorId: "u1",
+        aggregateType: "deal",
         aggregateId: `d${i}`,
-        action: 'deal.created',
+        action: "deal.created",
       });
     }
     await service.write({
-      actorId: 'u2',
-      aggregateType: 'arbitrator',
-      aggregateId: 'a1',
-      action: 'arbitrator.approved',
+      actorId: "u2",
+      aggregateType: "arbitrator",
+      aggregateId: "a1",
+      action: "arbitrator.approved",
     });
 
-    const page1 = await service.findPaginated({ page: 1, limit: 2, action: 'deal.created' });
+    const page1 = await service.findPaginated({
+      page: 1,
+      limit: 2,
+      action: "deal.created",
+    });
     expect(page1.total).toBe(5);
     expect(page1.items).toHaveLength(2);
     expect(page1.page).toBe(1);
 
-    const page2 = await service.findPaginated({ page: 2, limit: 2, action: 'deal.created' });
+    const page2 = await service.findPaginated({
+      page: 2,
+      limit: 2,
+      action: "deal.created",
+    });
     expect(page2.items).toHaveLength(2);
 
-    const filtered = await service.findPaginated({ aggregateType: 'arbitrator' });
+    const filtered = await service.findPaginated({
+      aggregateType: "arbitrator",
+    });
     expect(filtered.total).toBe(1);
   });
 
-  it('clamps limit to a safe maximum', async () => {
+  it("clamps limit to a safe maximum", async () => {
     const result = await service.findPaginated({ limit: 9999 });
     expect(result.limit).toBeLessThanOrEqual(200);
   });

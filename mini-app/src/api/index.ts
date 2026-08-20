@@ -264,11 +264,19 @@ export const dealsApi = {
 
   create: (data: {
     type: string;
+    subcategory?: string;
     amount: number;
     description: string;
     title?: string;
     terms?: string;
     currency?: string;
+    feeModel?: 'split_50_50' | 'buyer_pays' | 'seller_pays';
+    sellerId?: string;
+    settlement?: {
+      network: 'ton' | 'polygon';
+      chainId: string;
+      asset: 'ton_usdt' | 'ton_native' | 'polygon_usdt';
+    };
     metadata?: Record<string, unknown>;
   }) => api.post<Deal>('/deals', data),
 
@@ -437,7 +445,13 @@ export const paymentsApi = {
     } catch {
       // Fallback: hosted checkout only.
       return [
-        { method: 'cryptomus', label: 'Cryptomus', available: true, kind: 'hosted' },
+        {
+          method: 'cryptomus',
+          label: 'Cryptomus',
+          available: true,
+          kind: 'hosted',
+          channels: ['web'],
+        },
       ];
     }
   },

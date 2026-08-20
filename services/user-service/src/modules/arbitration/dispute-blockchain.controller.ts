@@ -8,19 +8,19 @@ import {
   Post,
   Req,
   UnauthorizedException,
-} from '@nestjs/common';
-import { Request } from 'express';
-import { DisputeService } from './dispute.service';
+} from "@nestjs/common";
+import { Request } from "express";
+import { DisputeService } from "./dispute.service";
 import {
   ArbitratorSelectionService,
   ArbitratorCandidate,
-} from './arbitrator-selection.service';
+} from "./arbitrator-selection.service";
 import {
   DisputeBlockchainService,
   AssignArbitratorOnChainResult,
   RecordResolutionInput,
-} from './dispute-blockchain.service';
-import { Dispute } from './entities/dispute.entity';
+} from "./dispute-blockchain.service";
+import { Dispute } from "./entities/dispute.entity";
 
 class RecordResolutionDto implements RecordResolutionInput {
   txHash: string;
@@ -48,7 +48,7 @@ interface AutoAssignResponse {
  *
  * Mounted at `/api/arbitration` (same prefix as the existing controller).
  */
-@Controller('arbitration')
+@Controller("arbitration")
 export class DisputeBlockchainController {
   constructor(
     private readonly disputes: DisputeService,
@@ -66,16 +66,16 @@ export class DisputeBlockchainController {
    * Idempotent in the same sense as DisputeService.assignArbitrator —
    * re-assignment only works if the dispute is still in an "open" state.
    */
-  @Post('disputes/:id/auto-assign')
+  @Post("disputes/:id/auto-assign")
   @HttpCode(HttpStatus.OK)
   async autoAssign(
     @Req() req: Request,
-    @Param('id', ParseUUIDPipe) disputeId: string,
+    @Param("id", ParseUUIDPipe) disputeId: string,
     @Body() opts: AutoAssignOptionsDto = {},
   ): Promise<AutoAssignResponse> {
     const userId = req.user?.id;
     if (!userId) {
-      throw new UnauthorizedException('Not authenticated');
+      throw new UnauthorizedException("Not authenticated");
     }
 
     const dispute = await this.disputes.getDispute(disputeId);
@@ -92,7 +92,8 @@ export class DisputeBlockchainController {
       true,
     );
 
-    const onChain = await this.bridge.syncArbitratorAssignmentOnChain(disputeId);
+    const onChain =
+      await this.bridge.syncArbitratorAssignmentOnChain(disputeId);
 
     return { dispute: updated, candidate, onChain };
   }
@@ -104,17 +105,17 @@ export class DisputeBlockchainController {
    * broadcast the on-chain `resolve(buyerPct, sellerPct)` tx. We record
    * the tx hash + decision and transition the deal to DISPUTE_RESOLVED.
    */
-  @Post('disputes/:id/record-resolution')
+  @Post("disputes/:id/record-resolution")
   @HttpCode(HttpStatus.OK)
   async recordResolution(
     @Req() req: Request,
-    @Param('id', ParseUUIDPipe) disputeId: string,
+    @Param("id", ParseUUIDPipe) disputeId: string,
     @Body() body: RecordResolutionDto,
   ) {
     const userId = req.user?.id;
     if (!userId) {
-      throw new UnauthorizedException('Not authenticated');
+      throw new UnauthorizedException("Not authenticated");
     }
-    return this.bridge.recordResolutionTx(disputeId, body);
+    return this.bridge.recordResolutionTx(disputeId, body, userId);
   }
 }

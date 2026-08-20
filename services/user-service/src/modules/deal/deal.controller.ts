@@ -10,17 +10,37 @@ import {
   HttpStatus,
   ParseUUIDPipe,
   ParseIntPipe,
-} from '@nestjs/common';
-import { DealService, CreateDealDto, UpdateDealDto, DealFilterDto } from './deal.service';
-import { Deal } from './entities/deal.entity';
-import { DealMessage } from './entities/deal-message.entity';
-import { DealInvite } from './entities/deal-invite.entity';
-import { CurrentUser } from '../auth/current-user.decorator';
-import type { UserPayload } from '../auth/auth.middleware';
+} from "@nestjs/common";
+import { Throttle } from "@nestjs/throttler";
+import {
+  DealService,
+  CreateDealDto,
+  UpdateDealDto,
+  DealFilterDto,
+} from "./deal.service";
+import { Deal } from "./entities/deal.entity";
+import { DealMessage } from "./entities/deal-message.entity";
+import { DealInvite } from "./entities/deal-invite.entity";
+import { CurrentUser } from "../auth/current-user.decorator";
+import type { UserPayload } from "../auth/auth.middleware";
+import { ClientChannel } from "./enums/deal.enum";
+import {
+  TonNativeFundingResponse,
+  TonNativeFundingService,
+} from "./ton-native-funding.service";
+import {
+  TonNativeLifecycleRequestResponse,
+  TonNativeLifecycleRequestService,
+} from "./ton-native-lifecycle-request.service";
+import { TonNativeLifecycleAction } from "./ton-native-lifecycle";
 
-@Controller('deals')
+@Controller("deals")
 export class DealController {
-  constructor(private dealService: DealService) {}
+  constructor(
+    private dealService: DealService,
+    private readonly tonNativeFunding: TonNativeFundingService,
+    private readonly tonNativeLifecycle: TonNativeLifecycleRequestService,
+  ) {}
 
   @Post()
   @HttpCode(HttpStatus.CREATED)
@@ -28,7 +48,9 @@ export class DealController {
     @Body() data: CreateDealDto,
     @CurrentUser() user: UserPayload,
   ): Promise<Deal> {
-    return this.dealService.create(data, user.id);
+    return this.dealService.create(data, user.id, {
+      channel: ClientChannel.TELEGRAM_MINI_APP,
+    });
   }
 
   @Get()
@@ -39,118 +61,151 @@ export class DealController {
     return this.dealService.findMany(filter, user.id);
   }
 
-  @Get('number/:number')
+  @Get("number/:number")
   async findByNumber(
-    @Param('number') number: string,
+    @Param("number") number: string,
     @CurrentUser() user: UserPayload,
   ): Promise<Deal> {
     return this.dealService.findByNumberForUser(number, user.id, user.roles);
   }
 
-  @Get(':id')
+  @Get(":id")
   async findById(
-    @Param('id', ParseUUIDPipe) id: string,
+    @Param("id", ParseUUIDPipe) id: string,
     @CurrentUser() user: UserPayload,
   ): Promise<Deal> {
     return this.dealService.findByIdForUser(id, user.id, user.roles, [
-      'buyer',
-      'seller',
-      'messages',
-      'attachments',
-      'events',
+      "buyer",
+      "seller",
+      "messages",
+      "attachments",
+      "events",
     ]);
   }
 
-  @Put(':id')
+  @Put(":id")
   async update(
-    @Param('id', ParseUUIDPipe) id: string,
+    @Param("id", ParseUUIDPipe) id: string,
     @Body() data: UpdateDealDto,
     @CurrentUser() user: UserPayload,
   ): Promise<Deal> {
-    return this.dealService.update(id, data, user.id);
+    return this.dealService.update(id, data, user.id, {
+      channel: ClientChannel.TELEGRAM_MINI_APP,
+    });
   }
 
-  @Post(':id/cancel')
+  @Post(":id/cancel")
   async cancel(
-    @Param('id', ParseUUIDPipe) id: string,
+    @Param("id", ParseUUIDPipe) id: string,
     @Body() body: { reason?: string },
     @CurrentUser() user: UserPayload,
   ): Promise<Deal> {
     return this.dealService.cancel(id, user.id, body.reason);
   }
 
-  @Post(':id/accept')
+  @Post(":id/accept")
   async accept(
-    @Param('id', ParseUUIDPipe) id: string,
+    @Param("id", ParseUUIDPipe) id: string,
     @CurrentUser() user: UserPayload,
   ): Promise<Deal> {
     return this.dealService.accept(id, user.id);
   }
 
-  @Post(':id/reject')
+  @Post(":id/reject")
   async reject(
-    @Param('id', ParseUUIDPipe) id: string,
+    @Param("id", ParseUUIDPipe) id: string,
     @Body() body: { reason?: string },
     @CurrentUser() user: UserPayload,
   ): Promise<Deal> {
     return this.dealService.reject(id, user.id, body.reason);
   }
 
-  @Post(':id/confirm')
+  @Post(":id/confirm")
   async confirmReceipt(
-    @Param('id', ParseUUIDPipe) id: string,
+    @Param("id", ParseUUIDPipe) id: string,
     @CurrentUser() user: UserPayload,
   ): Promise<Deal> {
     return this.dealService.confirmReceipt(id, user.id);
   }
 
-  @Post(':id/ship')
+  @Post(":id/ship")
   async markShipped(
-    @Param('id', ParseUUIDPipe) id: string,
+    @Param("id", ParseUUIDPipe) id: string,
     @CurrentUser() user: UserPayload,
   ): Promise<Deal> {
     return this.dealService.markShipped(id, user.id);
   }
 
-  @Get(':id/escrow')
+  @Get(":id/escrow")
   async getEscrow(
-    @Param('id', ParseUUIDPipe) id: string,
+    @Param("id", ParseUUIDPipe) id: string,
     @CurrentUser() user: UserPayload,
   ) {
     return this.dealService.getEscrowForDeal(id, user.id);
   }
 
-  @Post(':id/escrow/release-sync')
+  /**
+   * Returns an exact TON Connect deploy-and-fund request. The underlying TON
+   * adapter remains hard-disabled until ingestion/reconciliation are ready.
+   */
+  @Throttle({ default: { ttl: 60_000, limit: 10 } })
+  @Post(":id/ton-native/funding-request")
+  @HttpCode(HttpStatus.OK)
+  async buildTonNativeFundingRequest(
+    @Param("id", ParseUUIDPipe) id: string,
+    @CurrentUser() user: UserPayload,
+  ): Promise<TonNativeFundingResponse> {
+    return this.tonNativeFunding.buildFundingRequest(id, user.id);
+  }
+
+  /** Returns an immutable, role-scoped TON Connect lifecycle request. */
+  @Throttle({ default: { ttl: 60_000, limit: 20 } })
+  @Post(":id/ton-native/action-request")
+  @HttpCode(HttpStatus.OK)
+  async buildTonNativeLifecycleRequest(
+    @Param("id", ParseUUIDPipe) id: string,
+    @Body() body: { action: TonNativeLifecycleAction; reason?: string },
+    @CurrentUser() user: UserPayload,
+  ): Promise<TonNativeLifecycleRequestResponse> {
+    return this.tonNativeLifecycle.buildRequest(
+      id,
+      user.id,
+      body.action,
+      body.reason,
+    );
+  }
+
+  @Post(":id/escrow/release-sync")
   async syncEscrowRelease(
-    @Param('id', ParseUUIDPipe) id: string,
+    @Param("id", ParseUUIDPipe) id: string,
     @Body() body: { txHash?: string },
     @CurrentUser() user: UserPayload,
   ): Promise<Deal> {
     return this.dealService.syncEscrowRelease(id, user.id, body.txHash);
   }
 
-  @Post(':id/dispute')
+  @Post(":id/dispute")
   async openDispute(
-    @Param('id', ParseUUIDPipe) id: string,
+    @Param("id", ParseUUIDPipe) id: string,
     @Body() body: { reason: string },
     @CurrentUser() user: UserPayload,
   ): Promise<Deal> {
     return this.dealService.openDispute(id, user.id, body.reason);
   }
 
-  @Get(':id/messages')
+  @Get(":id/messages")
   async getMessages(
-    @Param('id', ParseUUIDPipe) id: string,
-    @Query('limit', ParseIntPipe) limit: number = 50,
-    @Query('offset', ParseIntPipe) offset: number = 0,
+    @Param("id", ParseUUIDPipe) id: string,
+    @Query("limit", ParseIntPipe) limit: number = 50,
+    @Query("offset", ParseIntPipe) offset: number = 0,
     @CurrentUser() user: UserPayload,
   ): Promise<DealMessage[]> {
     return this.dealService.getMessages(id, limit, offset, user.id, user.roles);
   }
 
-  @Post(':id/messages')
+  @Post(":id/messages")
   async createMessage(
-    @Param('id', ParseUUIDPipe) id: string,
+    @Param("id", ParseUUIDPipe) id: string,
     @Body() body: { content: string },
     @CurrentUser() user: UserPayload,
   ): Promise<DealMessage> {
@@ -161,19 +216,20 @@ export class DealController {
     });
   }
 
-  @Get(':id/events')
+  @Get(":id/events")
   async getEvents(
-    @Param('id', ParseUUIDPipe) id: string,
-    @Query('limit', ParseIntPipe) limit: number = 50,
+    @Param("id", ParseUUIDPipe) id: string,
+    @Query("limit", ParseIntPipe) limit: number = 50,
     @CurrentUser() user: UserPayload,
   ) {
     return this.dealService.getEvents(id, limit, user.id, user.roles);
   }
 
-  @Post(':id/invite')
+  @Post(":id/invite")
   async createInvite(
-    @Param('id', ParseUUIDPipe) id: string,
-    @Body() body: {
+    @Param("id", ParseUUIDPipe) id: string,
+    @Body()
+    body: {
       invitedUserId?: string;
       invitedUserTelegramId?: string;
       message?: string;
@@ -191,9 +247,9 @@ export class DealController {
     );
   }
 
-  @Get(':id/stats')
+  @Get(":id/stats")
   async getStats(
-    @Param('id', ParseUUIDPipe) _id: string,
+    @Param("id", ParseUUIDPipe) _id: string,
     @CurrentUser() user: UserPayload,
   ): Promise<{
     totalDeals: number;

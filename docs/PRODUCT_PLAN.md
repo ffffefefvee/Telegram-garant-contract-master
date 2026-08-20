@@ -1,106 +1,123 @@
-# Telegram Garant — Product Plan (v0.1)
+# Telegram Garant — Product Plan (v0.3: TON-focused multichain)
 
-> Единый источник правды по продукту и архитектуре. Заменяет все файлы `PHASE*_COMPLETE.md`, `FINAL_STATUS.md`, `ARCHITECTURE.md`, `.qwen/PROJECT_SUMMARY.md` после согласования.
+> Единый источник правды по продукту и архитектуре. Детальный порядок работ и release gates: [MULTICHAIN_PUBLIC_LAUNCH_PLAN.md](./MULTICHAIN_PUBLIC_LAUNCH_PLAN.md). Техническая декомпозиция: [MULTICHAIN_IMPLEMENTATION_SPEC.md](./MULTICHAIN_IMPLEMENTATION_SPEC.md).
 >
-> Статус: **черновик на согласование**. После твоего «ок» коммитим как `docs/PRODUCT_PLAN.md` через PR и удаляем устаревшие документы.
+> Статус: **подтверждённое продуктовое направление; реализация к публичному запуску не завершена**. TON является основным Telegram-направлением, Polygon сохраняется как полноценный выбор пользователя. Реальные деньги запрещены до прохождения policy/legal, security, reconciliation, audit и closed-beta gates для каждой включённой сети.
+
+### Правило приоритета v0.3
+
+Версия v0.3 отменяет как Polygon-only, так и TON-only трактовку. **TON и Polygon остаются в продукте**, а стороны выбирают сеть сделки до funding. Одна сделка никогда не скрывает переход между сетями: funding, escrow, release/refund и reconciliation выполняются в выбранной сети. При любом конфликте приоритет имеют решения D1–D22 этой версии, [multichain launch plan](./MULTICHAIN_PUBLIC_LAUNCH_PLAN.md) и [implementation spec](./MULTICHAIN_IMPLEMENTATION_SPEC.md).
 
 ---
 
 ## 1. Что мы делаем
 
-**Telegram Garant** — anti-scam P2P escrow внутри Telegram. Покупатель и продавец встречаются в личной «комнате сделки», прописывают условия, общаются в чате Mini App. Деньги хранятся в индивидуальном смарт-контракте на Polygon (USDT). При споре арбитр платформы распределяет средства.
+**Telegram Garant** — anti-scam P2P escrow с Telegram Mini App и полноценным сайтом на одном ядре. Покупатель и продавец фиксируют условия и выбирают сеть сделки, после чего покупатель переводит средства непосредственно в TON- или Polygon-эскроу. При споре уполномоченный арбитр распределяет средства в той же сети по опубликованным правилам.
 
-**Целевая аудитория MVP:** русскоязычные P2P-сделки на цифровые товары/доступы/услуги (аккаунты, ключи, подписки, инфопродукты, фриланс-задачи).
+**Целевая аудитория MVP:** русскоязычные P2P-пользователи в явно разрешённых странах. Категории цифровых товаров/доступов/услуг внутри Mini App включаются только после письменного подтверждения допустимой Telegram payment-policy модели; сайт может иметь отдельный разрешённый scope.
 
 **Чего точно нет в MVP** (явно, чтобы не было разночтений):
 - Конструктор ботов с self-host у продавца (Phase 3+).
-- Cryptomus payout продавцу в фиат (Phase 2 — пока только USDT в Web3-кошелёк продавца).
+- Гарантии «вывод на любую карту/в любой стране». В MVP гарантируется direct payout в активе сделки на TON-кошелёк; fiat/card/SBP включается отдельно по стране через разрешённого партнёра.
 - Физические товары с доставкой, аренда, сложные multi-stage сделки (Phase 2+).
 - Decentralized арбитраж со стейкингом (Phase 3+).
 - Внешняя проверка скам-историй (Phase 2, и только как ручная модерация).
 - Реферальная программа (Phase 2).
-- Поддержка нескольких сетей кроме Polygon (BSC — Phase 2, TRON/TON — позже, требует отдельной архитектуры).
+- BSC/TRON и cross-chain settlement внутри одной сделки. TON и Polygon входят в целевую модель; другие сети добавляются только через тот же adapter/audit process.
 
 ---
 
-## 2. Зафиксированные решения
+## 2. Решения v0.3 и пункты, требующие freeze
+
+Подтверждённое направление: TON-focused, Polygon retained, выбор сети сторонами, выгода обеим сторонам, низкие прозрачные комиссии, Mini App + сайт и security-first release gates. Численные targets и архитектурные варианты, отмеченные как proposed/ADR/legal, являются рекомендацией этого плана и становятся фиксированным решением только после соответствующего sign-off.
 
 | # | Решение | Значение | Обоснование |
 |---|---------|----------|-------------|
-| D1 | Custody | Non-custodial payout; light-custody на funding (Cryptomus relay) | Cryptomus не разрешает произвольный `to_address` в инвойсе → backend становится relay'ем. Деньги физически проходят через hot-wallet платформы между webhook и on-chain forward. Payout продавцу — прямо из эскроу в его Web3-кошелёк. |
-| D2 | Сеть и токен в эскроу (MVP) | Polygon, USDT (USDT.e или native USDT — уточняем при деплое). **Валюта котировки** — на выбор продавца при создании сделки: `RUB` или `USDT`. | Эскроу всегда в USDT (нужен один токен on-chain). UI и платёж идут в выбранной валюте; курс RUB→USDT фиксируется в момент funding'а через Cryptomus rate snapshot. BSC — Phase 2. TRON/TON — позже. |
-| D3 | Тип сделки (MVP) | Digital goods, 5 подкатегорий: (1) аккаунт, (2) ключ/код активации, (3) цифровой файл, (4) онлайн-услуга, (5) перенос подписки | Нет доставки, нет «оспорить качество товара», единственный critical path: «получил доступ → подтвердил». Контракт и FSM одинаковы для всех 5 — различаются только поля формы и шаблоны evidence в споре (см. §6.2). |
+| D1 | Custody | Direct buyer funding в escrow выбранной сети; direct same-chain/same-asset payout продавцу | Основной путь не проводит TON через Polygon float или наоборот. Любой conversion/fiat rail — отдельная явно котируемая услуга партнёра. |
+| D2 | Сеть и актив в эскроу (MVP) | **TON и Polygon**. TON: официальный USDT-TON, TONCOIN после lifecycle-тестирования. Polygon: allowlisted USDT deployment. RUB может быть валютой отображения. | Стороны выбирают сеть до funding и подтверждают её в terms hash. Mini App исполняет TON; Polygon исполняется на сайте, если Telegram не даст письменное разрешение на иной flow. |
+| D3 | Тип сделки (MVP) | Технически поддерживаем 5 digital-подкатегорий, но их доступность по каналу и стране определяется policy/legal allowlist | Telegram отдельно регулирует оплату digital goods/services. Публичный scope нельзя считать разрешённым без письменного решения; контракт/FSM могут быть общими для разрешённых категорий. |
 | D4 | Распределение комиссии | Дефолт 50/50, при создании сделки можно выбрать 100/0 (на покупателе) или 0/100 (на продавце) | Скамят чаще продавцы, безопасность нужна обеим сторонам. Перенос — только до funding'а, не во время спора. |
-| D5 | Тариф комиссии | **Тарифная сетка**: при сумме сделки `< 1000 ₽` — фикс **50 ₽**; при `≥ 1000 ₽` — **5%** от суммы. Для сделок в USDT — пересчёт по курсу RUB→USDT в момент funding'а (`< $11` → ~$0.55 фикс, `≥ $11` → 5%). Распределение между сторонами по D4. | На мелких сделках процентная комиссия не покрывает себестоимость спора; фикс делает мелочёвку безубыточной. Параметризуется в `EscrowFactory` (порог + ставки). |
-| D6 | Минимальная сумма | **300 ₽** или эквивалент в USDT по курсу на момент создания сделки (~$3.30). | Покрывает газ + комиссию Cryptomus + наши 50 ₽ фикс + остаётся продавцу около 220-240 ₽. |
+| D5 | Тариф комиссии | Точный тариф утверждается после unit economics. **Proposed launch target:** all-in cost ≤ 3% минимум для 90% целевого объёма; small-deal exceptions раскрываются заранее. Один versioned quote задаёт buyer total и seller net во всех слоях. | Старый тариф 50 ₽/5% не является целевым: на минимальной сделке он доходил до 16,7% и не доказывал низкую комиссию. |
+| D6 | Минимальная сумма | Определяется по ticket-band unit economics для конкретного asset/rail; прежние 300 ₽ не зафиксированы. | Минимум должен одновременно сохранять низкий all-in процент и не создавать отрицательную маржу после газа, поддержки, risk reserve и ожидаемого арбитража. |
 | D7 | Арбитраж (MVP) | Централизованный пул, 1 арбитр на спор, апелляция → второй арбитр | Decentralized — Phase 3+. На старте арбитров нанимаем (см. §11). |
-| D8 | Юрисдикция юрлица | TBD — блокирующий вопрос для legal-фазы перед публичным запуском | Не блокирует разработку MVP, но блокирует closed beta с реальными деньгами. |
-| D9 | Контрактный паттерн | EIP-1167 minimal proxy clones + Factory с `cloneDeterministic(salt = dealId)` | Газ ~45k на клон вместо ~1M+. Адрес вычисляется заранее (CREATE2) → показываем покупателю до деплоя. |
-| D10 | Auth в Mini App | Telegram WebApp `initData` HMAC-валидация на backend | Нативно для TG, без отдельного логина. |
-| D11 | Стек | NestJS (модульный монолит) + PostgreSQL + Redis + BullMQ + ethers v6 + Telegraf + React/Vite | Уже есть в репо, рефакторим, не переписываем с нуля. |
+| D8 | Юрисдикции | Launch-country allowlist и отдельный legal/provider sign-off по каждой стране; Россия оценивается первой, но не считается автоматически разрешённой | Блокирует любые реальные деньги, включая closed beta. «СНГ» не является одной регуляторной зоной. |
+| D9 | Контрактный паттерн | Две независимые реализации за общим domain interface: TON isolated escrow по TON ADR и Polygon `EscrowFactory`/isolated clone после hardening | Chain-specific безопасность не абстрагируется. Общими остаются terms/quote, FSM, ledger semantics и acceptance tests. |
+| D10 | Auth и wallet proof | Telegram WebApp `initData` с replay protection + TON Connect/`ton_proof` для подтверждения кошелька | Telegram identity и владение кошельком — разные доказательства; ни одно не должно подменять другое. |
+| D11 | Стек | NestJS/PostgreSQL/Redis/BullMQ/Telegraf/React-Vite + ethers для Polygon + TON SDK/contract toolchain для TON; chain adapters за typed interface | Одна сеть не должна загрязнять код и инварианты другой, но обе используют единое продуктовое ядро. |
 | D12 | UX-парадигма | **Button-driven**: все действия через inline-кнопки в боте и кнопки в Mini App. Текстовые команды — только `/start`, `/help`, `/support` как deep-link fallback. | Снижает порог входа, исключает ошибки ввода, нативно для Telegram. |
-| D13 | Дизайн-система | Единый UI Kit на основе Telegram-native palette + темизация под `Telegram.WebApp.themeParams` (auto dark/light). Skeleton loaders, плавные переходы, haptic feedback на всех мутирующих действиях, иконки на каждой кнопке. | Качество UI — приоритет, отдельный design pass в конце Горизонта 1. |
-| D14 | Админ-панели | **Две панели в MVP**: (a) Arbitrator panel — кабинет арбитра; (b) Admin panel — панель founder/саппорта. Обе — отдельные секции Mini App с auth по роли. | В Горизонте 1, не Phase 2. |
-| D15 | Оплата арбитра | **Штраф с виновной стороны = зарплата арбитра** (см. §6.5). Размер — 10% от суммы сделки, минимум 100 ₽, максимум 1000 ₽. Источник: эскроу-средства проигравшего. **Когда виновен продавец** — у него нет денег под нашим контролем; платформа доплачивает арбитру из своей комиссии (Treasury Reserve, 20% от каждой нормальной сделки). Невиновный **всегда** получает 100% ожидаемого. | Простая прозрачная связь «решение спора → деньги». Платформа несёт риск шортфолла, который покрывается резервом из обычных сделок. |
-| D16 | Залог арбитра | **200 USDT** при найме, on-chain в `ArbitratorRegistry.sol`. Сетка форфейтов 10/25/50/100% по тяжести проступка (см. §6.7). Изъятый залог → пострадавшей стороне или в Treasury Reserve. Senior-арбитры (>50 разрешённых споров без санкций) могут работать с пониженным залогом 100 USDT. | Skin in the game без агрессивного барьера на найм. |
+| D13 | Дизайн-система | Общий UI Kit для Mini App и сайта; Mini App адаптируется к `Telegram.WebApp.themeParams`, сайт имеет собственную responsive оболочку. Skeleton loaders, clear states, accessibility и haptic там, где он доступен. | UX моделируется параллельно с interaction contracts; финальный visual pass выполняется после стабилизации money flow. |
+| D14 | Админ-панели | **Две панели в MVP**: (a) Arbitrator workspace; (b) Admin/support workspace. Для production они могут жить на отдельном защищённом web origin с MFA/step-up auth, а не внутри пользовательского Mini App | Money-moving и evidence-доступ требуют более сильной операторской защиты, чем обычный Telegram session. |
+| D15 | Оплата арбитра | Сохраняем принцип отдельного финансирования арбитража и защиты невиновной стороны, но точные 10%/100–1000 ₽/20% reserve считаются гипотезой до legal и unit-economics sign-off | Нельзя одновременно обещать низкую комиссию и неограниченную компенсацию без доказанной резервной модели. |
+| D16 | Залог арбитра | Механизм stake/slashing сохраняется как продуктовая гипотеза; asset/network/custody и legal treatment утверждаются отдельно | Существующий `ArbitratorRegistry.sol` может обслуживать Polygon, но не считается общим реестром TON без отдельного ADR. |
 | D17 | Vacation & capacity | Арбитр сам управляет статусом: ACTIVE / VACATION / CAPACITY_LIMITED. Vacation — auto-resume по дате, нельзя если есть открытые споры (надо сдать head_arbitrator'у). Лимит отпуска — 30 дней / год. Capacity — max active disputes (по умолчанию 5). | Минимизирует burnout арбитров и даёт прозрачную загрузку. |
+| D18 | Взаимная выгода | До funding показываем buyer total, seller net, fee/rail/FX, сроки и refund outcome; условия подписываются обеими сторонами | Гарантия ценна только тогда, когда обе стороны понимают цену и получают защиту от бездействия контрагента. |
+| D19 | Payout truth | В MVP гарантируем same-chain/same-asset payout: TON deal → TON wallet; Polygon deal → Polygon wallet. Card/SBP/fiat показывается только eligible пользователю после country/provider check | Визуальный выбор сети/валюты без реального исполнения запрещён. |
+| D20 | Security release gate | Ноль unresolved Critical/High, семь дней zero reconciliation delta, внешний аудит и capped closed beta до public funds | Абсолютной гарантии безопасности не существует; готовность доказывается тестами, аудитом, лимитами и recovery. |
+| D21 | Два клиента | Mini App и полноценный сайт используют одно ядро, design system, API schemas и финансовую терминологию | UI проектируется совместно, но правила сделки и расчёты не должны расходиться между каналами. |
+| D22 | Network choice | Сеть является обязательной версионированной частью terms; обе стороны подтверждают её до funding, после funding изменить нельзя | Пользователь выбирает выгоду TON или Polygon сам; платформа показывает сравнение fee/speed/wallet/payout и не делает скрытый bridge. |
 
 ---
 
 ## 3. Поток одной сделки (happy path)
 
 ```
-[1] Покупатель в боте → /new_deal
-    → выбирает тип "digital goods", описывает что покупает
-    → указывает цену сделки и **валюту котировки** (RUB или USDT — выбор продавца при акцепте, см. шаг [4])
-    → выбирает модель распределения комиссии (50/50 / 100% buyer / 100% seller)
-    → платёжная валюта на стороне Cryptomus — отдельно, выбирает покупатель на платёжной странице (RUB карта, USDT, BTC, ...)
+[1] Покупатель в Mini App или на сайте создаёт сделку
+    → выбирает разрешённую категорию, цену, сеть и актив
+    → Mini App предлагает TON; сайт предлагает TON и Polygon по availability matrix
+    → выбирает распределение platform fee
+    → backend формирует chain-specific versioned quote: buyer total, seller net, network/rail fees, сроки, refund outcome
 
-[2] Backend генерирует invite-ссылку с deal_id
-    → детерминированно вычисляет будущий адрес escrow (CREATE2)
-    → сохраняет в БД (deal: status=PENDING_SELLER)
+[2] Backend генерирует invite-ссылку с deal_id и canonical terms version
+    → выбранный chain adapter создаёт/вычисляет адрес изолированного escrow
+    → deal: status=PENDING_SELLER
 
-[3] Покупатель шлёт ссылку продавцу
+[3] Покупатель отправляет ссылку продавцу
 
-[4] Продавец открывает ссылку → Mini App → видит условия, акцептует
-    → если возражает: цикл переговоров через чат, финальный consent от обеих сторон
-    → продавец указывает Polygon-адрес, куда хочет получить USDT
+[4] Продавец открывает ссылку, подключает кошелёк выбранной сети и проверяет условия
+    → при изменениях создаётся новая terms version; funding старой версии запрещён
+    → network, chain id, token contract/master, payout address и seller net фиксируются в terms hash
+    → обе стороны подтверждают одну версию
     → deal: status=AWAITING_FUNDING
 
-[5] Mini App показывает покупателю кнопку "Оплатить через Cryptomus"
-    → создаётся Cryptomus invoice (order_id = deal_id, amount = price + buyer_fee)
-    → ссылка ведёт на платёжную страницу Cryptomus
+[5] Покупатель нажимает «Оплатить»
+    → TON: TON Connect в Mini App/website
+    → Polygon: EIP-1193/WalletConnect на website
+    → клиент формирует точную транзакцию в escrow выбранной сети
+    → ручной ввод address/network/amount не нужен; кошелёк явно показывает сеть и актив
 
-[6] Покупатель платит в любой поддерживаемой валюте
-    → Cryptomus конвертирует → шлёт USDT на статичный hot-wallet платформы
-
-[7] Cryptomus webhook → backend (verify signature, idempotent insert в outbox)
-    → BullMQ воркер берёт outbox-запись:
-        a) если escrow ещё не задеплоен — Factory.deployAndFund(deal_id, ...)
-        b) если задеплоен — переводит USDT в escrow + Escrow.notifyFunded()
+[6] Backend индексирует finalized транзакцию
+    → chain adapter проверяет allowlisted token, sender, amount, deal id, finality и idempotency
+    → пишет balanced ledger postings и сверяет on-chain escrow balance
     → deal: status=FUNDED
-    → пуш обеим сторонам
+    → уведомляет обе стороны
 
-[8] Mini App у обоих обновляется: "Деньги в эскроу. Линк на контракт: <polygonscan>"
+[7] Оба клиента показывают: «Средства заблокированы»
+    → адрес контракта, asset, сумма, final tx и terms hash доступны для проверки
 
-[9a] Happy path:
+[8a] Happy path:
     → продавец передаёт цифровой товар через чат сделки
     → покупатель жмёт "Подтвердить получение"
-    → Escrow.release(): seller_amount → seller_wallet, fee → PlatformTreasury
+    → escrow выбранной сети исполняет release: seller net → seller wallet той же сети, fee → chain-specific treasury/reserve по quote
+    → backend индексирует payout, завершает ledger/reconciliation
     → deal: status=COMPLETED → request reviews от обеих сторон
 
-[9b] Sad path (любая сторона жмёт "Открыть спор"):
+[8b] Timeout buyer:
+    → опубликованное окно подтверждения истекло
+    → контракт делает auto-release либо переводит сделку в гарантированный dispute flow по правилам категории
+    → продавец не зависит бессрочно от подписи покупателя
+
+[8c] Sad path (любая сторона жмёт "Открыть спор"):
     → deal: status=DISPUTED
     → 48h evidence period: обе стороны загружают доказательства (скриншоты, чек-логи, файлы)
     → файлы хэшируются, хэши immutable в БД; снапшот чата фиксируется (хэш-цепочка сообщений)
     → backend случайно назначает свободного арбитра (round-robin с фильтром "конфликт интересов")
     → арбитр читает чат + evidence, может задать уточняющие вопросы в "арбитражном чате"
-    → 72h на решение → Escrow.resolve(buyer_share_bps, seller_share_bps)
+    → 72h на решение → chain adapter вызывает escrow resolve(buyer_share_bps, seller_share_bps)
     → если кто-то из сторон запросил апелляцию в течение 24h → новый арбитр (или панель из 3 для крупных сумм)
     → итоговое решение исполняется on-chain
     → deal: status=RESOLVED
 
-[10] После closure (любого):
+[9] После closure (любого):
     → reviews от обеих сторон (двойная)
     → reputation update
     → решения арбитра анонимизированно публикуются в "прецедентную базу" (опционально)
@@ -112,14 +129,20 @@
 - **Timeout funding**: 7 дней без оплаты → deal: status=EXPIRED.
 - **Timeout seller after funding**: 14 дней без активности продавца после funding → автоматически открывается спор в пользу покупателя.
 - **Partial release**: только через consent обеих сторон ИЛИ через арбитра в диспуте.
-- **Webhook повторно/потерян**: outbox + idempotency keys. Watcher балансов hot-wallet'а как fallback.
-- **Контракт не задеплоился**: ретраи с экспоненциальным backoff. После 5 fails — алерт + ручной forward.
+- **Indexer повторил/пропустил событие**: cursor + backfill + unique event/action key + независимая сверка; credit строго idempotent.
+- **Контракт не задеплоился**: funding request не показывается как готовый; retry/alert без ручного перенаправления пользовательских средств.
+- **Fake jetton / неверная сумма / underpayment**: не credit; отдельный recovery state и support runbook.
+- **Wrong EVM chain/token или неподдерживаемый contract address**: не credit; UI не предлагает импорт/переключение без повторной проверки chain-specific quote.
+- **Стороны хотят разные сети**: переговоры создают новую terms version; до взаимного подтверждения funding запрещён.
+- **Reconciliation mismatch**: автоматическая остановка новых funding requests и egress до dual-authorized recovery.
 
 ---
 
-## 4. Контракты (Polygon)
+## 4. Контракты: TON и Polygon
 
-### 4.1 Список
+> **Важно:** TON и Polygon — независимые settlement implementations. Их объединяет typed backend interface и одинаковые business invariants, но аудит, токены, finality, wallet UX и deployment manifests отдельны. Ни одна сеть не считается production-ready только потому, что готова другая.
+
+### 4.P1 Polygon contracts (retained, requires hardening)
 
 | Контракт | Назначение | Изменяемость |
 |----------|-----------|--------------|
@@ -128,7 +151,7 @@
 | `PlatformTreasury.sol` | Аккумулирует комиссии и Treasury Reserve (20% отчислений), multisig withdrawal | 2/3 multisig |
 | `ArbitratorRegistry.sol` | On-chain реестр арбитров: stake, level, status, slashing (D16) | Owner-controlled через TimelockController |
 
-### 4.2 Интерфейс EscrowImplementation
+### 4.P2 Polygon `EscrowImplementation`
 
 ```solidity
 // State
@@ -164,19 +187,24 @@ function getBalance() external view returns (uint256);
 - ReentrancyGuard на `release` / `refund` / `resolve`.
 - Комиссия извлекается из `amount` и переводится в `PlatformTreasury` тем же вызовом, что отправляет деньги стороне. Никаких "застрявших на контракте" денег.
 
-### 4.3 Газ-стратегия
+### 4.P3 Polygon gas strategy
 
 Все вызовы (release, refund, dispute, resolve, notifyFunded) — **через relay-кошелёк платформы**. Пользователи никогда не платят газ напрямую. Газ компенсируется из комиссии. У relay'я отдельный bot-кошелёк с минимальным балансом MATIC (рефиллится из treasury).
 
-### 4.4 Тесты и аудит
+### 4.P4 Per-chain tests и аудит
 
 - Hardhat coverage ≥ 90% на финальных версиях контрактов (Foundry опционально).
 - Slither + Mythril в CI.
-- **Перед запуском с реальными деньгами** — внешний аудит (CertiK/Hacken/локальный аудитор). На MVP closed beta — собственный аудит + bug bounty.
+- Polygon: property/fuzz/invariant tests, allowlisted token/chain assertions, verified deployment manifest и независимый audit.
+- TON: property/fuzz tests, canonical jetton/finality assertions, verified deployment manifest и независимый audit.
+- Общий conformance suite запускается для обоих adapters, но не заменяет chain-specific security tests.
+- **До любых реальных денег, включая closed beta** — ноль нерешённых Critical/High и независимый retest исправлений.
 
 ---
 
 ## 5. Backend (NestJS)
+
+> Сохраняем модульную продуктовую основу и выделяем chain-neutral orchestration поверх отдельных TON и Polygon adapters. Текущий TON→Polygon relay остаётся migration path только до нативного TON escrow и не является целевой схемой.
 
 ### 5.1 Модули
 
@@ -186,9 +214,9 @@ src/modules/
 ├── user/              # Профили, settings, payout-адреса
 ├── deal/              # Сделки, FSM, чат, snapshot чата
 ├── arbitration/       # Споры, evidence, decisions, апелляции, назначение арбитров
-├── payment/           # Cryptomus invoice, webhooks, конверсия валют
-├── escrow/            # Взаимодействие с контрактами + on-chain watcher
-├── ledger/            # Двойная запись: каждое движение средств логируется и сверяется с on-chain
+├── payment/           # TON Connect requests, TON/jetton ingestion, optional provider rails
+├── escrow/            # TON contracts, finalized event indexer, release/refund/resolve
+├── ledger/            # Полная двойная запись, liabilities, fees/reserve/payout и reconciliation
 ├── notification/      # Telegram-пуши, email-fallback на критичные события
 ├── review/            # Двойные отзывы, репутация, trust score
 ├── admin/             # Internal API для арбитров и саппорта (auth по роли)
@@ -198,23 +226,25 @@ src/modules/
 
 ### 5.2 Инфраструктурные паттерны
 
-- **Outbox pattern** для всех внешних event-ов (Cryptomus webhook, on-chain events). Webhook → INSERT в outbox → BullMQ воркер → внешний side-effect → mark processed. Гарантия at-least-once + idempotency.
+- **Outbox/inbox pattern** для всех внешних событий (TON indexer, provider webhook, notifications). Приём → durable insert → BullMQ worker → side-effect → mark processed. Гарантия at-least-once + idempotency.
 - **Idempotency keys** на все мутирующие endpoint-ы.
-- **Reconciliation job** каждые 5 минут: сверка `sum(funded_deals.amount) == hot_wallet.usdt_balance + sum(active_escrows.balance)`. Расхождение → алерт.
+- **Reconciliation** по finalized snapshot доказывает `on-chain assets = user liabilities + fees + reserves + deferred payouts`. Необъяснённое расхождение включает circuit breaker, а не только alert.
 - **State machine** на сделке как явный код (XState или собственный enum-FSM с гардами), не как if/else в сервисах.
 
-### 5.3 Что выкидываем из текущего кода
+### 5.3 Стратегия миграции текущего кода
 
-После аудита репо — много модулей либо пустых, либо с TS-ошибками, либо дублирующих:
-- `services/user-service/src/modules/store/` — это что? Никак не связан с escrow. Удалить.
-- `monitoring/` — пустой каркас. Удалить, заменить на Prometheus + структурный logger.
-- `arbitration/` сейчас — 11 entities, но без работающего FSM. Переписать с нуля по новой модели (§6).
-- Все `*.ps1`, `*.bat`, `$null`, `build_output*`, `.qwen/` — мусор.
-- 8 `PHASE*_COMPLETE.md` — заменить этим документом.
+- Переиспользуем работающие deal/chat/arbitration/admin/reputation модули после contract/integration tests.
+- Polygon contracts и EVM wallet flow сохраняем, harden и помещаем за `PolygonEscrowAdapter`.
+- TON→Polygon relay/float маркируем transitional и удаляем после native TON E2E parity; он не должен становиться третьей скрытой settlement-моделью.
+- Общий код выделяем только на уровне domain FSM, quote, ledger и adapter contracts; chain-specific проверку не смешиваем.
+- Сначала исправляем подтверждённые API/FSM gaps: `subcategory`, fee payer, RUB/payment DTO, TONCOIN completion, durable TON tx IDs, on-chain refund и auto-release.
+- Документы со статусом «complete» не используются как доказательство; source of truth — этот план, код, CI evidence и release reports.
 
 ---
 
 ## 6. Арбитраж — детальная спецификация
+
+> Workflow, evidence и appeal сохраняются как продуктовая основа. Экономика, stake и on-chain registry из v0.1 пересмотрены решениями D5/D15/D16: они не считаются финальными до legal, incentive и unit-economics review.
 
 ### 6.1 Модель MVP
 
@@ -235,7 +265,7 @@ src/modules/
    - "Доказательства передачи/непередачи товара" (файлы, до 10 шт, ≤ 10 MB)
    - "Скриншоты переписки вне платформы" (опционально)
    - "Ссылки на внешние подтверждения"
-   - Каждый файл хэшируется (SHA-256), хэш в immutable БД. Файлы — в S3/object storage с lifecycle policy (хранение 5 лет).
+   - Каждый безопасно принятый файл хэшируется (SHA-256); hash и audit metadata неизменяемы. Файлы — в private object storage с quarantine/AV и сроком хранения, утверждённым legal/privacy policy.
 
 3. **Снапшот чата:** при открытии спора — генерируется JSON со всеми сообщениями + Merkle-root, хэш сохраняется в БД и в `Escrow.disputeSnapshot` on-chain. Стороны не могут "дописать" историю задним числом.
 
@@ -250,7 +280,7 @@ src/modules/
    - Жалоба на арбитра → ticket в admin.
    - Расследование старшим арбитром (head arbitrator).
    - Действия: warning / 30-day suspension / removal / financial penalty.
-   - На MVP при единственном/двух арбитрах — head arbitrator = ты (founder).
+   - На beta минимум два обученных исполнителя плюс escalation owner; founder может быть head arbitrator, но не единственной точкой отказа.
 
 ### 6.3 Назначение арбитра
 
@@ -271,34 +301,20 @@ src/modules/
 
 На старте: head arbitrator (ты), 1-2 junior. По мере роста — найм.
 
-### 6.5 Экономика арбитра (D15)
+### 6.5 Экономика арбитра (D15; требуется freeze)
 
-**Штраф с виновной стороны = зарплата арбитра.** Прозрачная и простая связь: чьё решение принято — тот не платит штраф; чьё отклонено — платит.
+Модель v0.1 «10% с проигравшего, минимум 100 ₽» отменена как подтверждённая: на маленькой сделке она могла создавать 33% спорный штраф и конфликтовала с принципом доступной гарантии.
 
-**Расчёт штрафа:**
-```
-fine = clamp(0.10 * deal_amount_usdt, min=100₽_eq, max=1000₽_eq)
-```
-В пересчёте на USDT по курсу момента funding. На MVP-минимуме 300 ₽ → 100 ₽ штраф (33% от сделки) — это плата за то, что человек втянул арбитра в мелкую сделку.
+Финальная модель должна одновременно:
 
-**Распределение по исходу:**
+- показывать до funding максимальные последствия normal completion, refund и dispute;
+- не уменьшать обещанный innocent-party outcome скрытой комиссией;
+- компенсировать арбитру время независимо от того, какая сторона победила;
+- не создавать арбитру стимула выбрать исход с большей выплатой;
+- иметь резерв, подтверждённый loss/dispute-rate моделированием и beta-данными;
+- сохранять non-negative platform margin без нарушения low-fee gate.
 
-| Решение арбитра | Откуда штраф | Кому штраф |
-|---|---|---|
-| 100% покупателю (виновен продавец) | Treasury Reserve платформы | Арбитру |
-| 100% продавцу (виновен покупатель) | Из эскроу-доли покупателя | Арбитру |
-| Доли (например 70/30) | Пропорционально из доли каждой стороны (30% штрафа платит покупатель, 70% — Treasury за продавца) | Арбитру |
-
-**Treasury Reserve** — отдельный счёт платформы. Источник: 20% от каждой обычной (без споров) платформенной комиссии. Назначение: покрытие шортфолла, когда виновен продавец. По экспертной оценке индустрии: ~5-10% сделок идут в спор, из них ~40-60% решаются в пользу покупателя → резерв расходуется на ~3-6% сделок, при отчислении 20% это 4-7x запас прочности.
-
-**Бонусы и ранги** (поверх штрафа):
-
-| Ранг | Доступные споры | Бонус за «не оспорено в апелляции» |
-|---|---|---|
-| TRAINEE (первые 5 решений) | До $50 | 0% |
-| JUNIOR | До $500 | +50% к штрафу из Treasury Reserve |
-| SENIOR (>50 без санкций) | До $5000 + апелляции | +100% к штрафу |
-| HEAD_ARBITRATOR (founder) | Любые + misconduct | Не получает прямой штраф (его комп — фикс из Treasury) |
+Рабочий вариант для моделирования: часть обычной platform fee направляется в прозрачный arbitration reserve; для злоупотребления может существовать отдельный заранее раскрытый misconduct charge, но его размер, источник и legal treatment утверждаются до Quote API freeze. Ранги и лимиты споров сохраняются; бонус не зависит напрямую от присуждённой стороне суммы.
 
 **Защита от «продажи решения»:** так как штраф — прямой процент от сделки, теоретически арбитру выгоднее судить «в пользу той стороны, у которой больше денег вне платформы». Контрмеры:
 - Доли решений (50/50 / 70/30 / 30/70) — арбитр выбирает соотношение, не «победителя», что усложняет коррупцию.
@@ -307,31 +323,15 @@ fine = clamp(0.10 * deal_amount_usdt, min=100₽_eq, max=1000₽_eq)
 - Апелляции с переворотом решения → форфейт залога (см. §6.7).
 - Ratio overturn-rate в KPI; >15% → автосуспенд + расследование.
 
-### 6.6 Залог арбитра и реестр (D16)
+### 6.6 Залог арбитра и реестр (D16; требуется multichain/legal ADR)
 
-**Реестр в `ArbitratorRegistry.sol`:**
-```solidity
-struct Arbitrator {
-    address wallet;             // payout address
-    bytes32 telegramIdHash;     // ссылка на TG-аккаунт (для backend join)
-    uint256 stake;              // текущий залог
-    uint256 totalResolved;      // счётчик
-    uint256 totalSlashed;       // суммарно изъято
-    Level level;                // TRAINEE | JUNIOR | SENIOR | HEAD
-    Status status;              // ACTIVE | VACATION | PROBATION | SUSPENDED | TERMINATED
-    uint64 hiredAt;
-    uint64 lastActivityAt;
-    uint64 vacationEndsAt;      // 0 если не в отпуске
-}
-```
+Существующий Solidity `ArbitratorRegistry` остаётся Polygon-specific компонентом. Отдельно подтверждаем, нужен ли параллельный TON on-chain stake либо достаточно договорной ответственности, общего backend role registry и страхового/операционного резерва.
 
-**Lifecycle:**
-- **Hire:** head_arbitrator (или admin) приглашает кандидата → invite-link. Кандидат вносит 200 USDT через Cryptomus или Web3 → status=TRAINEE.
-- **Promotion:** автоматически JUNIOR после 5 разрешённых споров без санкций; SENIOR после 50 без санкций (за последние 90 дней).
-- **Top-up:** если stake < 80% от минимума → status=SUSPENDED, автоматически назначения отключены до пополнения.
-- **Withdraw:** через `requestWithdraw()` + 14-дневный cooldown без открытых споров и санкций → multisig admin одобряет → on-chain transfer.
+Если stake сохраняется, ADR фиксирует asset/network, custody, cooldown, due process, limits on slashing, compensation destination и multisig/timelock governance. Hire/promotion/capacity и performance history продолжают жить в backend как auditable operational state; перевод денег не может выполняться одиночным администратором.
 
 ### 6.7 Санкции и форфейт залога
+
+Проценты ниже — **черновая policy matrix**, а не активная финансовая конфигурация. Она требует legal review, уведомления арбитра, доказательств, appeal/due process и per-chain implementation review.
 
 Каждое решение арбитра обжалуемо в течение 24 часов (см. §6.2). Если апелляционный арбитр **переворачивает** решение, оригинальный получает санкцию.
 
@@ -370,16 +370,21 @@ struct Arbitrator {
 
 ---
 
-## 7. Mini App
+## 7. Mini App и полноценный сайт
 
-Один SPA на React + Vite + Zustand + Telegram WebApp SDK. Парадигма — **button-driven** (D12), без свободного ввода команд.
+Два клиентских входа на общем React/Vite UI Kit, общих API schemas и одинаковой финансовой модели:
+
+- **Mini App** — Telegram-native оболочка, `initData`, MainButton/BackButton, theme params, haptics и TON Connect.
+- **Website** — полноценная responsive оболочка с публичными страницами доверия/условий и авторизованной deal room; TON Connect остаётся основным wallet layer.
+
+Парадигма сделки — **button-driven** (D12). Свободный ввод используется для описания, чата и evidence, но не для ручного конструирования платежа.
 
 ### 7.1 Пользовательские страницы
 - `/` — список моих сделок (вкладки: Active / Completed / Disputed), кнопка «+ Новая сделка».
-- `/deal/new` — мастер создания сделки: (1) выбор подкатегории digital goods из 5 (аккаунт / ключ-код / файл / онлайн-услуга / перенос подписки) → (2) описание + поля под подкатегорию → (3) цена + валюта котировки (RUB / USDT) → (4) модель распределения комиссии → (5) invite-ссылка.
+- `/deal/new` — мастер создания сделки: (1) разрешённая категория → (2) описание и сроки → (3) цена и on-chain актив → (4) fee split → (5) versioned quote с buyer total/seller net → (6) invite-ссылка.
 - `/deal/:id` — страница сделки: условия, чат, статус, линк на контракт в эксплоере, кнопки действий (Confirm receipt / Cancel / Open dispute), все через MainButton/inline.
 - `/dispute/:id` — flow для evidence (форма со слотами, drag-and-drop файлов) + просмотр решения.
-- `/profile` — мой профиль, отзывы на меня, payout-адрес (с QR-сканером), trust score, настройки.
+- `/profile` — профиль, отзывы, привязанные TON-кошельки, фактически доступные payout methods, trust score и настройки.
 - `/reviews` — отзывы по сделкам, оставленные/полученные.
 
 ### 7.2 Кабинет арбитра (`/arbitrator/*`) — только при роли `arbitrator`
@@ -397,8 +402,8 @@ struct Arbitrator {
   - Форма решения: два слайдера (buyer % / seller %, сумма = 100), preset-кнопки [100/0, 70/30, 50/50, 30/70, 0/100], обязательный reasoning ≥ 100 символов.
   - Pre-submit подтверждение: «Вы решаете 70/30. Это финально, обжалование 24ч. Подтвердить?».
 - `/arbitrator/history` — все мои разрешённые споры (поиск, фильтр по дате/исходу/был ли overturned).
-- `/arbitrator/payouts` — баланс, история выплат, кнопка «Withdraw to Web3 wallet» (только USDT).
-- `/arbitrator/stake` — текущий stake / минимум / форфейт-история (с linker'ами на споры). Кнопка «Top up» (через Cryptomus или прямой trans). Кнопка «Request withdraw» (только если ACTIVE, no open disputes, cooldown 14 дней).
+- `/arbitrator/payouts` — баланс, история выплат и direct withdrawal в поддерживаемом TON-активе.
+- `/arbitrator/stake` — текущий stake / минимум / форфейт-история после утверждения D16. Top up/withdraw только через разрешённый TON flow с cooldown и отсутствием открытых споров.
 - `/arbitrator/vacation` — flow отпуска:
   - Toggle «Уйти в отпуск» (disabled если есть открытые споры — показываем «Сначала разрешите N споров или передайте head_arbitrator'у»).
   - Поля: дата начала (default = сейчас), дата возврата (mandatory).
@@ -412,7 +417,7 @@ struct Arbitrator {
 
 ### 7.3 Админ-панель (`/admin/*`) — только при роли `admin` или `head_arbitrator`
 
-- `/admin` — **overview**: live-метрики (active deals, deals in funding, hot-wallet balance, Treasury Reserve balance, reconciliation diff, arbitrator queue length, SLA breaches за 24ч), алерты с цветовыми бейджами.
+- `/admin` — **overview**: active/funding deals, on-chain assets, user liabilities, treasury/reserve, reconciliation diff, circuit-breaker state, arbitrator queue и SLA breaches.
 - `/admin/deals` — поиск/фильтр всех сделок, drill-down в любую, кнопка «Force resolve» (с обязательным reason и аудитом).
 - `/admin/users` — поиск пользователей, profile, история, кнопки «Suspend / Unban / Verify», просмотр linked accounts (для CoI-анализа).
 - `/admin/arbitrators` — **реестр арбитров**:
@@ -436,7 +441,7 @@ struct Arbitrator {
   - Учёт за период: `выплачено арбитрам / собрано штрафов / dotated from reserve / комиссия платформы / отчисление в Reserve`.
   - Кнопка multisig-approve withdrawal (требует 2/3).
 - `/admin/audit` — лог всех админ-действий (Suspended, Terminated, Force-resolved, Stake adjusted, Override): кто, когда, кого, с каким reason. Read-only, immutable.
-- `/admin/settings` — feature flags, fee-config (тарифная сетка D5, штраф D15, минимум D6 — менять только через TimelockController), blocklist ключевых слов.
+- `/admin/settings` — country/category/rail feature flags, versioned quote policy, лимиты и blocklist. Финансовые/контрактные изменения — только через утверждённый multisig/timelock process.
 
 ### 7.4 Общие требования к UI
 - **Все действия через кнопки.** Поля ввода только там, где нужны данные (цена, описание, payout-адрес, reasoning арбитра).
@@ -451,12 +456,22 @@ struct Arbitrator {
 - **Accessibility**: aria-labels, фокус-стейты, контраст ≥ AA.
 
 ### 7.5 Интеграция с Telegram WebApp SDK
-- `initData` валидация на backend (HMAC-SHA256 с bot token).
+- `initData` валидация на backend (HMAC-SHA256 с bot token), age limit и one-time query replay protection.
 - `MainButton.show/hide/setText/onClick` — контекстная primary action.
 - `BackButton.show/hide/onClick` — навигация.
 - `HapticFeedback.notificationOccurred('success'|'warning'|'error')`.
 - `themeChanged` event — реактивная тема.
 - `viewport` — корректная обработка resize и swipe-down.
+- TON Connect + `ton_proof` — connect/restore/disconnect, wallet ownership и точный transaction request.
+- Capability detection для embedded/gasless; обязательный standard TON-gas fallback.
+
+### 7.6 Полноценный сайт
+
+- Публичные страницы: value proposition для buyer/seller, «как работает», комиссии, безопасность без ложных гарантий, правила споров, availability по странам, ToS/Privacy/AML/prohibited items и support/status.
+- Авторизованные страницы: dashboard, create/invite, deal room, wallet/payout settings, disputes, reviews и notifications.
+- Admin/arbitrator workspace допускается вынести на отдельный защищённый web origin с MFA/step-up auth.
+- Mobile-first и desktop layouts проектируются отдельно, а не через растягивание Mini App.
+- SEO/marketing страницы не получают доступ к privileged API или wallet session без явного перехода в приложение.
 
 ---
 
@@ -487,18 +502,26 @@ struct Arbitrator {
 ## 9. База данных (укрупнённо)
 
 ```
-users (id, telegram_id, telegram_username, payout_address, role, kyc_status, ...)
+users (id, telegram_id, telegram_username, role, kyc_status, country_code, ...)
+wallet_bindings (id, user_id, network, chain_id, address, proof_type, proof_verified_at, revoked_at, ...)
 deals (id, deal_number, type, subcategory, status, buyer_id, seller_id,
-       amount_quote, quote_currency,        -- цена в выбранной валюте (RUB | USDT)
-       amount_usdt, fx_rate_locked_at,      -- зафиксированный эквивалент в USDT в момент funding
-       fee_model, fee_buyer_usdt, fee_seller_usdt,  -- по тарифной сетке D5 + распределение D4
-       escrow_address, funding_invoice_id, fsm_state, created_at, ...)
+       quote_id, terms_version, terms_hash, escrow_address, fsm_state, created_at, ...)
 -- subcategory ∈ {ACCOUNT, KEY_CODE, FILE, ONLINE_SERVICE, SUBSCRIPTION_TRANSFER}
--- quote_currency ∈ {RUB, USDT}; ESCROW всегда в USDT on-chain
+deal_quotes (id, deal_id, version, asset, amount_atomic, buyer_total_atomic,
+             seller_net_atomic, platform_fee_atomic, rail_fee_atomic,
+             fx_rate, fx_spread, refund_atomic, expires_at, quote_hash, ...)
+deal_payout_methods (deal_id, method, network, asset, address, provider_id, country_code, eligibility_snapshot, ...)
 deal_messages (id, deal_id, author_id, content, content_hash, created_at)
 deal_attachments (id, deal_id, message_id, s3_key, sha256, size, ...)
 deal_events (id, deal_id, type, payload, created_at)  -- audit log
-ledger_entries (id, deal_id, direction, amount, source_address, dest_address, tx_hash, ...)
+chain_events (id, network, event_id, action_index, tx_hash, lt, finalized_at, payload, ...)
+chain_transfers (id, deal_id, direction, asset, amount_atomic, from_address, to_address,
+                 inbound_tx_hash, outbound_tx_hash, status, ...)
+ledger_accounts (id, owner_type, owner_id, asset, account_type, ...)
+ledger_transactions (id, event_type, ref_type, ref_id, effective_at, ...)
+ledger_postings (id, ledger_transaction_id, account_id, debit_atomic, credit_atomic, ...)
+reconciliation_snapshots (id, asset, finalized_block, assets_atomic, liabilities_atomic,
+                          delta_atomic, breaker_state, created_at, ...)
 disputes (id, deal_id, opened_by, evidence_deadline, decision_deadline, status, ...)
 dispute_evidence (id, dispute_id, side, content, files[], hash, submitted_at)
 dispute_decisions (id, dispute_id, arbitrator_id, buyer_share_pct, seller_share_pct, reasoning, tx_hash)
@@ -511,7 +534,7 @@ arbitrator_sanctions (id, arbitrator_id, dispute_id, type, slash_pct, status_cha
 arbitrator_payouts (id, arbitrator_id, dispute_id, amount_usdt, source, tx_hash, created_at)
    -- source ∈ {GUILTY_BUYER, TREASURY_RESERVE}
 treasury_ledger (id, account, kind, amount, ref_id, tx_hash, created_at)
-   -- account ∈ {HOT_WALLET, RESERVE, MAIN}; kind ∈ {FEE_INCOME, RESERVE_DEPOSIT, ARB_PAYOUT, COMP_PAYOUT, WITHDRAW}
+   -- projection для отчётов; source of truth — balanced ledger_postings
 reviews (id, deal_id, author_id, target_id, rating, comment, ...)
 reputation_scores (user_id, score, total_deals, completed_deals, disputed_deals, trust_level)
 moderation_reports (id, deal_id, reported_by, reason, status, ...)
@@ -524,13 +547,17 @@ outbox_events (id, source, payload, processed_at, attempts, last_error)  -- outb
 
 ## 10. Безопасность и compliance
 
-- **Утёкший Telegram bot token** в `.env.example` — отозвать через @BotFather и удалить из git history (BFG / `git filter-repo`). Это **первая задача** Горизонта 0, сделать ДО любых других PR.
-- **Multisig hot wallet** (2/3) для USDT-relay. Ключи у разных людей (разные устройства).
-- **KYC**: на MVP — встроенный KYC через Cryptomus (они его делают для крупных сумм). При сделках > $1000 — обязательно. Ниже — пока не требуем.
-- **AML**: ручной мониторинг подозрительных паттернов (одни и те же payout-адреса, сделки между accounts с одного IP, разгон репутации) → блокировка.
-- **Запрещённые тематики**: автофильтр ключевых слов + ручная модерация. Список: оружие, наркотики, любые виды CSAM, услуги политического характера, фейковые документы, услуги по обходу санкций.
-- **Terms of Service** + **Privacy Policy** на старте. ToS включает arbitration clause, отказ от ответственности, юрисдикцию.
-- **Аудит контрактов** перед запуском с реальными деньгами (внешний). На closed beta — собственный + bug bounty.
+- **Секреты:** отозвать любой утёкший bot/API token, очистить history и подтвердить rotation; private keys не хранятся в env.
+- **Key custody:** отдельные non-exportable production keys, private/mTLS signer, least privilege, 2/3 multisig и timelock. Emergency pause не даёт права изъять пользовательские средства.
+- **Contract security:** threat model, conservation invariants, property/fuzz tests, mandatory coverage/analyzers и независимый audit + retest до любых real-money tests.
+- **Financial safety:** balanced ledger для каждого движения, finalized reconciliation, circuit breaker и семь дней zero unexplained delta до beta.
+- **Auth:** Telegram replay protection, короткие access tokens, rotating/revocable sessions и MFA/step-up для privileged money-moving operations.
+- **Admin audit:** mutation и audit event атомарны и fail closed; ordinary role не может менять/удалять audit rows; off-site/WORM export.
+- **Evidence:** private quarantine storage, magic-byte validation, AV, опасные форматы запрещены, expiring URLs, authorization и retention/deletion policy.
+- **KYC/AML/sanctions:** не фиксированный глобальный порог, а правила, подтверждённые counsel/provider для каждой страны, категории, суммы и payout rail. Issuer/provider freeze risk раскрывается пользователю.
+- **Запрещённые тематики:** allowlist категорий, автофильтр, ручная модерация и санкции. Запрещены как минимум оружие, наркотики, CSAM, фейковые документы и услуги обхода санкций; финальный список утверждает legal.
+- **Policies:** ToS, Privacy, refund, arbitration, prohibited items, AML/KYC, vulnerability disclosure и incident communication готовы до beta.
+- **Resilience:** encrypted immutable backups, isolated restore, RPC/indexer/DB/Redis failover drills, опубликованные RPO/RTO и именованные on-call owners.
 
 ---
 
@@ -556,9 +583,9 @@ outbox_events (id, source, payload, processed_at, attempts, last_error)  -- outb
 - Сравниваем решения с эталоном.
 - Если расхождение в 4 из 5 — отказ.
 
-**Срок до first hire:** 2-3 недели после старта закрытой беты (или параллельно с разработкой Горизонта 1).
+**Срок до first hire:** до запуска real-money closed beta; найм и модельные кейсы идут параллельно TON-разработке.
 
-**На старте closed beta** (когда арбитров ещё нет) — head arbitrator = founder (ты). Объёма споров не должно быть много при ≤ 50 пользователях.
+**На старте closed beta:** минимум два обученных исполнителя плюс escalation owner. Founder может быть head arbitrator, но не единственной точкой отказа. До готовности команды допускается только testnet/симуляция без пользовательских средств.
 
 ---
 
@@ -570,17 +597,20 @@ outbox_events (id, source, payload, processed_at, attempts, last_error)  -- outb
 
 **UX в боте (button-driven, D12):** пункт меню «🛡 Проверить пользователя» / команда `/check` → кнопка «Выбрать пользователя» (`request_users` → `users_shared`) либо ввод Telegram ID / `@username` → вердикт (чист / есть жалобы / скамер + ссылка на базу) → кнопка «🚩 Пожаловаться» (причина + **обязательные** скриншоты-доказательства).
 
-**Модель подтверждения (гибрид):**
-- **Авто:** запись помечается `CONFIRMED` при достижении порога РАЗНЫХ жалобщиков (`ANTISCAM_AUTO_CONFIRM_THRESHOLD`, дефолт 3).
-- **Ручная:** при первой жалобе в чат модерации (`ANTISCAM_MODERATION_CHAT_ID`) приходит карточка с кнопками «✅ Скамер / ❌ Отклонить» (только для ADMIN/SUPER_ADMIN); также REST под `RolesGuard` (`/admin/anti-scam/*`).
+**Модель подтверждения:**
+- Число разных жалобщиков может повысить internal risk score и приоритет очереди, но **не** должно автоматически присваивать публичный статус `CONFIRMED`.
+- Публикация — только после ручной проверки безопасно сохранённых evidence, reasoned moderation decision и проверки linked/duplicate complainants.
+- Нужны уведомление затронутого пользователя, appeal/correction flow, журнал редакций и legal/privacy retention policy.
+- При первой жалобе в чат модерации (`ANTISCAM_MODERATION_CHAT_ID`) приходит карточка решения только для подходящей роли; mutation и audit event атомарны.
 
 **Anti-spam / дедуп:** одна жалоба на пару (жалобщик, цель); запрет одинакового текста жалобы глобально (SHA-256 `contentHash`); запрет self-report; скриншоты обязательны.
 
 **Публикация в каналы (бот-постинг):**
-- Канал-доказательства — отдельное сообщение на каждого скамера (текст жалоб + скриншоты media-group).
-- Канал-база — пакетная запись при накоплении `ANTISCAM_PUBLISH_BATCH_SIZE` (дефолт 10) через `@Cron`; формат строки: «Скамер — @юз — ссылка через tg id — ссылка на доказательства».
+- Выключена по умолчанию до legal/privacy sign-off и production evidence pipeline.
+- После включения публикуется только минимально необходимая, отредактированная информация по подтверждённому решению; чувствительные evidence не становятся публичными автоматически.
+- Correction/appeal должен обновлять или отзывать публикацию во всех каналах с audit trail.
 
-**Данные:** `scammer_records` (ключ `targetTelegramId`, статус, счётчик жалобщиков, message-id постов), `scam_reports` (жалоба, `contentHash`, `screenshotFileIds`). Скриншоты хранятся как Telegram `file_id` (без внешнего storage). Миграция `1716500000000-CreateAntiScamTables`.
+**Данные (current implementation):** `scammer_records` (ключ `targetTelegramId`, статус, счётчик жалобщиков, message-id постов), `scam_reports` (жалоба, `contentHash`, `screenshotFileIds`). Telegram `file_id` без managed quarantine/scanning не проходит production evidence gate: перед использованием в решении/публикации файл должен быть безопасно получен, проверен, сохранён по утверждённой policy и связан с hash/audit metadata. Миграция `1716500000000-CreateAntiScamTables` требует расширения.
 
 **Конфиг (env):** `ANTISCAM_DB_CHANNEL_ID/_USERNAME`, `ANTISCAM_EVIDENCE_CHANNEL_ID/_USERNAME`, `ANTISCAM_MODERATION_CHAT_ID`, `ANTISCAM_AUTO_CONFIRM_THRESHOLD`, `ANTISCAM_PUBLISH_BATCH_SIZE`, `ANTISCAM_MIN/MAX_SCREENSHOTS`, `ANTISCAM_PUBLISH_ENABLED`. Бот должен быть админом обоих каналов.
 
@@ -588,89 +618,66 @@ outbox_events (id, source, payload, processed_at, attempts, last_error)  -- outb
 
 ## 12. Дорожная карта
 
-> **Статус (обновлено):** Кодовая часть Горизонта 1 (MVP) в основном выполнена:
-> контракты (114/114), сделки+FSM, платежи (Cryptomus/TON/direct-USDT),
-> чат+release, арбитраж (споры/evidence/resolve on-chain), admin/arbitrator UI,
-> отзывы/репутация. Backend-тесты 318/318.
-> **Осталось (инфра/человек):** relay-ключ в KMS/Vault, редеплой escrow после
-> правки `resolve()`, E2E платежей в sandbox, внешний аудит, mainnet deploy,
-> юрлицо/KYC/найм арбитров. Детали: [PAYMENTS_HARDENING_PLAN.md](./PAYMENTS_HARDENING_PLAN.md).
+> **Честный статус v0.3:** значительная часть deal/chat/arbitration/admin/reputation и Polygon contract логики уже существует. Но TON сейчас является входным rail поверх Polygon, а не отдельным escrow lifecycle; fee/payout/ledger/security gaps остаются. Поэтому публичный multichain MVP нельзя считать «почти готовым, остался UI».
 
-### Горизонт 0 — Гигиена (1 спринт = ~1 неделя)
-- [ ] Отозвать утёкший TG bot token, очистить git history.
-- [ ] Удалить мусор: `*.ps1`, `*.bat`, `$null`, `.qwen/`, `build_output*.txt`, `fix-errors.sh`.
-- [ ] Удалить все `PHASE*_COMPLETE.md`, `FINAL_STATUS.md`, `ARCHITECTURE.md` после коммита этого документа.
-- [ ] Починить TS-ошибки → `npm run build` и `npm run lint` зелёные без `--type-check false`.
-- [ ] CI: GitHub Actions — build + lint + unit tests + slither (на контрактах) на каждый PR.
-- [ ] `docker-compose.yml` поднимает весь стек (postgres + redis + user-service + mini-app + Hardhat node).
+Подробные задачи, Definition of Done и численные gates находятся в [MULTICHAIN_PUBLIC_LAUNCH_PLAN.md](./MULTICHAIN_PUBLIC_LAUNCH_PLAN.md). Здесь фиксируется порядок фаз:
 
-### Горизонт 1 — MVP (5-6 спринтов = ~6-8 недель)
+### Фаза 0 — Scope freeze и go/no-go решения
 
-**Spr 1: Контракты + базовая инфра**
-- `EscrowImplementation`, `EscrowFactory`, `PlatformTreasury`, `ArbitratorRegistry` + 90% test coverage.
-- Deploy на Polygon Amoy (testnet).
-- Backend `escrow/` модуль: relay-вызовы, watcher событий.
+- Telegram clarification для P2P escrow цифровых товаров/услуг.
+- Russia legal memo и первая country matrix.
+- Unit economics, low-fee target и честная payout matrix.
+- Freeze скрытого TON→Polygon settlement; network choice и channel availability становятся явными.
 
-**Spr 2: Сделка end-to-end (без оплаты)**
-- FSM сделки.
-- API: create deal, invite, accept, cancel.
-- Mini App: страницы создания сделки и просмотра.
-- Telegram bot: команды `/start`, `/new_deal`, deep-links.
+### Фаза 1 — Multichain specifications
 
-**Spr 3: Оплата + funding**
-- Cryptomus интеграция: создание инвойса, webhook handler, outbox.
-- Backend forward USDT в эскроу.
-- Reconciliation job.
+- ADR нативного TON-контракта и Polygon hardening; общий `EscrowChainAdapter` contract.
+- Contract/FSM invariants, canonical terms/quote schema и threat model.
+- Double-entry chart of accounts, reconciliation invariant и circuit breaker.
+- API contract между Mini App, website и backend.
 
-**Spr 4: Чат + release happy path**
-- Mini App чат сделки.
-- Кнопки release / cancel / dispute.
-- Уведомления в Telegram.
+### Фаза 2 — Два независимых testnet vertical slices
 
-**Spr 5: Арбитраж**
-- FSM спора.
-- Evidence collection.
-- Назначение арбитров.
-- Кабинет арбитра.
-- Resolve on-chain.
+- TON Connect в Mini App и website.
+- USDT-TON create → accept → fund → finalize → release/refund.
+- Polygon wallet connect на website и Polygon USDT create → accept → fund → finalize → release/refund.
+- Same-chain/same-asset payout; TON deal не требует EVM, Polygon deal не требует TON wallet.
+- Durable on-chain IDs, cursor/backfill, ledger и reconciliation.
+- Исправление текущих payload/FSM/fee inconsistencies.
 
-**Spr 6: Admin & Arbitrator panels (MVP-обязательные)**
-- `/admin/*` страницы: overview, deals, users, arbitrators, moderation, treasury, disputes, settings.
-- `/arbitrator/*` страницы: dashboard, dispute workspace, history, payouts.
-- Auth по ролям, аудит-лог всех админ-действий.
+### Фаза 3 — Disputes, security и operations
 
-**Spr 7: Reviews + reputation + Design pass + closed beta**
-- Двойные отзывы, trust score, влияние на лимиты.
-- **Design pass**: единый UI Kit, skeleton loaders, empty states, HapticFeedback, плавные переходы, прохождение по всем страницам с дизайнером (если есть) или с UI-чек-листом (см. §7.4).
-- Внутренний аудит контрактов + deploy на Polygon mainnet.
-- Закрытая бета на 20-50 пользователей.
+- TON и Polygon dispute/resolve/timeout/auto-release conformance.
+- Production evidence pipeline.
+- Signer, multisig/timelock, privileged auth и atomic audit.
+- Monitoring, alerting, backups, restore/failover и incident runbooks.
+- Независимый audit contract + backend funds flow; remediation и retest.
 
-### Горизонт 2 — Развитие (после MVP)
-- BSC support.
-- Cryptomus payout продавцу в фиат (custody-light с признанием).
-- Физические товары / услуги с доставкой / аренда.
-- Реферальная программа.
-- Внешний аудит контрактов.
-- Расширение admin/arbitrator панелей (advanced analytics, batch actions, экспорт отчётов).
-- Mini App на en/es.
+### Фаза 4 — Capped closed beta
 
-### Горизонт 3 — Масштаб
-- Конструктор ботов (отдельный продукт).
-- Decentralized арбитраж (а-ля Kleros).
-- TON / TRON support.
-- KYC через сторонних провайдеров (Sumsub).
+- Invite-only, лимиты per-deal/user/day/total value at risk.
+- Не менее 100 ограниченных сделок и не менее 20 на каждый enabled rail.
+- Ноль потерь, ноль необъяснённых reconciliation deltas, все refund/recovery drills успешны.
+
+### Фаза 5 — Public beta и постепенное расширение
+
+- Только страны, категории и payout rails с подписанным sign-off.
+- Ступенчатое повышение лимитов по safety, dispute, fraud, payout и support metrics.
+- Fiat/card/SBP включается отдельно по стране, а не глобальным переключателем.
 
 ---
 
 ## 13. Что делаем прямо сейчас
 
-После твоего «ок» по этому документу:
-
-1. Создаю PR с этим файлом как `docs/PRODUCT_PLAN.md`.
-2. **Не удаляю** PHASE-файлы в этом PR — они уйдут в Горизонте 0 (отдельный PR).
-3. Жду твоего апрува PR'а с планом.
-4. Затем — отдельный PR на Горизонт 0 (чистка + фикс TS-ошибок + CI).
-5. Дальше — по тикетам.
+1. Зафиксировать TON + Polygon scope и запрет скрытого cross-chain settlement внутри сделки.
+2. Параллельно запросить Telegram clarification и заказать Russia legal memo.
+3. Заполнить unit economics и утвердить тариф/минимум по измеримому low-fee target.
+4. Зафиксировать MVP payout promise: direct same-chain payout для TON/Polygon; fiat только conditional.
+5. Написать multichain ADR, per-chain threat models, общие contract invariants и ledger/reconciliation spec.
+6. Исправить API payload mismatches и создать versioned Quote API.
+7. Реализовать TON и Polygon testnet vertical slices через единый conformance suite.
+8. Затем — security/operations hardening, внешний аудит и capped beta.
+9. UI Mini App и сайта моделировать параллельно по стабильным interaction contracts; visual redesign не должен маскировать незавершённый money flow.
 
 ---
 
@@ -678,13 +685,16 @@ outbox_events (id, source, payload, processed_at, attempts, last_error)  -- outb
 
 | # | Вопрос | Когда решать | Кто |
 |---|--------|-------------|-----|
-| Q1 | Юрисдикция юрлица | До closed beta с реальными деньгами | Founder + юрист |
-| Q2 | KYC-процесс при сделках > $1000 | До mainnet deploy | Founder |
-| Q3 | Внешний аудит контрактов: какой подрядчик | До mainnet deploy | Founder |
-| Q4 | Размер security budget на bug bounty | После closed beta | Founder |
-| Q5 | Найм первых арбитров | Параллельно Горизонту 1 | Founder |
-| Q6 | Точные ставки оплаты арбитров (черновик в §6.5) | До hire | Founder |
-| Q7 | Hosting платформы (Railway есть в репо, но это prod-grade?) | До закрытой беты | Founder + tech |
+| Q1 | Разрешает ли Telegram заявленный neutral escrow для digital goods/services в Mini App и на каких условиях? | До freeze Mini App commerce scope | Founder + legal |
+| Q2 | Разрешён ли точный TON escrow/conversion flow для пользователей в России; какое юрлицо и compliance нужны? | До любых real-money tests | Founder + fintech counsel |
+| Q3 | Какие первая и резервная launch countries/categories входят в allowlist? | Фаза 0 | Founder + product + legal |
+| Q4 | Индивидуальный TON-контракт на сделку или иная доказуемо изолированная модель? | До contract implementation | TON lead + security |
+| Q5 | Тариф, минимум и reserve contribution по реальным unit economics | До Quote API freeze | Founder + finance/product |
+| Q6 | Запускаем ли TONCOIN одновременно с USDT-TON либо после USDT vertical slice? | До Фазы 2 | Product + TON/security |
+| Q7 | Какой лицензированный payout/KYC partner доступен в каждой стране? | До включения fiat/card rail | Founder + compliance |
+| Q8 | Окончательная экономика арбитража, stake/slashing и компенсаций | До найма/контрактного freeze | Founder + legal + finance |
+| Q9 | Подрядчик внешнего TON + Polygon + backend funds-flow аудита и bug-bounty budget | До Фазы 3 | Founder + security |
+| Q10 | Production hosting, RPO/RTO, on-call и disaster-recovery owners | До closed beta | Founder + tech/ops |
 
 ---
 

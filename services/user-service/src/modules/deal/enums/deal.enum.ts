@@ -39,6 +39,32 @@ export enum FeeModel {
   SELLER_PAYS = 'seller_pays',
 }
 
+/** Settlement network agreed by both parties before funding. */
+export enum SettlementNetwork {
+  TON = 'ton',
+  POLYGON = 'polygon',
+}
+
+/** Allowlisted asset identifiers. Token addresses/masters come from server config. */
+export enum SettlementAsset {
+  TON_USDT = 'ton_usdt',
+  TON_NATIVE = 'ton_native',
+  POLYGON_USDT = 'polygon_usdt',
+}
+
+/** Distinguishes target native settlement from historical TON→Polygon funding. */
+export enum SettlementMode {
+  NATIVE = 'native',
+  LEGACY_TON_TO_POLYGON = 'legacy_ton_to_polygon',
+}
+
+/** Runtime client shell. This is policy input, not part of immutable deal terms. */
+export enum ClientChannel {
+  TELEGRAM_MINI_APP = 'telegram_mini_app',
+  WEB = 'web',
+  ADMIN_WEB = 'admin_web',
+}
+
 /**
  * Статусы сделки в течение жизненного цикла
  */

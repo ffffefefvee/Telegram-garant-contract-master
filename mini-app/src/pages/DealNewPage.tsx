@@ -132,14 +132,20 @@ export const DealNewPage: React.FC = () => {
     try {
       const deal = await dealsApi.create({
         type: 'digital',
+        subcategory: subtype,
         amount: parsedAmount,
         description: description.trim(),
         title: title.trim() || subtypeMeta?.label,
         terms: deliveryNote.trim() || undefined,
         currency,
+        feeModel:
+          commissionModel === 'split'
+            ? 'split_50_50'
+            : commissionModel === 'seller'
+              ? 'seller_pays'
+              : 'buyer_pays',
+        sellerId: selectedCounterparty?.id,
         metadata: {
-          digitalSubtype: subtype,
-          commissionModel,
           quoteCurrency: currency,
           counterpartyUsername: selectedCounterparty?.username,
         },

@@ -38,6 +38,7 @@ contracts/artifacts
 contracts/typechain-types
 contracts/coverage
 contracts/coverage.json
+contracts-ton/.acton/
 
 # AI agent artifacts
 .qwen

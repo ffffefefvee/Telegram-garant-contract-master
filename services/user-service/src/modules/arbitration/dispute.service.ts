@@ -3,23 +3,24 @@ import {
   NotFoundException,
   ForbiddenException,
   ConflictException,
-} from '@nestjs/common';
-import { InjectRepository } from '@nestjs/typeorm';
-import { Repository, DataSource } from 'typeorm';
-import { Dispute } from './entities/dispute.entity';
-import { ArbitrationChat } from './entities/arbitration-chat.entity';
-import { ArbitrationEvent } from './entities/arbitration-event.entity';
-import { Deal } from '../deal/entities/deal.entity';
-import { User, UserType } from '../user/entities/user.entity';
+} from "@nestjs/common";
+import { InjectRepository } from "@nestjs/typeorm";
+import { Repository, DataSource } from "typeorm";
+import { Dispute } from "./entities/dispute.entity";
+import { ArbitrationChat } from "./entities/arbitration-chat.entity";
+import { ArbitrationEvent } from "./entities/arbitration-event.entity";
+import { Deal } from "../deal/entities/deal.entity";
+import { User, UserType } from "../user/entities/user.entity";
 import {
   DisputeStatus,
   DisputeType,
   DisputeSide,
   ArbitrationEventType,
-} from './entities/enums/arbitration.enum';
-import { OpenDisputeDto, UpdateDisputeStatusDto } from './dto';
-import { ArbitrationSettingsService } from './arbitration-settings.service';
-import { OutboxService } from '../ops/outbox.service';
+} from "./entities/enums/arbitration.enum";
+import { OpenDisputeDto, UpdateDisputeStatusDto } from "./dto";
+import { ArbitrationSettingsService } from "./arbitration-settings.service";
+import { OutboxService } from "../ops/outbox.service";
+import { ArbitrationDecision } from "./entities/arbitration-decision.entity";
 
 /**
  * Сервис для управления спорами (FSM)
@@ -40,7 +41,80 @@ export class DisputeService {
     private readonly dataSource: DataSource,
     private readonly settingsService: ArbitrationSettingsService,
     private readonly outbox: OutboxService,
+    @InjectRepository(ArbitrationDecision)
+    private readonly decisionRepository: Repository<ArbitrationDecision>,
   ) {}
+
+  async applyFinalizedNativeTonResolution(input: {
+    decisionId: string;
+    decisionHash: string;
+    dealId: string;
+    buyerAwardAtomic: string;
+    sellerAwardAtomic: string;
+    transactionHash: string;
+    enforcedByUserId: string;
+  }): Promise<void> {
+    if (
+      !/^[0-9a-f]{64}$/.test(input.decisionHash) ||
+      !/^\d+$/.test(input.buyerAwardAtomic) ||
+      !/^\d+$/.test(input.sellerAwardAtomic) ||
+      !input.transactionHash
+    ) {
+      throw new ConflictException(
+        "Finalized TON resolution evidence is invalid",
+      );
+    }
+    const decision = await this.decisionRepository.findOne({
+      where: { id: input.decisionId },
+      relations: ["dispute"],
+    });
+    if (!decision || decision.dispute?.dealId !== input.dealId) {
+      throw new ConflictException(
+        "Finalized TON decision does not match dispute",
+      );
+    }
+    const nativeTon = (decision.metadata?.nativeTon ?? {}) as Record<
+      string,
+      unknown
+    >;
+    if (decision.isEnforced) {
+      if (
+        nativeTon.decisionHash === input.decisionHash &&
+        nativeTon.transactionHash === input.transactionHash
+      ) {
+        return;
+      }
+      throw new ConflictException("Decision was enforced by a different event");
+    }
+    if (decision.dispute.appealId) {
+      throw new ConflictException("Appealed decision cannot be enforced");
+    }
+    decision.enforce(input.enforcedByUserId);
+    decision.metadata = {
+      ...(decision.metadata ?? {}),
+      nativeTon: {
+        decisionHash: input.decisionHash,
+        buyerAwardAtomic: input.buyerAwardAtomic,
+        sellerAwardAtomic: input.sellerAwardAtomic,
+        transactionHash: input.transactionHash,
+      },
+    };
+    decision.dispute.status = DisputeStatus.ENFORCED;
+    decision.dispute.enforcedAt = decision.enforcedAt;
+    await this.decisionRepository.save(decision);
+    await this.disputeRepository.save(decision.dispute);
+    await this.outbox.enqueue({
+      aggregateType: "dispute",
+      aggregateId: decision.dispute.id,
+      eventType: "dispute.native_ton_resolution_finalized",
+      payload: {
+        disputeId: decision.dispute.id,
+        dealId: input.dealId,
+        decisionId: decision.id,
+        transactionHash: input.transactionHash,
+      },
+    });
+  }
 
   /**
    * Открыть спор
@@ -52,11 +126,11 @@ export class DisputeService {
   ): Promise<Dispute> {
     const deal = await this.dealRepository.findOne({
       where: { id: dealId },
-      relations: ['buyer', 'seller'],
+      relations: ["buyer", "seller"],
     });
 
     if (!deal) {
-      throw new NotFoundException('Deal not found');
+      throw new NotFoundException("Deal not found");
     }
 
     // Проверка что пользователь является стороной сделки
@@ -64,12 +138,12 @@ export class DisputeService {
     const isSeller = deal.sellerId === userId;
 
     if (!isBuyer && !isSeller) {
-      throw new ForbiddenException('You are not a party to this deal');
+      throw new ForbiddenException("You are not a party to this deal");
     }
 
     // Проверка что сделка может быть оспорена
     if (!deal.canBeDisputed) {
-      throw new ForbiddenException('This deal cannot be disputed');
+      throw new ForbiddenException("This deal cannot be disputed");
     }
 
     // Проверка что спор ещё не открыт
@@ -78,12 +152,13 @@ export class DisputeService {
     });
 
     if (existingDispute && !existingDispute.isClosed) {
-      throw new ConflictException('Dispute already exists for this deal');
+      throw new ConflictException("Dispute already exists for this deal");
     }
 
     // Получение настроек
     const penaltyPercent = await this.settingsService.getPenaltyPercent();
-    const evidenceHours = await this.settingsService.getEvidenceSubmissionHours();
+    const evidenceHours =
+      await this.settingsService.getEvidenceSubmissionHours();
 
     // Создание спора
     const dispute = this.disputeRepository.create({
@@ -112,10 +187,10 @@ export class DisputeService {
 
     try {
       await queryRunner.manager.save(dispute);
-      
+
       chat.disputeId = dispute.id;
       await queryRunner.manager.save(chat);
-      
+
       dispute.chatId = chat.id;
       await queryRunner.manager.save(dispute);
 
@@ -133,16 +208,16 @@ export class DisputeService {
       await queryRunner.manager.save(event);
 
       // Обновление статуса сделки
-      deal.status = 'DISPUTED' as any;
+      deal.status = "DISPUTED" as any;
       deal.disputedAt = new Date();
       await queryRunner.manager.save(deal);
 
       // Нотификация оппоненту (не открывшему спор)
       const opponentUserId = isBuyer ? deal.sellerId : deal.buyerId;
       await this.outbox.enqueue({
-        aggregateType: 'dispute',
+        aggregateType: "dispute",
         aggregateId: dispute.id,
-        eventType: 'dispute.opened',
+        eventType: "dispute.opened",
         payload: {
           disputeId: dispute.id,
           dealId: deal.id,
@@ -159,13 +234,13 @@ export class DisputeService {
       // Загрузка отношений
       const savedDispute = await this.disputeRepository.findOne({
         where: { id: dispute.id },
-        relations: ['deal', 'opener', 'chat'],
+        relations: ["deal", "opener", "chat"],
       });
-      
+
       if (!savedDispute) {
-        throw new NotFoundException('Dispute not found after creation');
+        throw new NotFoundException("Dispute not found after creation");
       }
-      
+
       return savedDispute;
     } catch (error) {
       await queryRunner.rollbackTransaction();
@@ -197,13 +272,17 @@ export class DisputeService {
     const { dealId, buyerId, userId, reason } = params;
 
     // Idempotency: never create a second open dispute for the same deal.
-    const existing = await this.disputeRepository.findOne({ where: { dealId } });
+    const existing = await this.disputeRepository.findOne({
+      where: { dealId },
+    });
     if (existing && !existing.isClosed) {
       return existing;
     }
 
-    const openedBy = buyerId === userId ? DisputeSide.BUYER : DisputeSide.SELLER;
-    const evidenceHours = await this.settingsService.getEvidenceSubmissionHours();
+    const openedBy =
+      buyerId === userId ? DisputeSide.BUYER : DisputeSide.SELLER;
+    const evidenceHours =
+      await this.settingsService.getEvidenceSubmissionHours();
     const penaltyPercent = await this.settingsService.getPenaltyPercent();
 
     const dispute = this.disputeRepository.create({
@@ -261,21 +340,25 @@ export class DisputeService {
   ): Promise<Dispute> {
     const dispute = await this.disputeRepository.findOne({
       where: { id: disputeId },
-      relations: ['deal', 'opener'],
+      relations: ["deal", "opener"],
     });
 
     if (!dispute) {
-      throw new NotFoundException('Dispute not found');
+      throw new NotFoundException("Dispute not found");
     }
 
     if (!dispute.isOpen) {
-      throw new ForbiddenException('Dispute is not open for arbitrator assignment');
+      throw new ForbiddenException(
+        "Dispute is not open for arbitrator assignment",
+      );
     }
 
     // Проверка что арбитр существует и активен
-    const arbitrator = await this.userRepository.findOne({ where: { id: arbitratorUserId } });
+    const arbitrator = await this.userRepository.findOne({
+      where: { id: arbitratorUserId },
+    });
     if (!arbitrator) {
-      throw new NotFoundException('Arbitrator not found');
+      throw new NotFoundException("Arbitrator not found");
     }
 
     const decisionHours = await this.settingsService.getDecisionDeadlineHours();
@@ -283,7 +366,9 @@ export class DisputeService {
     dispute.arbitratorId = arbitratorUserId;
     dispute.arbitratorAssignedAt = new Date();
     dispute.status = DisputeStatus.UNDER_REVIEW;
-    dispute.decisionDueAt = new Date(Date.now() + decisionHours * 60 * 60 * 1000);
+    dispute.decisionDueAt = new Date(
+      Date.now() + decisionHours * 60 * 60 * 1000,
+    );
 
     const queryRunner = this.dataSource.createQueryRunner();
     await queryRunner.connect();
@@ -296,11 +381,16 @@ export class DisputeService {
       const event = this.eventRepository.create({
         disputeId: dispute.id,
         type: ArbitrationEventType.ARBITRATOR_ASSIGNED,
-        description: isAutoAssigned ? 'Арбитр назначен автоматически' : 'Арбитр назначен',
+        description: isAutoAssigned
+          ? "Арбитр назначен автоматически"
+          : "Арбитр назначен",
         actorId: assignedByUserId,
         metadata: {
           arbitratorId: arbitratorUserId,
-          arbitratorName: arbitrator.telegramFirstName || arbitrator.telegramUsername || 'Unknown',
+          arbitratorName:
+            arbitrator.telegramFirstName ||
+            arbitrator.telegramUsername ||
+            "Unknown",
           isAutoAssigned,
         },
       });
@@ -308,9 +398,9 @@ export class DisputeService {
 
       // Нотификация арбитру
       await this.outbox.enqueue({
-        aggregateType: 'dispute',
+        aggregateType: "dispute",
         aggregateId: dispute.id,
-        eventType: 'dispute.arbitrator_assigned',
+        eventType: "dispute.arbitrator_assigned",
         payload: {
           disputeId: dispute.id,
           dealTitle: dispute.deal?.title ?? `Deal ${dispute.dealId}`,
@@ -326,13 +416,13 @@ export class DisputeService {
 
       const savedDispute = await this.disputeRepository.findOne({
         where: { id: dispute.id },
-        relations: ['deal', 'opener', 'arbitrator'],
+        relations: ["deal", "opener", "arbitrator"],
       });
-      
+
       if (!savedDispute) {
-        throw new NotFoundException('Dispute not found after assignment');
+        throw new NotFoundException("Dispute not found after assignment");
       }
-      
+
       return savedDispute;
     } catch (error) {
       await queryRunner.rollbackTransaction();
@@ -352,22 +442,24 @@ export class DisputeService {
   ): Promise<Dispute> {
     const dispute = await this.disputeRepository.findOne({
       where: { id: disputeId },
-      relations: ['arbitrator'],
+      relations: ["arbitrator"],
     });
 
     if (!dispute) {
-      throw new NotFoundException('Dispute not found');
+      throw new NotFoundException("Dispute not found");
     }
 
     // Проверка прав
     const isArbitrator = dispute.arbitratorId === userId;
     if (!isArbitrator) {
-      throw new ForbiddenException('Only arbitrator can update dispute status');
+      throw new ForbiddenException("Only arbitrator can update dispute status");
     }
 
     // Проверка перехода
     if (!dispute.canTransitionTo(dto.status)) {
-      throw new ForbiddenException(`Cannot transition from ${dispute.status} to ${dto.status}`);
+      throw new ForbiddenException(
+        `Cannot transition from ${dispute.status} to ${dto.status}`,
+      );
     }
 
     const oldStatus = dispute.status;
@@ -413,9 +505,11 @@ export class DisputeService {
     dealId: string,
     userId: string,
   ): Promise<boolean> {
-    return (await this.disputeRepository.count({
-      where: { dealId, arbitratorId: userId },
-    })) > 0;
+    return (
+      (await this.disputeRepository.count({
+        where: { dealId, arbitratorId: userId },
+      })) > 0
+    );
   }
 
   async getDisputeForUser(
@@ -429,10 +523,10 @@ export class DisputeService {
     // future error/log path.
     const dispute = await this.disputeRepository.findOne({
       where: { id: disputeId },
-      relations: ['deal'],
+      relations: ["deal"],
     });
     if (!dispute) {
-      throw new NotFoundException('Dispute not found');
+      throw new NotFoundException("Dispute not found");
     }
     if (
       !roles.includes(UserType.ADMIN) &&
@@ -441,7 +535,7 @@ export class DisputeService {
       dispute.deal?.buyerId !== userId &&
       dispute.deal?.sellerId !== userId
     ) {
-      throw new ForbiddenException('Access denied');
+      throw new ForbiddenException("Access denied");
     }
     return this.getDispute(disputeId);
   }
@@ -453,19 +547,19 @@ export class DisputeService {
     const dispute = await this.disputeRepository.findOne({
       where: { id: disputeId },
       relations: [
-        'deal',
-        'opener',
-        'arbitrator',
-        'evidence',
-        'chat',
-        'decision',
-        'events',
-        'appeal',
+        "deal",
+        "opener",
+        "arbitrator",
+        "evidence",
+        "chat",
+        "decision",
+        "events",
+        "appeal",
       ],
     });
 
     if (!dispute) {
-      throw new NotFoundException('Dispute not found');
+      throw new NotFoundException("Dispute not found");
     }
 
     return dispute;
@@ -477,21 +571,21 @@ export class DisputeService {
   async getUserDisputes(userId: string): Promise<Dispute[]> {
     const user = await this.userRepository.findOne({ where: { id: userId } });
     if (!user) {
-      throw new NotFoundException('User not found');
+      throw new NotFoundException("User not found");
     }
 
     // Споры где пользователь opener, arbitrator, или сторона сделки
     const disputes = await this.disputeRepository
-      .createQueryBuilder('dispute')
-      .leftJoinAndSelect('dispute.deal', 'deal')
-      .leftJoinAndSelect('dispute.opener', 'opener')
-      .leftJoinAndSelect('dispute.arbitrator', 'arbitrator')
-      .leftJoinAndSelect('dispute.chat', 'chat')
-      .where('dispute.openerId = :userId', { userId })
-      .orWhere('dispute.arbitratorId = :userId', { userId })
-      .orWhere('deal.buyerId = :userId', { userId })
-      .orWhere('deal.sellerId = :userId', { userId })
-      .orderBy('dispute.createdAt', 'DESC')
+      .createQueryBuilder("dispute")
+      .leftJoinAndSelect("dispute.deal", "deal")
+      .leftJoinAndSelect("dispute.opener", "opener")
+      .leftJoinAndSelect("dispute.arbitrator", "arbitrator")
+      .leftJoinAndSelect("dispute.chat", "chat")
+      .where("dispute.openerId = :userId", { userId })
+      .orWhere("dispute.arbitratorId = :userId", { userId })
+      .orWhere("deal.buyerId = :userId", { userId })
+      .orWhere("deal.sellerId = :userId", { userId })
+      .orderBy("dispute.createdAt", "DESC")
       .getMany();
 
     return disputes;
@@ -500,25 +594,33 @@ export class DisputeService {
   /**
    * Получить активные споры арбитра
    */
-  async getArbitratorActiveDisputes(arbitratorUserId: string): Promise<Dispute[]> {
+  async getArbitratorActiveDisputes(
+    arbitratorUserId: string,
+  ): Promise<Dispute[]> {
     return this.disputeRepository.find({
       where: {
         arbitratorId: arbitratorUserId,
         status: DisputeStatus.UNDER_REVIEW,
       },
-      relations: ['deal', 'opener'],
-      order: { createdAt: 'DESC' },
+      relations: ["deal", "opener"],
+      order: { createdAt: "DESC" },
     });
   }
 
   /**
    * Закрыть спор
    */
-  async closeDispute(disputeId: string, userId: string, reason?: string): Promise<Dispute> {
+  async closeDispute(
+    disputeId: string,
+    userId: string,
+    reason?: string,
+  ): Promise<Dispute> {
     const dispute = await this.getDispute(disputeId);
 
     if (!dispute.isClosed && dispute.status !== DisputeStatus.ENFORCED) {
-      throw new ForbiddenException('Cannot close dispute that is not enforced or closed');
+      throw new ForbiddenException(
+        "Cannot close dispute that is not enforced or closed",
+      );
     }
 
     dispute.closedAt = new Date();
@@ -527,7 +629,7 @@ export class DisputeService {
     const event = this.eventRepository.create({
       disputeId: dispute.id,
       type: ArbitrationEventType.DISPUTE_CLOSED,
-      description: reason || 'Спор закрыт',
+      description: reason || "Спор закрыт",
       actorId: userId,
     });
 
@@ -538,36 +640,39 @@ export class DisputeService {
   /**
    * Проверить права доступа к спору
    */
-  async checkAccess(disputeId: string, userId: string): Promise<{
+  async checkAccess(
+    disputeId: string,
+    userId: string,
+  ): Promise<{
     canAccess: boolean;
-    role: 'opener' | 'opponent' | 'arbitrator' | 'admin' | 'none';
+    role: "opener" | "opponent" | "arbitrator" | "admin" | "none";
   }> {
     const dispute = await this.disputeRepository.findOne({
       where: { id: disputeId },
-      relations: ['deal'],
+      relations: ["deal"],
     });
 
     if (!dispute) {
-      return { canAccess: false, role: 'none' };
+      return { canAccess: false, role: "none" };
     }
 
     // Проверка ролей
     if (dispute.openerId === userId) {
-      return { canAccess: true, role: 'opener' };
+      return { canAccess: true, role: "opener" };
     }
 
     if (dispute.arbitratorId === userId) {
-      return { canAccess: true, role: 'arbitrator' };
+      return { canAccess: true, role: "arbitrator" };
     }
 
     if (dispute.deal) {
       if (dispute.deal.buyerId === userId || dispute.deal.sellerId === userId) {
-        return { canAccess: true, role: 'opponent' };
+        return { canAccess: true, role: "opponent" };
       }
     }
 
     // Admin проверка будет в guard
-    return { canAccess: false, role: 'none' };
+    return { canAccess: false, role: "none" };
   }
 
   async findAllForAdmin(
@@ -575,20 +680,21 @@ export class DisputeService {
     limit: number = 20,
     filter?: { status?: string; type?: string },
   ): Promise<{ disputes: Dispute[]; total: number }> {
-    const query = this.disputeRepository.createQueryBuilder('dispute')
-      .leftJoinAndSelect('dispute.deal', 'deal')
-      .leftJoinAndSelect('deal.buyer', 'buyer')
-      .leftJoinAndSelect('deal.seller', 'seller');
+    const query = this.disputeRepository
+      .createQueryBuilder("dispute")
+      .leftJoinAndSelect("dispute.deal", "deal")
+      .leftJoinAndSelect("deal.buyer", "buyer")
+      .leftJoinAndSelect("deal.seller", "seller");
 
     if (filter?.status) {
-      query.andWhere('dispute.status = :status', { status: filter.status });
+      query.andWhere("dispute.status = :status", { status: filter.status });
     }
     if (filter?.type) {
-      query.andWhere('dispute.type = :type', { type: filter.type });
+      query.andWhere("dispute.type = :type", { type: filter.type });
     }
 
     const skip = (page - 1) * limit;
-    query.skip(skip).take(limit).orderBy('dispute.createdAt', 'DESC');
+    query.skip(skip).take(limit).orderBy("dispute.createdAt", "DESC");
 
     const [disputes, total] = await query.getManyAndCount();
     return { disputes, total };
@@ -597,15 +703,18 @@ export class DisputeService {
   async findByIdAdmin(id: string): Promise<Dispute> {
     const dispute = await this.disputeRepository.findOne({
       where: { id },
-      relations: ['deal', 'deal.buyer', 'deal.seller'],
+      relations: ["deal", "deal.buyer", "deal.seller"],
     });
     if (!dispute) {
-      throw new NotFoundException('Dispute not found');
+      throw new NotFoundException("Dispute not found");
     }
     return dispute;
   }
 
-  async reassignArbitratorAdmin(id: string, arbitratorId: string): Promise<Dispute> {
+  async reassignArbitratorAdmin(
+    id: string,
+    arbitratorId: string,
+  ): Promise<Dispute> {
     const dispute = await this.findByIdAdmin(id);
     dispute.arbitratorId = arbitratorId;
     return this.disputeRepository.save(dispute);
@@ -618,7 +727,10 @@ export class DisputeService {
     return this.disputeRepository.save(dispute);
   }
 
-  async getAdminStats(): Promise<{ openDisputes: number; totalDisputes: number }> {
+  async getAdminStats(): Promise<{
+    openDisputes: number;
+    totalDisputes: number;
+  }> {
     const openDisputes = await this.disputeRepository.count({
       where: { isClosed: false },
     });

@@ -1,0 +1,40 @@
+[package]
+name = "telegram-garant-ton-contracts"
+description = "Immutable per-deal TON escrow contracts"
+version = "0.1.0"
+license = "UNLICENSED"
+
+[toolchain]
+acton = "1.1.0"
+
+[contracts.TonNativeEscrow]
+src = "contracts/TonNativeEscrow.tolk"
+depends = []
+
+[contracts.TonJettonEscrow]
+src = "contracts/TonJettonEscrow.tolk"
+depends = []
+
+[test.mutation]
+minimum-percent = 100.0
+
+[lint]
+max-warnings = 0
+
+[lint.rules]
+dict-type-use = "allow"
+throw-requires-errors-enum = "allow"
+
+[fmt]
+width = 100
+ignore = []
+
+[build]
+output-fift = "build/acton-fift"
+
+[import-mappings]
+acton = ".acton"
+contracts = "contracts"
+tests = "tests-acton"
+wrappers = "wrappers-acton"
+gen = "gen"

@@ -123,6 +123,11 @@ export class DealStateMachine {
       event: DealEventType.DISPUTE_OPENED,
       guard: (deal) => !!deal.arbitratorId,
     },
+    {
+      from: DealStatus.IN_PROGRESS,
+      to: DealStatus.REFUNDED,
+      event: DealEventType.DEAL_REFUNDED,
+    },
 
     // Ожидание подтверждения
     {
