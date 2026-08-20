@@ -287,6 +287,14 @@ enable any production flag.
   transcript hash is not seal evidence. The eleven proof-kernel suites pass
   182 focused tests, and the full backend passes 84 suites / 824 tests. See
   `ADR-011-TON-PROVEN-TVM-ENVIRONMENT-AND-LOCAL-GETTER.md`.
+- The local canonical-wallet result can now be composed with a separately
+  proven active wallet at the identical finalized masterchain anchor. Exact
+  TEP-74 wallet data binds the escrow owner, allowlisted master, active pinned
+  code and embedded code; malformed, trailing, pruned or substituted data fails
+  closed. Its 19 tests preserve sealing authorization false and verification
+  evidence null. The twelve proof-kernel suites pass 201 focused tests, and the
+  full backend passes 85 suites / 843 tests. See
+  `ADR-012-TON-PROVEN-CANONICAL-WALLET-COMPOSITION.md`.
 
 The current local development code-cell hash is
 `1c4ce3fe43382378c3b472d64f8237a19c4e08c696149ebaf5bec501debe3da6`.

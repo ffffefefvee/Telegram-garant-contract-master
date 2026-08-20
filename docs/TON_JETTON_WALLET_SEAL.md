@@ -36,9 +36,14 @@ same finalized anchor, and locally execute `get_wallet_address` against proven
 master code/data. That local component still fixes authorization false and uses
 a synthetic execution fixture.
 
-Seal authorization remains blocked until the canonical wallet account is
-composed with that result, captured mainnet/testnet proofs reproduce offline,
-the executor policy is independently reviewed, and the separate
+The derived address can also be composed with a separately proven active wallet
+at the same finalized masterchain anchor. That pure composition verifies the
+exact wallet address, escrow owner, allowlisted master, active pinned code hash
+and embedded wallet-code hash. Its audit composition hash is not seal evidence,
+and the result keeps sealing authorization false.
+
+Seal authorization remains blocked until captured mainnet/testnet proofs
+reproduce offline, the executor policy is independently reviewed, and the separate
 verification-evidence commitment plus threshold initializer workflow are
 complete. No signer, broadcaster, adapter wiring, or durable ingestion is
 included here.

@@ -27,7 +27,7 @@ must let eligible users choose TON or Polygon.
 - Release candidate, Ed25519 threshold approval and deployment-input locks are
   implemented. The deployment lock re-verifies the original policy/signatures;
   it does not trust an unsigned approval JSON or possess deploy/signing access.
-- The current backend suite passes 82 suites / 795 tests, including the
+- The current backend suite passes 85 suites / 843 tests, including the
   unwired durable-ingestion and corrected raw-evidence reconciliation slices.
   Both npm dependency audits reported zero vulnerabilities.
 
@@ -144,10 +144,17 @@ non-authorizing and the fixture is synthetic; captured mainnet/testnet replay
 and independent executor-policy review are still required. See
 `ADR-011-TON-PROVEN-TVM-ENVIRONMENT-AND-LOCAL-GETTER.md`.
 
-The eleven proof-kernel suites currently pass 182 focused tests.
+The locally derived canonical address can now be composed with a separately
+proven active wallet account at the same finalized masterchain anchor. The
+composition decodes exact TEP-74 wallet data and binds the escrow owner,
+allowlisted master, active pinned code and embedded wallet code. It emits only
+an audit composition hash and keeps sealing authorization false and verification
+evidence null. See `ADR-012-TON-PROVEN-CANONICAL-WALLET-COMPOSITION.md`.
 
-Complete the proof pipeline before lifecycle work: verify the canonical
-wallet account with the new primitive and prove transaction inclusion; capture
+The twelve proof-kernel suites currently pass 201 focused tests.
+
+Complete the proof pipeline before lifecycle work: prove transaction inclusion;
+capture
 offline-replayable mainnet/testnet proofs and validate the local executor policy;
 define a separate domain-separated verification commitment; and require an
 audited threshold or multisig initializer approval. The structural or local
