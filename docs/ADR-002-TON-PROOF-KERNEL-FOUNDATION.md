@@ -19,7 +19,7 @@ The trusted policy binds:
 - maximum observation age and future clock skew;
 - maximum decoded bytes, declared cells, and parsed cell depth per proof BOC.
 
-The bundle binds a target masterchain extended block ID and raw single-root Merkle-proof BOCs for the masterchain block, shard descriptor, shard block, Jetton master account, and Jetton wallet account. Exact-key validation rejects caller-supplied trust or verification booleans. The masterchain proof's embedded virtual root must equal the target block root hash.
+The bundle binds a target masterchain extended block ID and raw Merkle-proof BOCs. The masterchain block, shard descriptor, and shard block roles require one complete root. Canonical Jetton master and wallet account-proof roles require exactly two roots: shard block header and shard state. Exact-key validation rejects caller-supplied trust or verification booleans. The masterchain proof's embedded virtual root must equal the target block root hash.
 
 ## Security invariant
 
@@ -27,7 +27,7 @@ No structurally validated input can authorize money movement. Only a later kerne
 
 ## Threat model and rejected inputs
 
-The boundary assumes every provider response and every bundle field is attacker controlled. It rejects malformed or non-canonical base64, unsupported BOC flags, unsafe integer widths, size arithmetic overflow, incomplete or trailing bytes, CRC corruption, multiple or absent roots, declared absent cells, excessive bytes/cells/depth, and non-Merkle-proof roots. It also rejects wrong network/global ID, non-masterchain anchors and targets, zero or non-canonical hashes, stale/future observations, and targets that do not advance the trusted key block.
+The boundary assumes every provider response and every bundle field is attacker controlled. It rejects malformed or non-canonical base64, unsupported BOC flags, unsafe integer widths, size arithmetic overflow, incomplete or trailing bytes, CRC corruption, wrong per-role root cardinality, declared absent or unreachable cells, excessive bytes/cells/depth, and non-Merkle-proof roots. It also rejects wrong network/global ID, non-masterchain anchors and targets, zero or non-canonical hashes, stale/future observations, and targets that do not advance the trusted key block.
 
 These checks do not establish validator signatures, key-block transitions, masterchain finality, shard-descriptor inclusion, shard-prefix correctness, shard-block validity, account or transaction inclusion, Jetton master/wallet identity, or local TVM getter execution.
 

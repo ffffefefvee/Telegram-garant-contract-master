@@ -27,7 +27,7 @@ must let eligible users choose TON or Polygon.
 - Release candidate, Ed25519 threshold approval and deployment-input locks are
   implemented. The deployment lock re-verifies the original policy/signatures;
   it does not trust an unsigned approval JSON or possess deploy/signing access.
-- The current backend suite passes 81 suites / 767 tests, including the
+- The current backend suite passes 82 suites / 795 tests, including the
   unwired durable-ingestion and corrected raw-evidence reconciliation slices.
   Both npm dependency audits reported zero vulnerabilities.
 
@@ -50,11 +50,12 @@ It always returns `sealingAuthorized: false` and keeps
 
 Phase 1 now also has an isolated proof-envelope foundation. It freezes the
 trusted network/checkpoint and raw five-proof bundle contracts, rejects
-non-canonical or over-budget BOCs, enforces exact byte consumption and one
-Merkle-proof root, binds the embedded masterchain virtual root to the target
-block, and commits the result for audit. Its 24 focused adversarial tests cover
+non-canonical or over-budget BOCs, enforces exact byte/cell consumption and
+per-role root cardinality (one for block roles, exactly two for canonical
+account proofs), binds the embedded masterchain virtual root to the target
+block, and commits the result for audit. Its 28 focused adversarial tests cover
 network/global-ID drift, stale/future observations, identity drift, malformed
-base64, size/cell/depth limits, trailing and unused bytes, multiple roots,
+base64, size/cell/depth limits, trailing/unused bytes, unreachable cells,
 wrong cell types and CRC corruption. This module is not cryptographic proof
 verification: its type cannot express authorization, it remains unwired, and
 it emits no `verificationEvidenceHash`. See
@@ -123,10 +124,20 @@ and new shard-state hashes. It deliberately keeps
 `shardStateProofVerified: false`, authorization false and verification evidence
 null. See `ADR-009-TON-FINALIZED-SHARD-BLOCK.md`.
 
-The eight proof-kernel suites currently pass 125 focused tests.
+The canonical two-root account verifier can now bind a `ShardStateUnsplit` to
+that finalized block and prove one exact active account through the augmented
+`ShardAccounts` dictionary. It verifies the shard prefix and complete state
+identity, distinguishes absence from pruning, accepts unrelated pruned siblings,
+and binds the separate account root, embedded address, last transaction LT,
+balance and code/data hashes. It keeps transaction inclusion false,
+authorization false and verification evidence null. See
+`ADR-010-TON-FINALIZED-ACCOUNT-STATE.md`.
+
+The nine proof-kernel suites currently pass 153 focused tests.
 
 Complete the proof pipeline before lifecycle work: verify the canonical
-shard-state/account and transaction-inclusion proofs; locally execute
+master and wallet accounts with the new primitive and prove transaction
+inclusion; locally execute
 `get_wallet_address` against the proven master state; define a separate
 domain-separated verification commitment; and require an audited threshold or
 multisig initializer approval. The structural hash must never be used as the

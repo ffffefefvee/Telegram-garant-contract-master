@@ -107,6 +107,30 @@ export interface TonParsedMerkleProof {
   masterchainHeader?: TonProvenMasterchainHeader;
 }
 
+export interface TonParsedMerkleProofRoot {
+  rootHash: string;
+  virtualRootHash: string;
+  depth: number;
+  virtualRoot: Cell;
+}
+
+export interface TonParsedAccountProof {
+  bocHash: string;
+  cells: number;
+  depth: number;
+  roots: readonly [TonParsedMerkleProofRoot, TonParsedMerkleProofRoot];
+}
+
+export interface TonParsedSingleRootCell {
+  bocHash: string;
+  rootHash: string;
+  cells: number;
+  depth: number;
+  root: Cell;
+}
+
+type TonParsedEnvelopeProof = TonParsedMerkleProof | TonParsedAccountProof;
+
 class EnvelopeValidationError extends Error {
   constructor(
     readonly reasonCode: Exclude<
@@ -532,11 +556,24 @@ function decodeCanonicalBase64(
   return buffer;
 }
 
-export function parseTonMerkleProofBoc(
+function countReachableCells(roots: readonly Cell[]): number {
+  const seen = new Set<Cell>();
+  const pending = [...roots];
+  while (pending.length > 0) {
+    const cell = pending.pop()!;
+    if (seen.has(cell)) continue;
+    seen.add(cell);
+    pending.push(...cell.refs);
+  }
+  return seen.size;
+}
+
+function parseStrictBoc(
   buffer: Buffer,
   limits: TonProofResourceLimits,
   label: string,
-): TonParsedMerkleProof {
+  expectedRoots: number,
+): { bocHash: string; cells: number; roots: Cell[] } {
   if (buffer.length === 0 || buffer.length > limits.maxBocBytes) {
     throw new EnvelopeValidationError(
       "INVALID_PROOF_BUNDLE",
@@ -553,22 +590,41 @@ export function parseTonMerkleProofBoc(
     if (header.cells < 1 || header.cells > limits.maxCells) {
       throw new Error("BOC cell count is out of range");
     }
-    if (header.roots !== 1 || header.absent !== 0) {
-      throw new Error("BOC must contain one complete root");
+    if (header.roots !== expectedRoots || header.absent !== 0) {
+      throw new Error(
+        `BOC must contain exactly ${expectedRoots} complete root${expectedRoots === 1 ? "" : "s"}`,
+      );
     }
     validateCellDataConsumption(buffer, header);
     roots = Cell.fromBoc(buffer);
+    if (
+      roots.length !== expectedRoots ||
+      countReachableCells(roots) !== header.cells
+    ) {
+      throw new Error("BOC contains unreachable or missing cells");
+    }
   } catch (error) {
     throw new EnvelopeValidationError(
       "INVALID_PROOF_BUNDLE",
       `${label} is malformed: ${error instanceof Error ? error.message : "unknown error"}`,
     );
   }
-  const root = roots[0];
-  if (roots.length !== 1 || root.type !== CellType.MerkleProof) {
+  return {
+    bocHash: createHash("sha256").update(buffer).digest("hex"),
+    cells: header.cells,
+    roots,
+  };
+}
+
+function parseMerkleProofRoot(
+  root: Cell,
+  limits: TonProofResourceLimits,
+  label: string,
+): TonParsedMerkleProofRoot {
+  if (root.type !== CellType.MerkleProof) {
     throw new EnvelopeValidationError(
       "INVALID_PROOF_BUNDLE",
-      `${label} must have one MerkleProof root`,
+      `${label} must contain only MerkleProof roots`,
     );
   }
   const depth = root.depth();
@@ -591,12 +647,63 @@ export function parseTonMerkleProofBoc(
     );
   }
   return {
-    bocHash: createHash("sha256").update(buffer).digest("hex"),
     rootHash: root.hash().toString("hex"),
     virtualRootHash,
-    cells: header.cells,
     depth,
     virtualRoot,
+  };
+}
+
+export function parseTonMerkleProofBoc(
+  buffer: Buffer,
+  limits: TonProofResourceLimits,
+  label: string,
+): TonParsedMerkleProof {
+  const parsed = parseStrictBoc(buffer, limits, label, 1);
+  const root = parseMerkleProofRoot(parsed.roots[0], limits, label);
+  return {
+    bocHash: parsed.bocHash,
+    cells: parsed.cells,
+    ...root,
+  };
+}
+
+export function parseTonAccountProofBoc(
+  buffer: Buffer,
+  limits: TonProofResourceLimits,
+  label: string,
+): TonParsedAccountProof {
+  const parsed = parseStrictBoc(buffer, limits, label, 2);
+  const first = parseMerkleProofRoot(parsed.roots[0], limits, `${label}[0]`);
+  const second = parseMerkleProofRoot(parsed.roots[1], limits, `${label}[1]`);
+  return {
+    bocHash: parsed.bocHash,
+    cells: parsed.cells,
+    depth: Math.max(first.depth, second.depth),
+    roots: [first, second],
+  };
+}
+
+export function parseTonSingleRootBoc(
+  buffer: Buffer,
+  limits: TonProofResourceLimits,
+  label: string,
+): TonParsedSingleRootCell {
+  const parsed = parseStrictBoc(buffer, limits, label, 1);
+  const root = parsed.roots[0];
+  const depth = root.depth();
+  if (depth > limits.maxDepth) {
+    throw new EnvelopeValidationError(
+      "INVALID_PROOF_BUNDLE",
+      `${label} exceeds the depth limit`,
+    );
+  }
+  return {
+    bocHash: parsed.bocHash,
+    rootHash: root.hash(0).toString("hex"),
+    cells: parsed.cells,
+    depth,
+    root,
   };
 }
 
@@ -612,13 +719,25 @@ function parseMerkleProof(
   );
 }
 
+function parseAccountProof(
+  value: unknown,
+  limits: TonProofResourceLimits,
+  label: string,
+): TonParsedAccountProof {
+  return parseTonAccountProofBoc(
+    decodeCanonicalBase64(value, limits.maxBocBytes, label),
+    limits,
+    label,
+  );
+}
+
 function validateBundle(
   value: unknown,
   config: TonTrustedNetworkConfig,
   nowUnix: number,
 ): {
   bundle: TonProofBundle;
-  parsedProofs: Record<string, TonParsedMerkleProof>;
+  parsedProofs: Record<string, TonParsedEnvelopeProof>;
 } {
   const reasonCode = "INVALID_PROOF_BUNDLE" as const;
   requireExactKeys(
@@ -667,19 +786,27 @@ function validateBundle(
   }
   requireExactKeys(value.proofs, PROOF_KEYS, "proofs", reasonCode);
   const proofs = {} as TonRawProofs;
-  const parsedProofs: Record<string, TonParsedMerkleProof> = {};
+  const parsedProofs: Record<string, TonParsedEnvelopeProof> = {};
   for (const key of PROOF_KEYS) {
     const raw = value.proofs[key];
     if (typeof raw !== "string") {
       throw new EnvelopeValidationError(reasonCode, `${key} must be a string`);
     }
     proofs[key] = raw;
-    parsedProofs[key] = parseMerkleProof(raw, config.limits, key);
+    parsedProofs[key] =
+      key === "masterAccountProofBocBase64" ||
+      key === "walletAccountProofBocBase64"
+        ? parseAccountProof(raw, config.limits, key)
+        : parseMerkleProof(raw, config.limits, key);
   }
-  if (
-    parsedProofs.masterchainBlockProofBocBase64.virtualRootHash !==
-    targetMasterchainBlock.rootHash
-  ) {
+  const masterchainProof = parsedProofs.masterchainBlockProofBocBase64;
+  if (!("virtualRootHash" in masterchainProof)) {
+    throw new EnvelopeValidationError(
+      reasonCode,
+      "masterchain proof role is invalid",
+    );
+  }
+  if (masterchainProof.virtualRootHash !== targetMasterchainBlock.rootHash) {
     throw new EnvelopeValidationError(
       reasonCode,
       "masterchain proof does not commit to the target root hash",
@@ -687,7 +814,7 @@ function validateBundle(
   }
   try {
     const masterchainHeader = verifyTonMasterchainHeaderCell(
-      parsedProofs.masterchainBlockProofBocBase64.virtualRoot,
+      masterchainProof.virtualRoot,
       {
         globalId: config.globalId,
         targetBlock: targetMasterchainBlock,
@@ -712,8 +839,7 @@ function validateBundle(
         "masterchain block is stale",
       );
     }
-    parsedProofs.masterchainBlockProofBocBase64.masterchainHeader =
-      masterchainHeader;
+    masterchainProof.masterchainHeader = masterchainHeader;
   } catch (error) {
     if (error instanceof EnvelopeValidationError) throw error;
     throw new EnvelopeValidationError(
@@ -735,7 +861,7 @@ function validateBundle(
 function structuralCommitment(
   config: TonTrustedNetworkConfig,
   bundle: TonProofBundle,
-  parsedProofs: Record<string, TonParsedMerkleProof>,
+  parsedProofs: Record<string, TonParsedEnvelopeProof>,
 ): string {
   const commitment = {
     domain: "telegram-garant/ton-proof-envelope/v1",
@@ -748,15 +874,27 @@ function structuralCommitment(
     observedAtUnix: bundle.observedAtUnix,
     proofs: PROOF_KEYS.map((key) => {
       const proof = parsedProofs[key];
-      return {
-        role: key,
-        bocHash: proof.bocHash,
-        rootHash: proof.rootHash,
-        virtualRootHash: proof.virtualRootHash,
-        cells: proof.cells,
-        depth: proof.depth,
-        masterchainHeader: proof.masterchainHeader ?? null,
-      };
+      return "roots" in proof
+        ? {
+            role: key,
+            bocHash: proof.bocHash,
+            cells: proof.cells,
+            depth: proof.depth,
+            roots: proof.roots.map((root) => ({
+              rootHash: root.rootHash,
+              virtualRootHash: root.virtualRootHash,
+              depth: root.depth,
+            })),
+          }
+        : {
+            role: key,
+            bocHash: proof.bocHash,
+            rootHash: proof.rootHash,
+            virtualRootHash: proof.virtualRootHash,
+            cells: proof.cells,
+            depth: proof.depth,
+            masterchainHeader: proof.masterchainHeader ?? null,
+          };
     }),
   };
   return createHash("sha256").update(JSON.stringify(commitment)).digest("hex");
