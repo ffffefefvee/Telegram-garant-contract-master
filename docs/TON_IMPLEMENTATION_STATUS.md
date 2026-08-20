@@ -277,6 +277,16 @@ enable any production flag.
   evidence null and remains pure/unwired. The nine proof-kernel suites pass 153
   focused tests and the full backend passes 82 suites / 795 tests. See
   `ADR-010-TON-FINALIZED-ACCOUNT-STATE.md`.
+- The shard/account artifacts now preserve their exact finalized masterchain
+  anchor. A masterchain-state proof binds a complete TVM configuration
+  dictionary to that anchor, and the pinned local sandbox executes
+  `get_wallet_address` against the proven master code/data with exact owner
+  encoding, exit/result shape, gas and missing-library checks. The 29 new tests
+  include real local emulator execution and adversarial anchor/config/code
+  drift. The result remains non-authorizing, its fixture is synthetic, and its
+  transcript hash is not seal evidence. The eleven proof-kernel suites pass
+  182 focused tests, and the full backend passes 84 suites / 824 tests. See
+  `ADR-011-TON-PROVEN-TVM-ENVIRONMENT-AND-LOCAL-GETTER.md`.
 
 The current local development code-cell hash is
 `1c4ce3fe43382378c3b472d64f8237a19c4e08c696149ebaf5bec501debe3da6`.

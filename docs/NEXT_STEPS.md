@@ -133,16 +133,27 @@ balance and code/data hashes. It keeps transaction inclusion false,
 authorization false and verification evidence null. See
 `ADR-010-TON-FINALIZED-ACCOUNT-STATE.md`.
 
-The nine proof-kernel suites currently pass 153 focused tests.
+The account and shard artifacts now retain the exact finalized masterchain
+anchor that authenticated them. A new masterchain-state verifier binds the
+complete TVM configuration dictionary to that same finalized header, and a
+pinned sandbox runner executes `get_wallet_address` locally against the proven
+Jetton-master code/data. It accepts only exit code zero and exactly one address,
+enforces deterministic inputs and a gas cap, and rejects missing global
+libraries. Provider getter output is not an input. The local result remains
+non-authorizing and the fixture is synthetic; captured mainnet/testnet replay
+and independent executor-policy review are still required. See
+`ADR-011-TON-PROVEN-TVM-ENVIRONMENT-AND-LOCAL-GETTER.md`.
+
+The eleven proof-kernel suites currently pass 182 focused tests.
 
 Complete the proof pipeline before lifecycle work: verify the canonical
-master and wallet accounts with the new primitive and prove transaction
-inclusion; locally execute
-`get_wallet_address` against the proven master state; define a separate
-domain-separated verification commitment; and require an audited threshold or
-multisig initializer approval. The structural hash must never be used as the
-contract's seal evidence. The initializer and reconciliation authority are
-money-critical and must remain distinct from every transaction role.
+wallet account with the new primitive and prove transaction inclusion; capture
+offline-replayable mainnet/testnet proofs and validate the local executor policy;
+define a separate domain-separated verification commitment; and require an
+audited threshold or multisig initializer approval. The structural or local
+execution transcript hash must never be used as the contract's seal evidence.
+The initializer and reconciliation authority are money-critical and must remain
+distinct from every transaction role.
 
 Update deterministic config/StateInit and seal-message composition for the new
 ABI. No component may sign, broadcast or enable funding merely because the

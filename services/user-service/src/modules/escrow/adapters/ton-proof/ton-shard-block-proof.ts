@@ -24,6 +24,7 @@ export interface TonProvenShardBlockHeader {
   authorizationAllowed: false;
   verificationEvidenceHash: null;
   networkGlobalId: number;
+  finalizedByMasterchainBlock: TonProofBlockId;
   block: TonProofBlockId;
   version: number;
   verticalSeqno: number;
@@ -325,6 +326,7 @@ export function verifyTonShardBlockProof(
       authorizationAllowed: false,
       verificationEvidenceHash: null,
       networkGlobalId: descriptor.networkGlobalId,
+      finalizedByMasterchainBlock: { ...descriptor.masterchainBlock },
       block: { ...descriptor.block },
       version,
       verticalSeqno,
