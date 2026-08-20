@@ -187,6 +187,16 @@ enable any production flag.
   still absent, it always returns `sealingAuthorized: false`, exposes only an
   audit-safe `structuralEvidenceHash`, and keeps the contract-ready
   `verificationEvidenceHash` null.
+- An isolated Phase 1 proof-envelope foundation now freezes exact trusted
+  network/checkpoint and raw proof-bundle schemas. It performs strict,
+  resource-bounded base64 and BOC framing checks, rejects incomplete/trailing
+  or internally unused bytes, requires one complete Merkle-proof root per role,
+  and binds the masterchain proof's embedded virtual root to the target block.
+  Its 24 focused adversarial tests pass. This remains an input-safety boundary,
+  not cryptographic finality verification: every result is non-authorizing,
+  `verificationEvidenceHash` remains null, and no production component imports
+  it. The invariant, threat model, observability, evidence and rollback rules
+  are recorded in `ADR-002-TON-PROOF-KERNEL-FOUNDATION.md`.
 
 The current local development code-cell hash is
 `1c4ce3fe43382378c3b472d64f8237a19c4e08c696149ebaf5bec501debe3da6`.

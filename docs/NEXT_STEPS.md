@@ -27,7 +27,7 @@ must let eligible users choose TON or Polygon.
 - Release candidate, Ed25519 threshold approval and deployment-input locks are
   implemented. The deployment lock re-verifies the original policy/signatures;
   it does not trust an unsigned approval JSON or possess deploy/signing access.
-- The current backend suite passes 73 suites / 642 tests, including the
+- The current backend suite passes 74 suites / 666 tests, including the
   unwired durable-ingestion and corrected raw-evidence reconciliation slices.
   Both npm dependency audits reported zero vulnerabilities.
 
@@ -47,6 +47,18 @@ configured source/operator pairs, raw getter cells and raw active wallet
 `ShardAccount` data, and emits only an audit-safe `structuralEvidenceHash`.
 It always returns `sealingAuthorized: false` and keeps
 `verificationEvidenceHash: null`.
+
+Phase 1 now also has an isolated proof-envelope foundation. It freezes the
+trusted network/checkpoint and raw five-proof bundle contracts, rejects
+non-canonical or over-budget BOCs, enforces exact byte consumption and one
+Merkle-proof root, binds the embedded masterchain virtual root to the target
+block, and commits the result for audit. Its 24 focused adversarial tests cover
+network/global-ID drift, stale/future observations, identity drift, malformed
+base64, size/cell/depth limits, trailing and unused bytes, multiple roots,
+wrong cell types and CRC corruption. This module is not cryptographic proof
+verification: its type cannot express authorization, it remains unwired, and
+it emits no `verificationEvidenceHash`. See
+`ADR-002-TON-PROOF-KERNEL-FOUNDATION.md`.
 
 Complete the proof pipeline before lifecycle work: verify the masterchain block
 proof, shard inclusion and account-state proof; locally execute
