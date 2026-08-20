@@ -218,6 +218,16 @@ enable any production flag.
   are not yet proven, its result fixes `validatorSetProven` and
   `finalityProven` to false and remains unwired. See
   `ADR-004-TON-ORDINARY-SIGNATURE-PROOF.md`.
+- A separate validator-set primitive now parses `validators#11` and
+  `validators_ext#12` cells plus catchain parameter 28, enforces exact
+  dictionary/descriptor/weight invariants, reproduces the optional SHA-512
+  masterchain shuffle, computes TON's order-sensitive CRC32C short hash, and
+  binds catchain/hash values to the parsed masterchain header. Its 17 focused
+  tests include fixed shuffle and hash vectors plus signature-verifier handoff.
+  The configuration cells are still caller-supplied rather than Merkle-proven,
+  so `sourceConfigProven`, `validatorSetProven` and `finalityProven` remain false
+  and the module stays unwired. See
+  `ADR-005-TON-VALIDATOR-SET-DERIVATION.md`.
 
 The current local development code-cell hash is
 `1c4ce3fe43382378c3b472d64f8237a19c4e08c696149ebaf5bec501debe3da6`.
