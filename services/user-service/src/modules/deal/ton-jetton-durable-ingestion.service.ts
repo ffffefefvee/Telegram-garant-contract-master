@@ -1,4 +1,4 @@
-import { DataSource, EntityManager, QueryRunner } from "typeorm";
+import { DataSource, EntityManager } from "typeorm";
 import { TonNetwork } from "../user/entities/ton-wallet-binding.entity";
 import {
   TonJettonChainEvent,

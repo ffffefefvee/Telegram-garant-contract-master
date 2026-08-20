@@ -1,4 +1,3 @@
-import { EntityManager } from "typeorm";
 import { TonNetwork } from "../user/entities/ton-wallet-binding.entity";
 import {
   TonJettonChainEvent,
