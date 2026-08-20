@@ -79,7 +79,15 @@ keeps `validatorSetProven: false` and `finalityProven: false`, because the suppl
 validator set is not yet derived from a proven key-block configuration. Simplex
 sets fail closed. See `ADR-004-TON-ORDINARY-SIGNATURE-PROOF.md`.
 
-The three proof-kernel suites currently pass 64 focused tests.
+The masterchain validator-set derivation primitive now parses both canonical
+validator-set cell formats and catchain parameter 28, reproduces TON's optional
+SHA-512 masterchain shuffle and CRC32C validator-list short hash, and binds the
+result to the parsed header's catchain/hash fields. The source cells are not yet
+Merkle-proven, so every artifact keeps `sourceConfigProven: false`,
+`validatorSetProven: false` and `finalityProven: false`. See
+`ADR-005-TON-VALIDATOR-SET-DERIVATION.md`.
+
+The four proof-kernel suites currently pass 81 focused tests.
 
 Complete the proof pipeline before lifecycle work: verify the masterchain block
 proof, shard inclusion and account-state proof; locally execute
