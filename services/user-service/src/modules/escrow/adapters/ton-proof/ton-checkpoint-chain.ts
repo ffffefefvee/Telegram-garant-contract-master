@@ -32,7 +32,9 @@ export interface TonProvenMasterchainCheckpointChain {
   endpointsVerified: true;
   completenessVerified: true;
   allLinksVerified: true;
-  ordinaryConsensusVerified: true;
+  supportedConsensusVerified: true;
+  ordinaryConsensusVerified: boolean;
+  simplexConsensusVerified: boolean;
   masterchainFinalityProven: true;
   finalityProven: true;
   authorizationAllowed: false;
@@ -214,6 +216,8 @@ function verifyDecodedChain(
       catchainParameter: link.catchainParameter,
       catchainSeqno: link.catchainSeqno,
       validatorSetHash: link.validatorSetHash,
+      consensus: link.consensus,
+      signedDataHash: link.signedDataHash,
       signedWeight: link.signedWeight,
       totalWeight: link.totalWeight,
       signerCount: link.signerCount,
@@ -226,7 +230,13 @@ function verifyDecodedChain(
     endpointsVerified: true,
     completenessVerified: true,
     allLinksVerified: true,
-    ordinaryConsensusVerified: true,
+    supportedConsensusVerified: true,
+    ordinaryConsensusVerified: links.every(
+      (link) => link.consensus === "ordinary",
+    ),
+    simplexConsensusVerified: links.some(
+      (link) => link.consensus === "simplex",
+    ),
     masterchainFinalityProven: true,
     finalityProven: true,
     authorizationAllowed: false,

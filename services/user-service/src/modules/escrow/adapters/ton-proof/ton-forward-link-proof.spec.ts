@@ -13,6 +13,7 @@ import type { TonLiteBlockLinkForward } from "./ton-lite-signature-proof";
 import {
   tonNodeIdShort,
   tonOrdinaryBlockSignedData,
+  tonSimplexBlockSignedData,
 } from "./ton-lite-signature-proof";
 import type { TonProofBlockId } from "./ton-proof-envelope";
 import {
@@ -186,6 +187,38 @@ interface FixtureOptions {
   toKeyBlock?: boolean;
   signerIndexes?: number[];
   wrongDestinationValidatorHash?: boolean;
+  simplex?: boolean;
+}
+
+function u32(value: number): Buffer {
+  const result = Buffer.alloc(4);
+  result.writeUInt32LE(value >>> 0);
+  return result;
+}
+
+function i32(value: number): Buffer {
+  const result = Buffer.alloc(4);
+  result.writeInt32LE(value);
+  return result;
+}
+
+function u64(value: bigint): Buffer {
+  const result = Buffer.alloc(8);
+  result.writeBigUInt64LE(value);
+  return result;
+}
+
+function simplexCandidate(value: TonProofBlockId): Buffer {
+  return Buffer.concat([
+    u32(0xe8f9bcdc),
+    i32(value.workchain),
+    u64(BigInt.asUintN(64, BigInt(value.shard))),
+    u32(value.seqno),
+    Buffer.from(value.rootHash, "hex"),
+    Buffer.from(value.fileHash, "hex"),
+    Buffer.alloc(32, 0x55),
+    u32(0x22cbcca9),
+  ]);
 }
 
 function fixture(options: FixtureOptions = {}) {
@@ -250,14 +283,7 @@ function fixture(options: FixtureOptions = {}) {
     rootHash: destinationBlock.hash(0).toString("hex"),
     fileHash: "b".repeat(64),
   };
-  const signedData = tonOrdinaryBlockSignedData(to);
   const signerIndexes = options.signerIndexes ?? [0, 1];
-  const signatures = signerIndexes.map((index) => ({
-    nodeIdShort: tonNodeIdShort(selectedValidators[index].publicKey).toString(
-      "hex",
-    ),
-    signature: sign(signedData, selectedValidators[index].secretKey),
-  }));
   const link: TonLiteBlockLinkForward = {
     kind: "forward",
     toKeyBlock: options.toKeyBlock ?? destinationKeyBlock,
@@ -272,12 +298,28 @@ function fixture(options: FixtureOptions = {}) {
       crc32: false,
     }),
     signatures: {
-      kind: "ordinary",
+      ...(options.simplex
+        ? {
+            kind: "simplex" as const,
+            sessionId: Buffer.alloc(32, 0x66),
+            slot: 23,
+            candidate: simplexCandidate(to),
+          }
+        : { kind: "ordinary" as const }),
       catchainSeqno: 7,
       validatorSetHash: derived.validatorSetHash,
-      signatures,
+      signatures: [],
     },
   };
+  const signedData = options.simplex
+    ? tonSimplexBlockSignedData(link)
+    : tonOrdinaryBlockSignedData(to);
+  link.signatures.signatures = signerIndexes.map((index) => ({
+    nodeIdShort: tonNodeIdShort(selectedValidators[index].publicKey).toString(
+      "hex",
+    ),
+    signature: sign(signedData, selectedValidators[index].secretKey),
+  }));
   return {
     link,
     expectation: {
@@ -347,12 +389,26 @@ describe("TON forward key-block link proof", () => {
       headerBindingVerified: true,
       signaturesVerified: true,
       thresholdVerified: true,
+      consensus: "ordinary",
       linkVerified: true,
       finalityProven: false,
       validatorParameter: 34,
       catchainParameter: "present",
       catchainSeqno: 7,
       validatorCount: 3,
+      signedWeight: "70",
+      totalWeight: "100",
+      signerCount: 2,
+    });
+  });
+
+  it("authenticates a finalized Simplex signature set against the same proven validator configuration", () => {
+    const { link, expectation } = fixture({ simplex: true });
+    expect(verifyTonForwardKeyBlockLink(link, expectation)).toMatchObject({
+      consensus: "simplex",
+      signaturesVerified: true,
+      thresholdVerified: true,
+      validatorSetProven: true,
       signedWeight: "70",
       totalWeight: "100",
       signerCount: 2,

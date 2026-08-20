@@ -5,7 +5,7 @@ import type {
 } from "./ton-proof-envelope";
 import { parseTonMerkleProofBoc } from "./ton-proof-envelope";
 import type { TonLiteBlockLinkForward } from "./ton-lite-signature-proof";
-import { verifyTonOrdinaryForwardLinkSignatures } from "./ton-lite-signature-proof";
+import { verifyTonForwardLinkSignatures } from "./ton-lite-signature-proof";
 import {
   computeTonValidatorSetHash,
   deriveTonMasterchainValidatorSet,
@@ -38,6 +38,7 @@ export interface TonVerifiedForwardKeyBlockLink {
   headerBindingVerified: true;
   signaturesVerified: true;
   thresholdVerified: true;
+  consensus: "ordinary" | "simplex";
   linkVerified: true;
   finalityProven: false;
   sourceBlock: TonProofBlockId;
@@ -50,6 +51,7 @@ export interface TonVerifiedForwardKeyBlockLink {
   signedWeight: string;
   totalWeight: string;
   signerCount: number;
+  signedDataHash: string;
   configAddress: string;
   configRootHash: string;
   validatorParameter: 34 | 35;
@@ -433,7 +435,7 @@ export function verifyTonForwardKeyBlockLink(
       "destination validator-list hash does not match proven configuration",
     );
   }
-  const signatures = verifyTonOrdinaryForwardLinkSignatures(
+  const signatures = verifyTonForwardLinkSignatures(
     link,
     derived.signatureValidatorSet,
   );
@@ -447,6 +449,7 @@ export function verifyTonForwardKeyBlockLink(
     headerBindingVerified: true,
     signaturesVerified: true,
     thresholdVerified: true,
+    consensus: signatures.consensus,
     linkVerified: true,
     finalityProven: false,
     sourceBlock: { ...link.from },
@@ -459,6 +462,7 @@ export function verifyTonForwardKeyBlockLink(
     signedWeight: signatures.signedWeight,
     totalWeight: signatures.totalWeight,
     signerCount: signatures.signerCount,
+    signedDataHash: signatures.signedDataHash,
     configAddress,
     configRootHash: configRoot.hash(0).toString("hex"),
     validatorParameter,

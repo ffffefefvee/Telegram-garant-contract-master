@@ -208,16 +208,18 @@ enable any production flag.
   and unwired. The two proof-kernel suites pass 44 focused tests and the full
   backend passes 80 suites / 755 tests. See
   `ADR-003-TON-MASTERCHAIN-HEADER-PROOF.md`.
-- A pure ordinary-signature primitive now strictly decodes raw LiteServer
+- A pure signature primitive now strictly decodes raw LiteServer
   `partialBlockProof` TL bytes, validates contiguous masterchain links, derives
   validator node IDs from Ed25519 public keys, reproduces TON's internal signed
   block-ID bytes, rejects duplicate/unknown/invalid signers and enforces the
-  protocol's strict more-than-two-thirds weight threshold. Non-ordinary
-  (including Simplex) signature sets fail closed. The 21 focused tests pass.
+  protocol's strict more-than-two-thirds weight threshold. It now separately
+  reproduces finalized Simplex candidate/session/slot vote bytes; unknown
+  signature-set constructors fail closed. The 30 focused tests pass.
   Because key-block configuration, validator selection and set-hash provenance
   are not yet proven, its result fixes `validatorSetProven` and
   `finalityProven` to false and remains unwired. See
-  `ADR-004-TON-ORDINARY-SIGNATURE-PROOF.md`.
+  `ADR-004-TON-ORDINARY-SIGNATURE-PROOF.md` and
+  `ADR-016-TON-SIMPLEX-FINALITY-AND-FIXTURE-CAPTURE.md`.
 - A separate validator-set primitive now parses `validators#11` and
   `validators_ext#12` cells plus catchain parameter 28, enforces exact
   dictionary/descriptor/weight invariants, reproduces the optional SHA-512
@@ -228,23 +230,35 @@ enable any production flag.
   so `sourceConfigProven`, `validatorSetProven` and `finalityProven` remain false
   and the module stays unwired. See
   `ADR-005-TON-VALIDATOR-SET-DERIVATION.md`.
-- The ordinary forward-link verifier now authenticates `config_proof` to an
+- The ordinary/finalized-Simplex forward-link verifier now authenticates
+  `config_proof` to an
   exact trusted source key block and `dest_proof` to its destination block,
   extracts the proven key-block configuration, distinguishes dictionary
   presence/absence from a pruned target path, selects parameter 35 before 34,
   applies parameter-28 defaults only after proven absence, binds the derived
   validator hash to the destination header and verifies the weighted Ed25519
-  signatures. Its 15 focused tests pass. A successful artifact proves one link
+  signatures. Its 16 focused tests pass. A successful artifact proves one link
   only and therefore fixes `finalityProven: false`; it remains pure, unwired and
   non-authorizing. See `ADR-006-TON-FORWARD-LINK-CONFIG-PROOF.md`.
 - A complete-chain verifier now composes strict raw `partialBlockProof`
   decoding with authenticated forward links from the exact trusted key block,
   requires proven key-block intermediates and an exact fresh endpoint, and
-  rejects incomplete, backward, stale/future or endpoint-drifted paths. Its 8
-  focused tests include a two-link validator rotation. Only the complete chain
+  rejects incomplete, backward, stale/future or endpoint-drifted paths. Its 9
+  focused tests include ordinary and finalized-Simplex two-link rotations.
+  Only the complete chain
   sets `masterchainFinalityProven: true`; it keeps `authorizationAllowed: false`
   and `verificationEvidenceHash: null` and remains pure and unwired. See
   `ADR-007-TON-MASTERCHAIN-CHECKPOINT-FINALITY.md`.
+
+- A pinned capture tool now transports current ordinary and Simplex LiteServer
+  responses, checks the official zerostate identity, and captures raw
+  checkpoint, header, configuration, shard, account and transaction artifacts
+  with a content-hashed immutable manifest. The compatibility codec is not a
+  verifier; all responses must pass the local proof kernel. Real mainnet and
+  testnet corpora, strict offline manifest replay, bit-flip vectors and
+  independent review remain Phase 1 exit gates. The full backend passes 88
+  suites / 912 tests. See
+  `ADR-016-TON-SIMPLEX-FINALITY-AND-FIXTURE-CAPTURE.md`.
 - The finalized masterchain target can now authenticate its state and exact
   basechain `ShardHashes` descriptor. The verifier binds the state proof to the
   header state-update hash, proves the workchain Patricia path, enforces exact
