@@ -27,7 +27,7 @@ must let eligible users choose TON or Polygon.
 - Release candidate, Ed25519 threshold approval and deployment-input locks are
   implemented. The deployment lock re-verifies the original policy/signatures;
   it does not trust an unsigned approval JSON or possess deploy/signing access.
-- The current backend suite passes 80 suites / 755 tests, including the
+- The current backend suite passes 81 suites / 767 tests, including the
   unwired durable-ingestion and corrected raw-evidence reconciliation slices.
   Both npm dependency audits reported zero vulnerabilities.
 
@@ -115,10 +115,18 @@ block ID recorded by finalized masterchain state, but keeps
 `shardBlockProofVerified: false`, authorization false and verification evidence
 null. See `ADR-008-TON-FINALIZED-SHARD-DESCRIPTOR.md`.
 
-The seven proof-kernel suites currently pass 113 focused tests.
+The finalized descriptor can now authenticate the exact shard block and its
+state-update commitment. The verifier binds the local `Block`/`BlockInfo` parse
+to the network, workchain, shard, sequence, time and split/merge metadata,
+checks parent/child predecessor relationships, and exposes the committed old
+and new shard-state hashes. It deliberately keeps
+`shardStateProofVerified: false`, authorization false and verification evidence
+null. See `ADR-009-TON-FINALIZED-SHARD-BLOCK.md`.
 
-Complete the proof pipeline before lifecycle work: verify the masterchain block
-proof, shard inclusion and account-state proof; locally execute
+The eight proof-kernel suites currently pass 125 focused tests.
+
+Complete the proof pipeline before lifecycle work: verify the canonical
+shard-state/account and transaction-inclusion proofs; locally execute
 `get_wallet_address` against the proven master state; define a separate
 domain-separated verification commitment; and require an audited threshold or
 multisig initializer approval. The structural hash must never be used as the

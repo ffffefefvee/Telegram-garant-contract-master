@@ -254,6 +254,18 @@ enable any production flag.
   `shardBlockProofVerified: false`, authorization false and verification
   evidence null and remains pure/unwired. See
   `ADR-008-TON-FINALIZED-SHARD-DESCRIPTOR.md`.
+- The finalized descriptor can now authenticate its exact shard-block Merkle
+  proof. The verifier binds the local `Block`/`BlockInfo` parse to network,
+  workchain, shard, sequence, time and split/merge metadata, checks ordinary,
+  parent and child predecessor relationships, and extracts the old/new state
+  hashes committed by the block's exotic `MerkleUpdate`. Its 12 tests cover
+  ordinary/split/merge paths, root substitution, identity/metadata drift,
+  invalid ancestry, state-update type and provenance failure. The result sets
+  `shardBlockFinalityProven: true`, but keeps `shardStateProofVerified: false`,
+  authorization false and verification evidence null and remains pure/unwired.
+  The eight proof-kernel suites pass 125 focused tests and the full backend
+  passes 81 suites / 767 tests. See
+  `ADR-009-TON-FINALIZED-SHARD-BLOCK.md`.
 
 The current local development code-cell hash is
 `1c4ce3fe43382378c3b472d64f8237a19c4e08c696149ebaf5bec501debe3da6`.

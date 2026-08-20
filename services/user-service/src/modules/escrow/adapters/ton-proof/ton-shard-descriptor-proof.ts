@@ -43,6 +43,7 @@ export interface TonProvenShardDescriptor {
   masterchainBlock: TonProofBlockId;
   masterchainStateHash: string;
   masterchainStateProofRootHash: string;
+  networkGlobalId: number;
   workchain: 0;
   shard: string;
   shardPrefixBits: number;
@@ -216,6 +217,7 @@ function parseDescriptor(
   | "masterchainBlock"
   | "masterchainStateHash"
   | "masterchainStateProofRootHash"
+  | "networkGlobalId"
 > {
   const tag = source.loadUint(4);
   if (tag !== SHARD_DESCRIPTOR_TAG && tag !== SHARD_DESCRIPTOR_NEW_TAG) {
@@ -404,6 +406,7 @@ export function verifyTonShardDescriptorProof(
     masterchainBlock: { ...chain.targetBlock },
     masterchainStateHash: header.newStateHash,
     masterchainStateProofRootHash: stateProof.rootHash,
+    networkGlobalId: chain.networkGlobalId,
     ...descriptor,
   };
 }
