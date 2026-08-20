@@ -1,9 +1,12 @@
 # Native TON escrow
 
 This package contains isolated per-deal TON escrows. `TonNativeEscrow` provides
-the native-TON lifecycle. `TonJettonEscrow` currently provides only the first
-funding-authentication slice for an allowlisted Jetton; it is not a complete or
-deployable real-funds lifecycle. Polygon remains a separate settlement option;
+the native-TON lifecycle. `TonJettonEscrow` currently provides only a two-phase,
+funding-authentication slice for an allowlisted Jetton. StateInit commits the
+master and wallet-code hash without precommitting the owner wallet; a distinct
+initializer must later seal independently verified canonical-wallet evidence
+before funding is possible. This is not a complete or deployable real-funds
+lifecycle. Polygon remains a separate settlement option;
 this package does not bridge, swap, or share custody with the Polygon contract.
 
 The implementation follows `docs/ADR-001-NATIVE-TON-ESCROW.md`. Tolk source is
@@ -40,7 +43,11 @@ acton test tests-acton --mutate --mutate-contract TonJettonEscrow --mutation-lev
 The shared gas baseline is committed. Critical/major mutation gating requires
 100% for both the complete native contract and the funding-only Jetton contract.
 That test score does not replace an external review or make the incomplete
-Jetton lifecycle releasable. The generated Acton wrappers, dependency cache
+Jetton lifecycle releasable. The initializer is a money-critical authority:
+the contract cannot independently execute the master getter, so the release
+workflow must verify the wallet address, owner, master and pinned code hash
+from finalized independent evidence before threshold approval and sealing.
+The generated Acton wrappers, dependency cache
 and build outputs are intentionally ignored.
 
 Generated build artifacts are intentionally ignored. `npm run build` records
