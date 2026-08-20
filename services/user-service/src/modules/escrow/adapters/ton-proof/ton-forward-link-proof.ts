@@ -18,7 +18,7 @@ const BLOCK_INFO_TAG = 0x9bc7a987;
 const MASTERCHAIN_EXTRA_TAG = 0xcca5;
 const MASTERCHAIN_SHARD = "-9223372036854775808";
 
-type ConfigLookup =
+export type TonAuthenticatedDictionaryLookup =
   | { status: "present"; value: Cell }
   | { status: "absent" }
   | { status: "unproven" };
@@ -124,25 +124,20 @@ function validateDictionaryNodeShape(
   return { left, right };
 }
 
-export function lookupTonConfigParameter(
+export function lookupTonHashmapRef(
   root: Cell,
-  parameter: number,
-): ConfigLookup {
-  if (
-    !Number.isSafeInteger(parameter) ||
-    parameter < 0 ||
-    parameter > 0x7fffffff
-  ) {
-    reject("configuration parameter is outside int32");
+  key: string,
+): TonAuthenticatedDictionaryLookup {
+  if (!/^[01]+$/.test(key) || key.length > 1023) {
+    reject("dictionary key bits are invalid");
   }
-  const key = parameter.toString(2).padStart(32, "0");
   let node = root;
   let offset = 0;
-  let remaining = 32;
+  let remaining = key.length;
   for (;;) {
     if (node.type === CellType.PrunedBranch) return { status: "unproven" };
     if (node.type !== CellType.Ordinary) {
-      reject("configuration dictionary path contains a non-ordinary cell");
+      reject("authenticated dictionary path contains a non-ordinary cell");
     }
     try {
       const source = node.beginParse();
@@ -166,10 +161,24 @@ export function lookupTonConfigParameter(
     } catch (error) {
       if (error instanceof TonForwardLinkProofError) throw error;
       reject(
-        `configuration dictionary is malformed: ${error instanceof Error ? error.message : "unknown error"}`,
+        `authenticated dictionary is malformed: ${error instanceof Error ? error.message : "unknown error"}`,
       );
     }
   }
+}
+
+export function lookupTonConfigParameter(
+  root: Cell,
+  parameter: number,
+): TonAuthenticatedDictionaryLookup {
+  if (
+    !Number.isSafeInteger(parameter) ||
+    parameter < 0 ||
+    parameter > 0x7fffffff
+  ) {
+    reject("configuration parameter is outside int32");
+  }
+  return lookupTonHashmapRef(root, parameter.toString(2).padStart(32, "0"));
 }
 
 interface ParsedForwardHeader {
@@ -324,7 +333,10 @@ function extractKeyBlockConfig(extraCell: Cell): {
   }
 }
 
-function requirePresent(lookup: ConfigLookup, parameter: number): Cell {
+function requirePresent(
+  lookup: TonAuthenticatedDictionaryLookup,
+  parameter: number,
+): Cell {
   if (lookup.status === "present") return lookup.value;
   if (lookup.status === "unproven") {
     reject(`configuration parameter ${parameter} is hidden by a pruned branch`);
