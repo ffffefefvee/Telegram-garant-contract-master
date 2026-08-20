@@ -97,7 +97,7 @@ interface BocHeader {
   totalCellSize: number;
 }
 
-interface ParsedProof {
+export interface TonParsedMerkleProof {
   bocHash: string;
   rootHash: string;
   virtualRootHash: string;
@@ -532,12 +532,17 @@ function decodeCanonicalBase64(
   return buffer;
 }
 
-function parseMerkleProof(
-  value: unknown,
+export function parseTonMerkleProofBoc(
+  buffer: Buffer,
   limits: TonProofResourceLimits,
   label: string,
-): ParsedProof {
-  const buffer = decodeCanonicalBase64(value, limits.maxBocBytes, label);
+): TonParsedMerkleProof {
+  if (buffer.length === 0 || buffer.length > limits.maxBocBytes) {
+    throw new EnvelopeValidationError(
+      "INVALID_PROOF_BUNDLE",
+      `${label} exceeds the byte limit`,
+    );
+  }
   let header: BocHeader;
   let roots: Cell[];
   try {
@@ -595,11 +600,26 @@ function parseMerkleProof(
   };
 }
 
+function parseMerkleProof(
+  value: unknown,
+  limits: TonProofResourceLimits,
+  label: string,
+): TonParsedMerkleProof {
+  return parseTonMerkleProofBoc(
+    decodeCanonicalBase64(value, limits.maxBocBytes, label),
+    limits,
+    label,
+  );
+}
+
 function validateBundle(
   value: unknown,
   config: TonTrustedNetworkConfig,
   nowUnix: number,
-): { bundle: TonProofBundle; parsedProofs: Record<string, ParsedProof> } {
+): {
+  bundle: TonProofBundle;
+  parsedProofs: Record<string, TonParsedMerkleProof>;
+} {
   const reasonCode = "INVALID_PROOF_BUNDLE" as const;
   requireExactKeys(
     value,
@@ -647,7 +667,7 @@ function validateBundle(
   }
   requireExactKeys(value.proofs, PROOF_KEYS, "proofs", reasonCode);
   const proofs = {} as TonRawProofs;
-  const parsedProofs: Record<string, ParsedProof> = {};
+  const parsedProofs: Record<string, TonParsedMerkleProof> = {};
   for (const key of PROOF_KEYS) {
     const raw = value.proofs[key];
     if (typeof raw !== "string") {
@@ -715,7 +735,7 @@ function validateBundle(
 function structuralCommitment(
   config: TonTrustedNetworkConfig,
   bundle: TonProofBundle,
-  parsedProofs: Record<string, ParsedProof>,
+  parsedProofs: Record<string, TonParsedMerkleProof>,
 ): string {
   const commitment = {
     domain: "telegram-garant/ton-proof-envelope/v1",

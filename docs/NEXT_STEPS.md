@@ -27,7 +27,7 @@ must let eligible users choose TON or Polygon.
 - Release candidate, Ed25519 threshold approval and deployment-input locks are
   implemented. The deployment lock re-verifies the original policy/signatures;
   it does not trust an unsigned approval JSON or possess deploy/signing access.
-- The current backend suite passes 75 suites / 685 tests, including the
+- The current backend suite passes 78 suites / 739 tests, including the
   unwired durable-ingestion and corrected raw-evidence reconciliation slices.
   Both npm dependency audits reported zero vulnerabilities.
 
@@ -87,7 +87,18 @@ Merkle-proven, so every artifact keeps `sourceConfigProven: false`,
 `validatorSetProven: false` and `finalityProven: false`. See
 `ADR-005-TON-VALIDATOR-SET-DERIVATION.md`.
 
-The four proof-kernel suites currently pass 81 focused tests.
+One ordinary forward link can now authenticate those inputs. The strict
+`config_proof` binds the trusted source key block and its configuration
+dictionary; the independent `dest_proof` binds the destination header.
+Authenticated Patricia lookups distinguish presence, proven absence and a
+target path hidden by pruning, select parameter 35 before 34, and allow
+parameter-28 defaults only after absence is proven. The derived set must match
+the destination header before its weighted signatures are accepted. This
+upgrades proof and validator provenance for one link, but deliberately keeps
+`finalityProven: false`; complete checkpoint-chain validation is still absent.
+See `ADR-006-TON-FORWARD-LINK-CONFIG-PROOF.md`.
+
+The five proof-kernel suites currently pass 97 focused tests.
 
 Complete the proof pipeline before lifecycle work: verify the masterchain block
 proof, shard inclusion and account-state proof; locally execute

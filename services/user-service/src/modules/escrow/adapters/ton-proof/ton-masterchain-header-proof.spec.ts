@@ -2,6 +2,8 @@ import {
   beginCell,
   Cell,
   convertToMerkleProof,
+  Dictionary,
+  generateMerkleProofDirect,
   storeShardIdent,
 } from "@ton/core";
 import {
@@ -26,6 +28,7 @@ interface FixtureOverrides {
   splitFlag?: boolean;
   notMaster?: boolean;
   stateUpdate?: Cell;
+  valueFlow?: Cell;
 }
 
 function extBlockRef(seqno: number, digit: string): Cell {
@@ -91,7 +94,7 @@ function fixture(overrides: FixtureOverrides = {}) {
     .storeUint(0x11ef55aa, 32)
     .storeInt(overrides.globalId ?? GLOBAL_ID, 32)
     .storeRef(info.endCell())
-    .storeRef(beginCell().storeUint(0, 1).endCell())
+    .storeRef(overrides.valueFlow ?? beginCell().storeUint(0, 1).endCell())
     .storeRef(overrides.stateUpdate ?? merkleUpdate())
     .storeRef(beginCell().storeUint(0, 1).endCell())
     .endCell();
@@ -103,7 +106,7 @@ function fixture(overrides: FixtureOverrides = {}) {
       workchain: -1,
       shard: MC_SHARD,
       seqno: 101,
-      rootHash: block.hash().toString("hex"),
+      rootHash: block.hash(0).toString("hex"),
       fileHash: "f".repeat(64),
     },
   };
@@ -173,6 +176,34 @@ describe("TON masterchain header Merkle proof", () => {
     expect(() =>
       verifyTonMasterchainHeaderCell(proof.refs[0], expectation),
     ).toThrow("rootHash");
+  });
+
+  it("uses the virtual level-zero hash when unrelated proof branches are pruned", () => {
+    const values = Dictionary.empty(
+      Dictionary.Keys.Uint(8),
+      Dictionary.Values.Cell(),
+    );
+    values.set(1, beginCell().storeUint(1, 1).endCell());
+    values.set(2, beginCell().storeUint(2, 2).endCell());
+    const full = beginCell().storeDictDirect(values).endCell();
+    const pruned = generateMerkleProofDirect(
+      values,
+      [1],
+      Dictionary.Keys.Uint(8),
+    );
+    const original = fixture({ valueFlow: full });
+    const merkelized = fixture({ valueFlow: pruned });
+    merkelized.expectation.targetBlock.rootHash = original.block
+      .hash(0)
+      .toString("hex");
+    expect(merkelized.block.hash(0)).toEqual(original.block.hash(0));
+    expect(merkelized.block.hash()).not.toEqual(original.block.hash(0));
+    expect(
+      verifyTonMasterchainHeaderCell(
+        merkelized.proof.refs[0],
+        merkelized.expectation,
+      ).rootHashVerified,
+    ).toBe(true);
   });
 
   it("rejects an ordinary state update", () => {
