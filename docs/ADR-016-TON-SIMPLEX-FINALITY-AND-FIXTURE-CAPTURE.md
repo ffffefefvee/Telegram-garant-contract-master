@@ -63,10 +63,11 @@ unknown constructors, ordinary/Simplex domain separation, authenticated
 forward-link verification and a complete two-link Simplex checkpoint chain.
 
 These tests establish algorithm and composition invariants, not real-network
-compatibility. Phase 1 exit still requires immutable captured mainnet and
-testnet corpora, strict manifest validation, offline replay with providers and
-network access removed, per-layer one-bit corruption tests, and independent
-review of the proof and TVM-executor policy.
+compatibility. Strict manifest validation and provider-free replay are now
+implemented in `ADR-017-TON-OFFLINE-PROOF-FIXTURE-REPLAY.md`. Phase 1 exit still
+requires immutable captured mainnet and testnet corpora, successful replay of
+both, cryptographic per-layer one-bit corruption tests, and independent review
+of the proof and TVM-executor policy.
 
 ## Migration and rollback
 

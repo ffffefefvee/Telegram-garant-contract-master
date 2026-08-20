@@ -256,9 +256,17 @@ enable any production flag.
   with a content-hashed immutable manifest. The compatibility codec is not a
   verifier; all responses must pass the local proof kernel. Real mainnet and
   testnet corpora, strict offline manifest replay, bit-flip vectors and
-  independent review remain Phase 1 exit gates. The full backend passes 88
-  suites / 912 tests. See
+  independent review remain Phase 1 exit gates. See
   `ADR-016-TON-SIMPLEX-FINALITY-AND-FIXTURE-CAPTURE.md`.
+- Captured fixture directories now pass an exact schema, pinned
+  network/zerostate, resource and 18-artifact content-hash boundary before any
+  proof parser runs. A provider-free replay composer then re-executes
+  checkpoint/header/shard/account/local-getter/wallet/transaction verification
+  and remains non-authorizing. Its tests include a one-bit mutation for every
+  artifact class and authenticated supplemental ShardHashes transport. Real
+  immutable mainnet/testnet corpora and successful replay remain required. See
+  `ADR-017-TON-OFFLINE-PROOF-FIXTURE-REPLAY.md`. The full backend passes 90
+  suites / 943 tests.
 - The finalized masterchain target can now authenticate its state and exact
   basechain `ShardHashes` descriptor. The verifier binds the state proof to the
   header state-update hash, proves the workchain Patricia path, enforces exact

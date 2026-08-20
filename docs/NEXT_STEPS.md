@@ -27,7 +27,7 @@ must let eligible users choose TON or Polygon.
 - Release candidate, Ed25519 threshold approval and deployment-input locks are
   implemented. The deployment lock re-verifies the original policy/signatures;
   it does not trust an unsigned approval JSON or possess deploy/signing access.
-- The current backend suite passes 88 suites / 912 tests, including the
+- The current backend suite passes 90 suites / 943 tests, including the
   unwired durable-ingestion and corrected raw-evidence reconciliation slices.
   Both npm dependency audits reported zero vulnerabilities.
 
@@ -180,16 +180,18 @@ payload before the pure result can express authorization. No key custody,
 message composition, broadcast, persistence or adapter wiring is included.
 See `ADR-015-TON-VERIFICATION-EVIDENCE-AND-THRESHOLD-APPROVAL.md`.
 
-The fourteen proof-kernel/evidence suites currently pass 247 focused tests;
+The sixteen proof-kernel/evidence suites currently pass 278 focused tests;
 finalized reconciliation composition adds 23 adversarial tests.
 
 Complete the proof pipeline before lifecycle work: the pinned capture tool now
-understands ordinary and Simplex LiteServer responses, but immutable mainnet
-and testnet corpora, strict manifest validation, offline replay, the per-layer
+understands ordinary and Simplex LiteServer responses, and strict manifest
+validation plus provider-free full replay are implemented. Immutable mainnet
+and testnet corpora, successful replay of both, the cryptographic per-layer
 bit-flip matrix and independent proof/executor-policy review remain required.
 The separate domain-separated verification commitment and threshold approval
 boundary exist but remain pure and unwired. The structural or local execution
 transcript hash must never be used as the contract's seal evidence.
+See `ADR-017-TON-OFFLINE-PROOF-FIXTURE-REPLAY.md`.
 The initializer and reconciliation authority are money-critical and must remain
 distinct from every transaction role.
 

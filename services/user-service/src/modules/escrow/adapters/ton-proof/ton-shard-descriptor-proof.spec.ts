@@ -96,6 +96,7 @@ function pruned(cell: Cell): Cell {
 
 function masterchainState(input?: {
   tree?: Cell;
+  shardHashesRoot?: Cell;
   seqno?: number;
   generatedAtUnix?: number;
   globalId?: number;
@@ -108,10 +109,13 @@ function masterchainState(input?: {
     Dictionary.Values.Cell(),
   );
   shardHashes.set(0, tree);
+  const shardHashesRoot = input?.shardHashesRoot ??
+    beginCell().storeDictDirect(shardHashes).endCell();
   const dummy = beginCell().storeBit(false).endCell();
   const extra = beginCell()
     .storeUint(0xcc26, 16)
-    .storeDict(shardHashes)
+    .storeBit(true)
+    .storeRef(shardHashesRoot)
     .storeBuffer(Buffer.alloc(32, 0xc1))
     .storeRef(dummy)
     .storeRef(dummy)
@@ -246,6 +250,39 @@ describe("TON finalized shard-descriptor proof", () => {
       nextValidatorShard: MC_SHARD,
       minimumReferencedMasterchainSeqno: 100,
       futureSplitMerge: { kind: "none" },
+    });
+  });
+
+  it("authenticates a separately transported full ShardHashes dictionary by its pruned state commitment", () => {
+    const tree = leaf(descriptor());
+    const dictionary = Dictionary.empty(
+      Dictionary.Keys.Int(32),
+      Dictionary.Values.Cell(),
+    );
+    dictionary.set(0, tree);
+    const fullRoot = beginCell().storeDictDirect(dictionary).endCell();
+    const fullState = masterchainState({ tree, shardHashesRoot: fullRoot });
+    const prunedState = masterchainState({
+      tree,
+      shardHashesRoot: pruned(fullRoot),
+    });
+    expect(prunedState.hash(0)).toEqual(fullState.hash(0));
+    const supplemental = beginCell()
+      .storeBit(true)
+      .storeRef(fullRoot)
+      .endCell()
+      .toBoc({ idx: false, crc32: false });
+    expect(
+      verifyTonShardDescriptorProof(
+        chain(),
+        header(fullState),
+        proof(prunedState),
+        { workchain: 0, shard: MC_SHARD, limits },
+        supplemental,
+      ),
+    ).toMatchObject({
+      shardDictionaryInclusionVerified: true,
+      block: { seqno: 77 },
     });
   });
 

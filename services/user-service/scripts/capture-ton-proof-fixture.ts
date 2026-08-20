@@ -46,10 +46,18 @@ const NETWORKS = {
   mainnet: {
     globalId: -239,
     configUrl: "https://ton.org/global.config.json",
+    zeroState: {
+      rootHash: "17a3a92992aabea785a7a090985a265cd31f323d849da51239737e321fb05569",
+      fileHash: "5e994fcf4d425c0a6ce6a792594b7173205f740a39cd56f537defd28b48a0f6e",
+    },
   },
   testnet: {
     globalId: -3,
     configUrl: "https://ton.org/testnet-global.config.json",
+    zeroState: {
+      rootHash: "823f81f306ff02694f935cf5021548e3ce2b86b529812af6a12148879e95a128",
+      fileHash: "67e20ac184b9e039a62667acc3f9c00f90f359a76738233379efa47604980ce8",
+    },
   },
 } as const;
 
@@ -291,6 +299,12 @@ async function capture(args: CaptureArguments): Promise<void> {
     ) {
       fail("LiteServer masterchain identity does not match official config");
     }
+    if (
+      masterchain.init.rootHash.toString("hex") !== network.zeroState.rootHash ||
+      masterchain.init.fileHash.toString("hex") !== network.zeroState.fileHash
+    ) {
+      fail("official config zerostate does not match the pinned network identity");
+    }
     stage(`capturing masterchain ${masterchain.last.seqno}`);
     const targetHeader = await client.getBlockHeader(masterchain.last);
     const trustedSeqno = previousKeyBlockSeqno(targetHeader.headerProof);
@@ -330,6 +344,18 @@ async function capture(args: CaptureArguments): Promise<void> {
     ]);
     if (!masterAccount.state || !walletAccount.state) {
       fail("master and wallet accounts must both be active");
+    }
+    const masterStorage = masterAccount.state.storage.state;
+    const walletStorage = walletAccount.state.storage.state;
+    if (
+      masterStorage.type !== "active" ||
+      !masterStorage.state.code ||
+      !masterStorage.state.data ||
+      walletStorage.type !== "active" ||
+      !walletStorage.state.code ||
+      !walletStorage.state.data
+    ) {
+      fail("master and wallet accounts must have active code and data");
     }
     stage("captured active master and wallet account proofs");
     const [masterShardHeader, walletShardHeader] = await Promise.all([
@@ -409,34 +435,35 @@ async function capture(args: CaptureArguments): Promise<void> {
       },
       zeroState: blockId({
         kind: "tonNode.blockIdExt",
-        workchain: config.validator.zero_state.workchain,
-        shard: config.validator.zero_state.shard.toString(),
-        seqno: config.validator.zero_state.seqno,
-        rootHash: Buffer.from(config.validator.zero_state.root_hash, "base64"),
-        fileHash: Buffer.from(config.validator.zero_state.file_hash, "base64"),
+        workchain: -1,
+        shard: MASTERCHAIN_SHARD,
+        seqno: 0,
+        rootHash: Buffer.from(network.zeroState.rootHash, "hex"),
+        fileHash: Buffer.from(network.zeroState.fileHash, "hex"),
       }),
       trustedKeyBlock: blockId(trustedLookup.id),
       targetMasterchainBlock: blockId(masterchain.last),
       masterAddress: args.masterAddress.toRawString(),
       ownerAddress: args.ownerAddress.toRawString(),
       walletAddress: args.walletAddress.toRawString(),
+      walletCodeHash: walletStorage.state.code.hash(0).toString("hex"),
       masterShardBlock: blockId(masterAccount.shardBlock),
       walletShardBlock: blockId(walletAccount.shardBlock),
       masterLastTransaction: masterAccount.lastTx
         ? {
-            lt: masterAccount.lastTx.lt,
+            lt: masterAccount.lastTx.lt.toString(),
             hash: masterAccount.lastTx.hash.toString(16).padStart(64, "0"),
           }
         : null,
       walletLastTransaction: walletAccount.lastTx
         ? {
-            lt: walletAccount.lastTx.lt,
+            lt: walletAccount.lastTx.lt.toString(),
             hash: walletAccount.lastTx.hash.toString(16).padStart(64, "0"),
           }
         : null,
       selectedShardTransaction: {
         accountAddress: transactionAddress.toRawString(),
-        lt: selected.lt,
+        lt: selected.lt.toString(),
         hash: selected.hash.toString("hex"),
       },
       artifacts,
