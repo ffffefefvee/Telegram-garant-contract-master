@@ -110,10 +110,11 @@ persistence, ledger/FSM updates or payout-state mutation.
 
 The isolated proof kernel can now bind a complete locally decoded transaction
 BOC through the finalized shard block's canonical account-block and transaction
-augmented dictionaries. This primitive remains test-only and fixes settlement
-authorization false. The reconciliation workflow must compose one such proof
-for every owner/sender/recipient transaction and bind all proven account states
-before it may emit a verification commitment.
+augmented dictionaries. A separate pure composer now binds one such proof for
+every owner/sender/recipient transaction, their structural block fingerprints,
+and the sender/recipient pre/post account hashes. It may report reconciliation
+finality, but still fixes settlement authorization false and verification
+evidence null. Both modules remain test-only.
 
 The v2 reconciliation suite has 27 raw-BOC and adversarial tests. The combined
 reconciliation, funding, notification and payout-state focused run passes 4
@@ -125,8 +126,8 @@ requirement.
 These slices are intentionally narrower than production settlement. The next
 caller/integration must additionally provide:
 
-- locally verified transaction and account-state proofs composed for every
-  reconciliation participant;
+- captured mainnet/testnet transaction and account-state proof fixtures with
+  offline replay and bit-corruption coverage;
 - durable transaction/message identity, replay and evidence-conflict handling;
 - immutable `TonJettonEscrow` code/config/state commitments;
 - a two-source, finalized canonical-wallet seal verifier and threshold-approved
