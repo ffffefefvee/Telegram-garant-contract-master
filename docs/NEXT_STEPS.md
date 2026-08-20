@@ -27,7 +27,7 @@ must let eligible users choose TON or Polygon.
 - Release candidate, Ed25519 threshold approval and deployment-input locks are
   implemented. The deployment lock re-verifies the original policy/signatures;
   it does not trust an unsigned approval JSON or possess deploy/signing access.
-- The current backend suite passes 85 suites / 843 tests, including the
+- The current backend suite passes 86 suites / 861 tests, including the
   unwired durable-ingestion and corrected raw-evidence reconciliation slices.
   Both npm dependency audits reported zero vulnerabilities.
 
@@ -151,10 +151,17 @@ allowlisted master, active pinned code and embedded wallet code. It emits only
 an audit composition hash and keeps sealing authorization false and verification
 evidence null. See `ADR-012-TON-PROVEN-CANONICAL-WALLET-COMPOSITION.md`.
 
-The twelve proof-kernel suites currently pass 201 focused tests.
+Finalized shard blocks can now prove a complete transaction through the
+canonical `BlockExtra`, `ShardAccountBlocks`, `AccountBlock` and transaction
+augmented dictionaries. A complete transaction BOC is locally decoded and must
+match the reference committed by the proof; unrelated pruning is allowed, while
+an unproven target path fails closed. The result keeps settlement authorization
+false and remains unwired. See `ADR-013-TON-FINALIZED-TRANSACTION-INCLUSION.md`.
 
-Complete the proof pipeline before lifecycle work: prove transaction inclusion;
-capture
+The thirteen proof-kernel suites currently pass 219 focused tests.
+
+Complete the proof pipeline before lifecycle work: compose proven transactions
+and account states into every payout reconciliation leg; capture
 offline-replayable mainnet/testnet proofs and validate the local executor policy;
 define a separate domain-separated verification commitment; and require an
 audited threshold or multisig initializer approval. The structural or local

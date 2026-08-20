@@ -108,6 +108,13 @@ remaining requirement `VERIFIED_MASTERCHAIN_SHARD_INCLUSION`. Malformed input
 also fails closed without throwing. The module performs no provider calls,
 persistence, ledger/FSM updates or payout-state mutation.
 
+The isolated proof kernel can now bind a complete locally decoded transaction
+BOC through the finalized shard block's canonical account-block and transaction
+augmented dictionaries. This primitive remains test-only and fixes settlement
+authorization false. The reconciliation workflow must compose one such proof
+for every owner/sender/recipient transaction and bind all proven account states
+before it may emit a verification commitment.
+
 The v2 reconciliation suite has 27 raw-BOC and adversarial tests. The combined
 reconciliation, funding, notification and payout-state focused run passes 4
 suites / 90 tests. These passing tests do not satisfy the missing finality proof
@@ -118,7 +125,8 @@ requirement.
 These slices are intentionally narrower than production settlement. The next
 caller/integration must additionally provide:
 
-- locally verified shard-to-finalized-masterchain inclusion proofs;
+- locally verified transaction and account-state proofs composed for every
+  reconciliation participant;
 - durable transaction/message identity, replay and evidence-conflict handling;
 - immutable `TonJettonEscrow` code/config/state commitments;
 - a two-source, finalized canonical-wallet seal verifier and threshold-approved
