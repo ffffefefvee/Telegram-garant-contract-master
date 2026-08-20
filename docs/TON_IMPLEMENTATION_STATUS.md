@@ -1,6 +1,6 @@
 # Native TON implementation status
 
-Date: 2026-08-18
+Date: 2026-08-20
 
 Polygon remains a first-class, independent settlement option. This status is
 only for the native TON implementation and does not change Polygon behavior or
@@ -22,8 +22,8 @@ enable any production flag.
   SHA-256.
 - Backend release-artifact verification against an operator-approved exact-file
   digest and code-cell hash.
-- Sixty `contracts-ton` Jest tests plus twenty-three authoritative Acton tests
-  (fourteen native and nine funding-only Jetton), including 64 deterministic
+- Sixty-six `contracts-ton` Jest tests plus twenty-six authoritative Acton tests
+  (fourteen native and twelve funding-only Jetton), including 64 deterministic
   fuzz runs, sampled
   award-conservation properties, explicit participant-path fee ceilings,
   maximum encodable economics, outbound-action rollback and cross-build
@@ -138,13 +138,19 @@ enable any production flag.
   masters, wrong wallet/owner/destination/buyer/query/amount/payload, bounced
   notifications, trailing data and malformed BOCs. It is not yet wired to a
   deal or enabled for settlement.
-- A separate funding-only `TonJettonEscrow` now commits the canonical wallet,
-  master, buyer, exact amount/query/payload and funding deadline and accepts one
-  matching TEP-74 notification. Nine authoritative Acton tests cover canonical
-  inline/reference funding, replay, fake-wallet, field mismatch, malformed,
-  bounced, late, invalid-configuration and impossible-state paths. Its
-  critical/major mutation score is 100% (71/71 killed) and CI enforces that
-  floor. This is not yet a complete release/refund/dispute/payout contract.
+- A separate funding-only `TonJettonEscrow` now avoids the canonical-wallet
+  StateInit fixed-point: its address is derived from configuration containing
+  the allowlisted master and pinned wallet-code hash, but not the wallet. A
+  distinct immutable initializer may seal one independently verified wallet
+  and evidence commitment; funding is impossible before sealing and afterward
+  accepts one matching TEP-74 notification only from that wallet. Twelve
+  authoritative Acton tests cover the two-phase bootstrap, identity separation,
+  seal replay/query/config boundaries, canonical inline/reference funding,
+  fake-wallet, malformed, bounced, late and impossible-state paths. The
+  critical/major mutation score is 100% (145/145 killed), with a committed
+  zero-drift 13-opcode gas baseline. This is not yet a complete
+  release/refund/dispute/payout contract, and the initializer workflow still
+  needs finalized independent wallet proof and threshold approval.
 - A pure finalized Jetton funding-envelope validator now composes canonical
   wallet and notification evidence with durable transaction identity,
   masterchain inclusion, explicit successful non-emulated execution, exact
@@ -154,6 +160,33 @@ enable any production flag.
   buyer/seller/treasury legs, assigns unique query IDs and idempotency keys,
   matches exact transaction observations, and permits retry only after a
   recorded bounce. It does not yet send transfers or reconcile balances.
+- The corrected pure Jetton payout reconciliation v2 is a raw-evidence
+  structural precheck, not a finalized-settlement validator. It locally parses
+  raw transaction BOCs and embedded TEP-74 message cells, binds an immutable
+  settlement/leg/attempt and exact owner transaction, supports a complete
+  committed multi-leg owner outbox, requires the exact notification/optional
+  excess semantics, and binds raw pre/post `ShardAccount` cells to transaction
+  state updates and locally decoded wallet code/data/balance. Two expected
+  collector IDs map to distinct immutable operator identities, and their
+  consensus fingerprint covers transaction, block-metadata, message and state
+  identities. Malformed input fails closed without throwing.
+- Full shard-to-finalized-masterchain inclusion verification is not yet
+  implemented. Therefore even a structurally valid, agreed observation returns
+  `accepted: false`, `settlementAuthorized: false` and
+  `MASTERCHAIN_PROOF_REQUIRED`. The precheck remains pure and unwired and cannot
+  update payout state, ledger, deal state or adapter readiness. Its v2 suite
+  passes 27 tests; the combined reconciliation, funding, notification and
+  payout-state focused run passes 4 suites / 90 tests.
+- A separate pure canonical-wallet seal preflight validates raw getter cells
+  and active wallet `ShardAccount` evidence from two configured, independently
+  identified collectors. It binds the exact network, escrow owner, allowlisted
+  master, candidate wallet, pinned code hash and block identities. Its 32 tests
+  cover malformed/trailing data, identity and network drift, source
+  disagreement, zero commitments, wallet data/code mismatches and transaction
+  history integrity. Because proof inclusion and local getter execution are
+  still absent, it always returns `sealingAuthorized: false`, exposes only an
+  audit-safe `structuralEvidenceHash`, and keeps the contract-ready
+  `verificationEvidenceHash` null.
 
 The current local development code-cell hash is
 `1c4ce3fe43382378c3b472d64f8237a19c4e08c696149ebaf5bec501debe3da6`.
@@ -194,16 +227,21 @@ still classified as a legacy migration path, not native TON escrow.
    governance and add signer recovery drills. Participant and resolution
    actions plus finalized
    award ingestion are implemented behind the gate.
-6. Extend the funding-only `TonJettonEscrow` into an audited lifecycle and wire
+6. Finish the canonical-wallet seal workflow first: independently verify the
+   master-derived wallet, raw active wallet code/data, owner and master against
+   finalized proofs; bind a domain-separated evidence commitment; require an
+   audited threshold initializer approval; and update deterministic config,
+   StateInit and seal-message generation for the two-phase ABI.
+7. Extend the funding-only `TonJettonEscrow` into an audited lifecycle and wire
    the finalized funding validator into durable, replay-safe ingestion. Add
    verified post-transaction wallet balance deltas, outbound transfers/excess,
    on-chain bounce handling and recovery reconciliation. Keep expanding the
    dedicated Jetton mutation/test gate with each lifecycle addition. The current
    isolated contract, envelope and recovery model do not imply Jetton readiness.
-7. Deploy to testnet, run release/refund/dispute/recovery drills, obtain an
+8. Deploy to testnet, run release/refund/dispute/recovery drills, obtain an
    independent contract/backend funds-flow audit, remediate, and only then run
    a value-capped closed beta.
-8. Design the Mini App and website against the stabilized transaction/status
+9. Design the Mini App and website against the stabilized transaction/status
    contracts in parallel. The Mini App focuses on TON; the website offers TON
    and Polygon according to channel policy.
 

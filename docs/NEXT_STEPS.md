@@ -1,6 +1,6 @@
 # Implementation handoff and remaining work
 
-Date: 2026-08-18
+Date: 2026-08-20
 
 This is the execution handoff for the next development session. Confirmed
 product scope remains in `PRODUCT_PLAN.md`. Polygon remains a first-class
@@ -13,9 +13,11 @@ must let eligible users choose TON or Polygon.
   slices exist, but `TonEscrowAdapter.isReady()` is deliberately hard-disabled.
 - The native contract passed 14 authoritative Acton tests, 64 deterministic
   fuzz runs, zero-drift gas checks and 110/110 critical/major mutations.
-- The funding-only Jetton contract authenticates one exact TEP-74 notification.
-  It passed 9 authoritative tests, zero-drift gas checks and 71/71
-  critical/major mutations. It is not yet a complete escrow lifecycle.
+- The funding-only Jetton contract now removes the canonical-wallet StateInit
+  circularity through one-time wallet sealing and authenticates one exact
+  TEP-74 notification only after sealing. It passed 12 authoritative tests,
+  zero-drift gas checks and 145/145 critical/major mutations. It is not yet a
+  complete escrow lifecycle.
 - Canonical Jetton wallet/notification and finalized funding-envelope
   validators exist, together with a pure payout/retry state model.
 - Durable Jetton event storage is implemented but intentionally unwired. It
@@ -25,38 +27,59 @@ must let eligible users choose TON or Polygon.
 - Release candidate, Ed25519 threshold approval and deployment-input locks are
   implemented. The deployment lock re-verifies the original policy/signatures;
   it does not trust an unsigned approval JSON or possess deploy/signing access.
-- The current backend suite passes 71 suites / 583 tests, including the final
-  unwired durable-ingestion slice. Both npm dependency audits reported zero
-  vulnerabilities.
+- The current backend suite passes 73 suites / 642 tests, including the
+  unwired durable-ingestion and corrected raw-evidence reconciliation slices.
+  Both npm dependency audits reported zero vulnerabilities.
 
 None of these statements authorizes real funds or public launch.
 
 ## P0 — complete the money path
 
-### 1. Finish Jetton reconciliation
+### 1. Complete the canonical-wallet seal workflow
 
-Implement the interrupted pure validator in a new
-`ton-jetton-reconciliation-validator.ts` plus adversarial tests.
+The escrow contract address can now be derived before its canonical Jetton
+wallet exists: StateInit commits the master and pinned wallet-code hash but not
+the wallet address. Funding is impossible until the immutable initializer
+seals one wallet and a nonzero verification-evidence commitment.
 
-It must prove all of the following from independently sourced finalized data:
+The pure off-chain structural preflight is now implemented. It compares two
+configured source/operator pairs, raw getter cells and raw active wallet
+`ShardAccount` data, and emits only an audit-safe `structuralEvidenceHash`.
+It always returns `sealingAuthorized: false` and keeps
+`verificationEvidenceHash: null`.
 
-- exact escrow-owner `transfer` instruction to the canonical escrow Jetton
-  wallet;
-- linked sender-wallet `internal_transfer` and successful recipient-wallet
-  processing;
-- exact query ID, amount, destination, response destination, forward TON and
-  payload hash;
-- canonical master/owner/wallet evidence for both wallets;
-- exact debit and credit balance deltas tied to durable transaction identities;
-- complete outbound message sets, with no unexplained or bounced messages; and
-- source independence. An `excesses` message alone is never payout proof.
+Complete the proof pipeline before lifecycle work: verify the masterchain block
+proof, shard inclusion and account-state proof; locally execute
+`get_wallet_address` against the proven master state; define a separate
+domain-separated verification commitment; and require an audited threshold or
+multisig initializer approval. The structural hash must never be used as the
+contract's seal evidence. The initializer and reconciliation authority are
+money-critical and must remain distinct from every transaction role.
 
-Definition of done: malformed input never throws; every rejection has durable
-evidence/reason codes; focused tests cover forged links, missing messages,
-wrong wallet/master/owner, stale state, bad deltas, bounce/restore and provider
-agreement; lint, TypeScript and full backend tests pass.
+Update deterministic config/StateInit and seal-message composition for the new
+ABI. No component may sign, broadcast or enable funding merely because the
+structural evidence agrees.
 
-### 2. Complete the Jetton escrow lifecycle
+### 2. Complete Jetton masterchain finality proof
+
+The corrected pure reconciliation v2 no longer trusts provider-decoded message
+objects. It parses raw transaction/message BOCs locally, binds the complete
+committed owner outbox and selected settlement attempt, validates the exact
+recipient notification/optional excess set, and binds raw pre/post
+`ShardAccount` cells to transaction state updates and locally decoded Jetton
+wallet code/data/balances. Collector operators come from immutable expectation
+configuration, and the consensus fingerprint covers transaction LT/hash,
+block metadata, message hashes and state identities.
+
+This is only a structural precheck. It deliberately returns `accepted: false`
+and `MASTERCHAIN_PROOF_REQUIRED` after all current checks pass because local
+shard-to-finalized-masterchain inclusion verification is not implemented. Keep
+it unwired. The next slice must verify those proofs from raw liteserver data,
+add proof-vector/adversarial tests, and only then introduce a result capable of
+authorizing durable settlement. Do not convert agreement on provider block
+metadata into finality.
+
+### 3. Complete the Jetton escrow lifecycle
 
 Extend the funding-only contract with delivery, release, refund, timeouts,
 dispute and resolution. Jetton transfers are asynchronous, so payout
@@ -75,11 +98,12 @@ immediate instruction bounces and downstream restore/retry paths are tested;
 gas baseline is stable; both contract mutation gates remain 100%; independent
 contract review is complete.
 
-### 3. Wire durable Jetton ingestion only after 1 and 2
+### 4. Wire durable Jetton ingestion only after 1, 2 and 3
 
 - Register the new migration/entities in the production composition root.
 - Add immutable Jetton preparations, watched accounts and lifecycle intents.
-- Feed only finalized, reconciled observations into the durable event service.
+- Feed only locally proof-verified, finalized observations into the durable
+  event service; the current structural precheck can never authorize this.
 - Apply ledger/FSM effects in the same transaction and persist `appliedAt` last.
 - Add scheduler, bounded backfill, rejected-event search, metrics, alerts and
   dual-authorized manual recovery.
