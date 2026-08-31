@@ -1,5 +1,9 @@
 import { createHash } from "crypto";
 import type { TonProofBlockId, TonProofNetwork } from "./ton-proof-envelope";
+import {
+  isTonJettonWalletContractProfile,
+  type TonJettonWalletContractProfile,
+} from "./ton-jetton-wallet-profile";
 
 const HASH_PATTERN = /^[0-9a-f]{64}$/;
 const RAW_ADDRESS_PATTERN = /^0:[0-9a-f]{64}$/;
@@ -32,21 +36,16 @@ export const TON_PROOF_FIXTURE_ARTIFACT_NAMES = [
   "checkpoint-proof.tl",
   "master-account-proof.boc",
   "master-account-shard-header-proof.boc",
-  "master-account-shard-proof.boc",
   "master-account-state.boc",
   "masterchain-config-proof.boc",
-  "masterchain-config-state-proof.boc",
   "masterchain-header-proof.boc",
   "masterchain-shards-data.boc",
-  "masterchain-shards-proof.boc",
   "official-global-config.json",
   "transaction-inclusion-proof.boc",
   "transaction.boc",
   "wallet-account-proof.boc",
   "wallet-account-shard-header-proof.boc",
-  "wallet-account-shard-proof.boc",
   "wallet-account-state.boc",
-  "wallet-shard-transactions-proof.boc",
 ] as const;
 
 export type TonProofFixtureArtifactName =
@@ -58,7 +57,7 @@ export interface TonProofFixtureLastTransaction {
 }
 
 export interface TonProofFixtureManifest {
-  schemaVersion: 1;
+  schemaVersion: 2;
   kind: "TON_CAPTURED_PROOF_FIXTURE";
   network: TonProofNetwork;
   globalId: number;
@@ -75,6 +74,7 @@ export interface TonProofFixtureManifest {
   ownerAddress: string;
   walletAddress: string;
   walletCodeHash: string;
+  walletContractProfile: TonJettonWalletContractProfile;
   masterShardBlock: TonProofBlockId;
   walletShardBlock: TonProofBlockId;
   masterLastTransaction: TonProofFixtureLastTransaction | null;
@@ -240,6 +240,7 @@ function parseManifest(raw: Buffer): TonProofFixtureManifest {
       "ownerAddress",
       "walletAddress",
       "walletCodeHash",
+      "walletContractProfile",
       "masterShardBlock",
       "walletShardBlock",
       "masterLastTransaction",
@@ -249,7 +250,7 @@ function parseManifest(raw: Buffer): TonProofFixtureManifest {
     ],
     "manifest",
   );
-  if (source.schemaVersion !== 1) reject("schemaVersion is unsupported");
+  if (source.schemaVersion !== 2) reject("schemaVersion is unsupported");
   if (source.kind !== "TON_CAPTURED_PROOF_FIXTURE") {
     reject("manifest kind is invalid");
   }
@@ -332,6 +333,9 @@ function parseManifest(raw: Buffer): TonProofFixtureManifest {
     "selectedShardTransaction",
   );
   if (!selectedTransaction) reject("selected transaction is absent");
+  if (!isTonJettonWalletContractProfile(source.walletContractProfile)) {
+    reject("walletContractProfile is unsupported");
+  }
 
   const artifactSource = exactRecord(
     source.artifacts,
@@ -360,7 +364,7 @@ function parseManifest(raw: Buffer): TonProofFixtureManifest {
   }
 
   return {
-    schemaVersion: 1,
+    schemaVersion: 2,
     kind: "TON_CAPTURED_PROOF_FIXTURE",
     network: source.network,
     globalId,
@@ -377,6 +381,7 @@ function parseManifest(raw: Buffer): TonProofFixtureManifest {
     ownerAddress: rawAddress(source.ownerAddress, "ownerAddress"),
     walletAddress: rawAddress(source.walletAddress, "walletAddress"),
     walletCodeHash: nonzeroHash(source.walletCodeHash, "walletCodeHash"),
+    walletContractProfile: source.walletContractProfile,
     masterShardBlock,
     walletShardBlock,
     masterLastTransaction: lastTransaction(
@@ -396,6 +401,74 @@ function parseManifest(raw: Buffer): TonProofFixtureManifest {
     },
     artifacts,
   };
+}
+
+function canonicalBase64Hash(value: unknown, label: string): string {
+  if (typeof value !== "string" || value.length !== 44) {
+    reject(`${label} is not a base64 hash`);
+  }
+  const decoded = Buffer.from(value, "base64");
+  if (decoded.length !== 32 || decoded.toString("base64") !== value) {
+    reject(`${label} is not canonical base64`);
+  }
+  return decoded.toString("hex");
+}
+
+function validateOfficialGlobalConfig(
+  raw: Buffer,
+  manifest: TonProofFixtureManifest,
+): void {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw.toString("utf8"));
+  } catch {
+    reject("official global config is not valid JSON");
+  }
+  if (!isRecord(parsed)) reject("official global config must be an object");
+  const validator = isRecord(parsed.validator) ? parsed.validator : null;
+  const zeroState = validator && isRecord(validator.zero_state)
+    ? validator.zero_state
+    : null;
+  if (!zeroState) reject("official global config has no zerostate");
+  if (zeroState.workchain !== -1 || zeroState.seqno !== 0) {
+    reject("official global config zerostate metadata is invalid");
+  }
+  if (
+    canonicalBase64Hash(zeroState.root_hash, "config zerostate root") !==
+      manifest.zeroState.rootHash ||
+    canonicalBase64Hash(zeroState.file_hash, "config zerostate file") !==
+      manifest.zeroState.fileHash
+  ) {
+    reject("official global config zerostate does not match the manifest");
+  }
+  if (
+    !Array.isArray(parsed.liteservers) ||
+    parsed.liteservers.length !== manifest.source.liteServerCount
+  ) {
+    reject("official global config LiteServer count does not match the manifest");
+  }
+  const identities = new Set<string>();
+  parsed.liteservers.forEach((value, index) => {
+    if (!isRecord(value) || !isRecord(value.id)) {
+      reject(`official global config liteservers[${index}] is malformed`);
+    }
+    integer(
+      value.ip,
+      -0x80000000,
+      0x7fffffff,
+      `config liteservers[${index}].ip`,
+    );
+    integer(value.port, 1, 65535, `config liteservers[${index}].port`);
+    if (value.id["@type"] !== "pub.ed25519") {
+      reject(`config liteservers[${index}] key type is unsupported`);
+    }
+    const key = canonicalBase64Hash(
+      value.id.key,
+      `config liteservers[${index}].key`,
+    );
+    if (identities.has(key)) reject("official global config has duplicate LiteServers");
+    identities.add(key);
+  });
 }
 
 export function verifyTonProofFixtureManifest(
@@ -425,6 +498,10 @@ export function verifyTonProofFixtureManifest(
     }
     artifacts[name] = Buffer.from(value);
   }
+  validateOfficialGlobalConfig(
+    artifacts["official-global-config.json"],
+    manifest,
+  );
   const artifactSetHash = sha256(
     JSON.stringify({
       domain: "telegram-garant/ton-proof-fixture-artifact-set/v1",

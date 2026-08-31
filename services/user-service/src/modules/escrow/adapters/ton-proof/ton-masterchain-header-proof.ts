@@ -1,5 +1,6 @@
 import { Cell, CellType, exoticMerkleUpdate, loadShardIdent } from "@ton/core";
 import type { TonProofBlockId } from "./ton-proof-envelope";
+import { canonicalTonShardId } from "./ton-shard-ident";
 
 const BLOCK_TAG = 0x11ef55aa;
 const BLOCK_INFO_TAG = 0x9bc7a987;
@@ -63,15 +64,6 @@ function requireHash(value: string, label: string): void {
   if (!HASH_PATTERN.test(value) || value === "0".repeat(64)) {
     reject(`${label} is invalid`);
   }
-}
-
-function signedShardString(shardPrefix: bigint): string {
-  if (shardPrefix < 0n || shardPrefix >= 1n << 64n) {
-    reject("shard prefix is outside uint64");
-  }
-  return (
-    shardPrefix >= 1n << 63n ? shardPrefix - (1n << 64n) : shardPrefix
-  ).toString();
 }
 
 function parseExtBlockRef(cell: Cell, label: string): ParsedExtBlockRef {
@@ -204,8 +196,8 @@ export function verifyTonMasterchainHeaderCell(
     const afterMerge = info.loadBit();
     const beforeSplit = info.loadBit();
     const afterSplit = info.loadBit();
-    const wantSplit = info.loadBit();
-    const wantMerge = info.loadBit();
+    info.loadBit(); // want_split is advisory and hash/signature committed
+    info.loadBit(); // want_merge is advisory and hash/signature committed
     const keyBlock = info.loadBit();
     const verticalSeqnoIncrement = info.loadBit();
     const flags = info.loadUint(8);
@@ -232,13 +224,13 @@ export function verifyTonMasterchainHeaderCell(
     }
     if (notMaster)
       reject("BlockInfo marks the masterchain block as non-master");
-    if (afterMerge || beforeSplit || afterSplit || wantSplit || wantMerge) {
+    if (afterMerge || beforeSplit || afterSplit) {
       reject("masterchain BlockInfo contains shard split/merge flags");
     }
     if (
       shard.workchainId !== -1 ||
       shard.shardPrefixBits !== 0 ||
-      signedShardString(shard.shardPrefix) !== MASTERCHAIN_SHARD
+      canonicalTonShardId(shard) !== MASTERCHAIN_SHARD
     ) {
       reject("BlockInfo shard identity is not the masterchain");
     }

@@ -3,6 +3,7 @@ import { Address, CellType } from "@ton/core";
 import type { TonProvenActiveAccountState } from "./ton-account-state-proof";
 import type { TonVerifiedLocalWalletGetterResult } from "./ton-local-wallet-getter";
 import type { TonProofBlockId } from "./ton-proof-envelope";
+import type { TonJettonWalletContractProfile } from "./ton-jetton-wallet-profile";
 
 const HASH = /^[0-9a-f]{64}$/;
 
@@ -11,6 +12,7 @@ export interface TonProvenWalletCompositionExpectation {
   masterAddress: string;
   candidateWalletAddress: string;
   pinnedWalletCodeHash: string;
+  walletContractProfile: TonJettonWalletContractProfile;
 }
 
 export interface TonProvenCanonicalWalletComposition {
@@ -32,6 +34,9 @@ export interface TonProvenCanonicalWalletComposition {
   ownerAddress: string;
   masterAddress: string;
   walletAddress: string;
+  walletContractProfile: TonJettonWalletContractProfile;
+  walletStatus: string | null;
+  walletLibraryHash: string | null;
   jettonBalance: string;
   walletCodeHash: string;
   walletDataHash: string;
@@ -84,7 +89,7 @@ function blockIdsEqual(left: TonProofBlockId, right: TonProofBlockId): boolean {
 
 function compositionHash(parts: readonly string[]): string {
   const hash = createHash("sha256");
-  hash.update("TON_PROVEN_CANONICAL_WALLET_COMPOSITION_V1", "utf8");
+  hash.update("TON_PROVEN_CANONICAL_WALLET_COMPOSITION_V2", "utf8");
   for (const part of parts) {
     const value = Buffer.from(part, "utf8");
     const length = Buffer.alloc(4);
@@ -143,6 +148,9 @@ export function composeTonProvenCanonicalWallet(
   ) {
     reject("local getter result does not match the seal expectation");
   }
+  if (getter.walletContractProfile !== expectation.walletContractProfile) {
+    reject("local getter used a different wallet contract profile");
+  }
   if (
     getter.networkGlobalId !== wallet.networkGlobalId ||
     !blockIdsEqual(
@@ -162,8 +170,8 @@ export function composeTonProvenCanonicalWallet(
   ) {
     reject("wallet-account cells no longer match their proven hashes");
   }
-  if (wallet.code.type !== CellType.Ordinary || wallet.data.type !== CellType.Ordinary) {
-    reject("wallet code and data must be ordinary cells");
+  if (wallet.data.type !== CellType.Ordinary) {
+    reject("wallet data must be an ordinary cell");
   }
   if (wallet.codeHash !== expectation.pinnedWalletCodeHash) {
     reject("active wallet code hash does not match the pinned code hash");
@@ -171,17 +179,76 @@ export function composeTonProvenCanonicalWallet(
 
   try {
     const data = wallet.data.beginParse();
-    const jettonBalance = data.loadCoins();
-    const storedOwner = data.loadAddress();
-    const storedMaster = data.loadAddress();
-    const embeddedWalletCode = data.loadRef();
-    data.endParse();
+    let walletStatus: bigint | null = null;
+    let walletLibraryHash: string | null = null;
+    let embeddedCodeHash: string;
+    let jettonBalance: bigint;
+    let storedOwner: Address;
+    let storedMaster: Address;
+    if (expectation.walletContractProfile === "tep74-reference-wallet-v1") {
+      if (wallet.code.type !== CellType.Ordinary) {
+        reject("reference wallet code must be an ordinary cell");
+      }
+      jettonBalance = data.loadCoins();
+      storedOwner = data.loadAddress();
+      storedMaster = data.loadAddress();
+      const embeddedWalletCode = data.loadRef();
+      data.endParse();
+      if (embeddedWalletCode.type !== CellType.Ordinary) {
+        reject("embedded wallet code must be an ordinary cell");
+      }
+      embeddedCodeHash = embeddedWalletCode.hash(0).toString("hex");
+    } else if (
+      expectation.walletContractProfile === "tep74-library-wallet-v1"
+    ) {
+      if (wallet.code.type !== CellType.Library) {
+        reject("TEP-74 library wallet code must be a library reference");
+      }
+      jettonBalance = data.loadCoins();
+      storedOwner = data.loadAddress();
+      storedMaster = data.loadAddress();
+      data.endParse();
+      if (
+        getter.masterWalletCodeHash === null ||
+        getter.walletCodeGetterMethodId === null ||
+        getter.walletCodeGetterGasUsed === null
+      ) {
+        reject("TEP-74 master wallet-code getter commitment is absent");
+      }
+      embeddedCodeHash = getter.masterWalletCodeHash;
+      const library = wallet.code.beginParse(true);
+      if (library.loadUint(8) !== 2) {
+        reject("TEP-74 wallet library reference tag is invalid");
+      }
+      walletLibraryHash = library.loadBuffer(32).toString("hex");
+      library.endParse();
+    } else if (
+      expectation.walletContractProfile ===
+      "ton-stablecoin-governance-wallet-v1"
+    ) {
+      if (wallet.code.type !== CellType.Library) {
+        reject("stablecoin wallet code must be a library reference");
+      }
+      walletStatus = data.loadUintBig(4);
+      jettonBalance = data.loadCoins();
+      storedOwner = data.loadAddress();
+      storedMaster = data.loadAddress();
+      data.endParse();
+      if (getter.masterWalletCodeHash === null) {
+        reject("stablecoin master wallet-code commitment is absent");
+      }
+      embeddedCodeHash = getter.masterWalletCodeHash;
+      const library = wallet.code.beginParse(true);
+      if (library.loadUint(8) !== 2) {
+        reject("stablecoin wallet library reference tag is invalid");
+      }
+      walletLibraryHash = library.loadBuffer(32).toString("hex");
+      library.endParse();
+    } else {
+      reject("wallet contract profile is unsupported");
+    }
     if (!storedOwner.equals(owner)) reject("wallet owner does not match escrow");
     if (!storedMaster.equals(master)) reject("wallet master does not match allowlist");
-    if (embeddedWalletCode.type !== CellType.Ordinary) {
-      reject("embedded wallet code must be an ordinary cell");
-    }
-    const embeddedCodeHash = embeddedWalletCode.hash(0).toString("hex");
     if (
       embeddedCodeHash !== wallet.codeHash ||
       embeddedCodeHash !== expectation.pinnedWalletCodeHash
@@ -211,6 +278,9 @@ export function composeTonProvenCanonicalWallet(
       owner.toRawString(),
       master.toRawString(),
       candidate.toRawString(),
+      expectation.walletContractProfile,
+      walletStatus?.toString() ?? "none",
+      walletLibraryHash ?? "none",
       jettonBalance.toString(),
     ]);
     return {
@@ -232,6 +302,9 @@ export function composeTonProvenCanonicalWallet(
       ownerAddress: owner.toRawString(),
       masterAddress: master.toRawString(),
       walletAddress: candidate.toRawString(),
+      walletContractProfile: expectation.walletContractProfile,
+      walletStatus: walletStatus?.toString() ?? null,
+      walletLibraryHash,
       jettonBalance: jettonBalance.toString(),
       walletCodeHash: wallet.codeHash,
       walletDataHash: wallet.dataHash,

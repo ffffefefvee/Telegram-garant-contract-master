@@ -7,8 +7,6 @@ const BLOCK_LINK_BACK_ID = 0xef7e1bef;
 const BLOCK_LINK_FORWARD_ID = 0x520fce1c;
 const SIGNATURE_SET_ORDINARY_ID = 0xf644a6e6;
 const SIGNATURE_SET_SIMPLEX_ID = 0xac249800;
-const SIGNATURE_ID = 0xa3def855;
-const VECTOR_ID = 0x1cb5c415;
 const BOOL_TRUE_ID = 0x997275b5;
 const BOOL_FALSE_ID = 0xbc799737;
 const TON_BLOCK_ID_ID = 0xc50b6e70;
@@ -297,10 +295,7 @@ class TlReader {
     reject(`${label} has an invalid Bool constructor`);
   }
 
-  vectorLength(limit: number, label: string): number {
-    if (this.uint32(`${label} constructor`) !== VECTOR_ID) {
-      reject(`${label} has an invalid vector constructor`);
-    }
+  bareVectorLength(limit: number, label: string): number {
     const count = this.uint32(`${label} count`);
     if (count > limit) reject(`${label} exceeds its item limit`);
     return count;
@@ -326,12 +321,9 @@ function decodeSignatures(
   reader: TlReader,
   limit: number,
 ): readonly TonLiteSignature[] {
-  const count = reader.vectorLength(limit, "signatures");
+  const count = reader.bareVectorLength(limit, "signatures");
   const signatures: TonLiteSignature[] = [];
   for (let index = 0; index < count; index += 1) {
-    if (reader.uint32(`signature[${index}] constructor`) !== SIGNATURE_ID) {
-      reject(`signature[${index}] has an invalid constructor`);
-    }
     const nodeIdShort = reader
       .fixed(32, `signature[${index}].nodeIdShort`)
       .toString("hex");
@@ -478,7 +470,7 @@ export function decodeTonLitePartialBlockProof(
   const complete = reader.bool("complete");
   const from = decodeBlockId(reader, "from");
   const to = decodeBlockId(reader, "to");
-  const count = reader.vectorLength(limits.maxLinks, "steps");
+  const count = reader.bareVectorLength(limits.maxLinks, "steps");
   const steps: TonLiteBlockLink[] = [];
   for (let index = 0; index < count; index += 1) {
     steps.push(decodeLink(reader, limits, index));

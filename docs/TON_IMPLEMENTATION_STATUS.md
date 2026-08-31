@@ -259,14 +259,16 @@ enable any production flag.
   independent review remain Phase 1 exit gates. See
   `ADR-016-TON-SIMPLEX-FINALITY-AND-FIXTURE-CAPTURE.md`.
 - Captured fixture directories now pass an exact schema, pinned
-  network/zerostate, resource and 18-artifact content-hash boundary before any
+  network/zerostate, resource and 13-artifact content-hash boundary before any
   proof parser runs. A provider-free replay composer then re-executes
   checkpoint/header/shard/account/local-getter/wallet/transaction verification
   and remains non-authorizing. Its tests include a one-bit mutation for every
   artifact class and authenticated supplemental ShardHashes transport. Real
-  immutable mainnet/testnet corpora and successful replay remain required. See
-  `ADR-017-TON-OFFLINE-PROOF-FIXTURE-REPLAY.md`. The full backend passes 90
-  suites / 943 tests.
+  immutable mainnet/testnet corpora are committed, replay offline, and reject
+  all 13 rehashed one-bit artifact mutations per network in a blocking hosted
+  CI gate. See `ADR-017-TON-OFFLINE-PROOF-FIXTURE-REPLAY.md`. The full backend
+  passes 93 suites / 956 tests; the 19 proof-kernel/evidence suites pass 291
+  tests.
 - The finalized masterchain target can now authenticate its state and exact
   basechain `ShardHashes` descriptor. The verifier binds the state proof to the
   header state-update hash, proves the workchain Patricia path, enforces exact

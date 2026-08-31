@@ -14,6 +14,10 @@ import type {
   tonNode_blockIdExt,
 } from "ton-lite-client/dist/schema";
 import { TLWriteBuffer } from "ton-tl";
+import {
+  isTonJettonWalletContractProfile,
+  type TonJettonWalletContractProfile,
+} from "../src/modules/escrow/adapters/ton-proof/ton-jetton-wallet-profile";
 
 type Network = "mainnet" | "testnet";
 
@@ -22,6 +26,8 @@ interface CaptureArguments {
   masterAddress: Address;
   ownerAddress: Address;
   walletAddress: Address;
+  walletContractProfile: TonJettonWalletContractProfile;
+  masterchainSeqno: number | null;
   outputDirectory: string;
 }
 
@@ -66,9 +72,36 @@ const BLOCK_TAG = 0x11ef55aa;
 const BLOCK_INFO_TAG = 0x9bc7a987;
 const ORDINARY_SIGNATURE_SET_ID = 0xf644a6e6 | 0;
 const SIMPLEX_SIGNATURE_SET_ID = 0xac249800 | 0;
+const LITE_QUERY_TIMEOUT_MS = 15_000;
+const LITE_STAGE_DEADLINE_MS = 180_000;
 
 function fail(message: string): never {
   throw new Error(`TON_FIXTURE_CAPTURE_FAILED: ${message}`);
+}
+
+async function withLiteStageDeadline<T>(
+  label: string,
+  operation: () => Promise<T>,
+): Promise<T> {
+  let timer: NodeJS.Timeout | undefined;
+  try {
+    return await Promise.race([
+      operation(),
+      new Promise<never>((_resolve, reject) => {
+        timer = setTimeout(
+          () =>
+            reject(
+              new Error(
+                `TON_FIXTURE_CAPTURE_FAILED: ${label} exceeded ${LITE_STAGE_DEADLINE_MS}ms`,
+              ),
+            ),
+          LITE_STAGE_DEADLINE_MS,
+        );
+      }),
+    ]);
+  } finally {
+    if (timer) clearTimeout(timer);
+  }
 }
 
 function parseArguments(argv: string[]): CaptureArguments {
@@ -86,9 +119,19 @@ function parseArguments(argv: string[]): CaptureArguments {
   if (network !== "mainnet" && network !== "testnet") {
     fail("--network must be mainnet or testnet");
   }
-  const expected = ["--network", "--master", "--owner", "--wallet", "--output"];
+  const expected = [
+    "--network",
+    "--master",
+    "--owner",
+    "--wallet",
+    "--profile",
+    "--output",
+  ];
+  const allowed = [...expected, "--masterchain-seqno"];
   if (
-    values.size !== expected.length ||
+    values.size < expected.length ||
+    values.size > allowed.length ||
+    [...values.keys()].some((key) => !allowed.includes(key)) ||
     expected.some((key) => !values.has(key))
   ) {
     fail(`required arguments: ${expected.join(" ")}`);
@@ -102,11 +145,28 @@ function parseArguments(argv: string[]): CaptureArguments {
     if (parsed.toRawString() !== raw) fail(`${key} is not canonical`);
     return parsed;
   };
+  const walletContractProfile = values.get("--profile");
+  if (!isTonJettonWalletContractProfile(walletContractProfile)) {
+    fail("--profile is unsupported");
+  }
+  const requestedSeqno = values.get("--masterchain-seqno");
+  let masterchainSeqno: number | null = null;
+  if (requestedSeqno !== undefined) {
+    if (!/^[1-9][0-9]*$/.test(requestedSeqno)) {
+      fail("--masterchain-seqno must be a positive canonical integer");
+    }
+    masterchainSeqno = Number(requestedSeqno);
+    if (!Number.isSafeInteger(masterchainSeqno) || masterchainSeqno > 0xffffffff) {
+      fail("--masterchain-seqno is outside uint32");
+    }
+  }
   return {
     network,
     masterAddress: address("--master"),
     ownerAddress: address("--owner"),
     walletAddress: address("--wallet"),
+    walletContractProfile,
+    masterchainSeqno,
     outputDirectory: resolve(values.get("--output")!),
   };
 }
@@ -286,9 +346,11 @@ async function capture(args: CaptureArguments): Promise<void> {
   const engine = new LiteRoundRobinEngine(engines);
   const client = new LiteClient({ engine });
   try {
-    const queryArgs = { timeout: 60_000 };
+    const queryArgs = { timeout: LITE_QUERY_TIMEOUT_MS };
     stage(`querying ${engines.length} configured LiteServers`);
-    const masterchain = await client.getMasterchainInfo(queryArgs);
+    const masterchain = await withLiteStageDeadline("masterchain info", () =>
+      client.getMasterchainInfo(queryArgs),
+    );
     if (
       masterchain.last.workchain !== -1 ||
       masterchain.last.shard !== MASTERCHAIN_SHARD ||
@@ -305,42 +367,78 @@ async function capture(args: CaptureArguments): Promise<void> {
     ) {
       fail("official config zerostate does not match the pinned network identity");
     }
-    stage(`capturing masterchain ${masterchain.last.seqno}`);
-    const targetHeader = await client.getBlockHeader(masterchain.last);
+    const targetBlock = args.masterchainSeqno === null
+      ? masterchain.last
+      : (
+          await withLiteStageDeadline("requested masterchain lookup", () =>
+            client.lookupBlockByID({
+              workchain: -1,
+              shard: MASTERCHAIN_SHARD,
+              seqno: args.masterchainSeqno!,
+            }),
+          )
+        ).id;
+    if (targetBlock.seqno > masterchain.last.seqno) {
+      fail("requested masterchain block is not finalized yet");
+    }
+    stage(`capturing masterchain ${targetBlock.seqno}`);
+    const targetHeader = await withLiteStageDeadline(
+      "target masterchain header",
+      () => client.getBlockHeader(targetBlock),
+    );
     const trustedSeqno = previousKeyBlockSeqno(targetHeader.headerProof);
-    const trustedLookup = await client.lookupBlockByID({
-      workchain: -1,
-      shard: MASTERCHAIN_SHARD,
-      seqno: trustedSeqno,
-    });
-    const checkpoint = await engine.query(
-      Functions.liteServer_getBlockProof,
-      {
-        kind: "liteServer.getBlockProof",
-        mode: 1,
-        knownBlock: trustedLookup.id,
-        targetBlock: masterchain.last,
-      },
-      queryArgs,
+    const trustedLookup = await withLiteStageDeadline(
+      "trusted key-block lookup",
+      () =>
+        client.lookupBlockByID({
+          workchain: -1,
+          shard: MASTERCHAIN_SHARD,
+          seqno: trustedSeqno,
+        }),
+    );
+    const checkpoint = await withLiteStageDeadline(
+      "checkpoint proof",
+      () =>
+        engine.query(
+          Functions.liteServer_getBlockProof,
+          {
+            kind: "liteServer.getBlockProof",
+            mode: 1,
+            knownBlock: trustedLookup.id,
+            targetBlock,
+          },
+          queryArgs,
+        ),
     );
     if (
       !checkpoint.complete ||
       checkpoint.from.seqno !== trustedSeqno ||
-      checkpoint.to.seqno !== masterchain.last.seqno ||
+      checkpoint.to.seqno !== targetBlock.seqno ||
       checkpoint.steps.length < 1
     ) {
       fail("LiteServer did not return a complete checkpoint proof");
     }
     stage(`verified complete checkpoint response with ${checkpoint.steps.length} link(s)`);
-    const configInfo = await engine.query(
-      Functions.liteServer_getConfigAll,
-      { kind: "liteServer.getConfigAll", mode: 0, id: masterchain.last },
-      queryArgs,
+    const configInfo = await withLiteStageDeadline(
+      "masterchain config proof",
+      () =>
+        engine.query(
+          Functions.liteServer_getConfigAll,
+          { kind: "liteServer.getConfigAll", mode: 0, id: targetBlock },
+          queryArgs,
+        ),
     );
-    const allShards = await client.getAllShardsInfo(masterchain.last);
+    const allShards = await withLiteStageDeadline(
+      "masterchain shard descriptors",
+      () => client.getAllShardsInfo(targetBlock),
+    );
     const [masterAccount, walletAccount] = await Promise.all([
-      client.getAccountStateRaw(args.masterAddress, masterchain.last, queryArgs),
-      client.getAccountStateRaw(args.walletAddress, masterchain.last, queryArgs),
+      withLiteStageDeadline("Jetton master account proof", () =>
+        client.getAccountStateRaw(args.masterAddress, targetBlock, queryArgs),
+      ),
+      withLiteStageDeadline("Jetton wallet account proof", () =>
+        client.getAccountStateRaw(args.walletAddress, targetBlock, queryArgs),
+      ),
     ]);
     if (!masterAccount.state || !walletAccount.state) {
       fail("master and wallet accounts must both be active");
@@ -359,35 +457,50 @@ async function capture(args: CaptureArguments): Promise<void> {
     }
     stage("captured active master and wallet account proofs");
     const [masterShardHeader, walletShardHeader] = await Promise.all([
-      client.getBlockHeader(masterAccount.shardBlock),
-      client.getBlockHeader(walletAccount.shardBlock),
+      withLiteStageDeadline("Jetton master shard header", () =>
+        client.getBlockHeader(masterAccount.shardBlock),
+      ),
+      withLiteStageDeadline("Jetton wallet shard header", () =>
+        client.getBlockHeader(walletAccount.shardBlock),
+      ),
     ]);
-    const transactions = await engine.query(
-      Functions.liteServer_listBlockTransactions,
-      {
-        kind: "liteServer.listBlockTransactions",
-        id: walletAccount.shardBlock,
-        mode: 1 + 2 + 4 + 32,
-        count: 1,
-        after: null,
-        reverseOrder: null,
-        wantProof: true,
-      },
-      queryArgs,
+    const transactions = await withLiteStageDeadline(
+      "wallet shard transaction list",
+      () =>
+        engine.query(
+          Functions.liteServer_listBlockTransactions,
+          {
+            kind: "liteServer.listBlockTransactions",
+            id: walletAccount.shardBlock,
+            mode: 1 + 2 + 4,
+            count: 1,
+            after: null,
+            reverseOrder: null,
+            wantProof: null,
+          },
+          queryArgs,
+        ),
     );
     const selected = transactions.ids[0];
     if (!selected?.account || !selected.lt || !selected.hash) {
-      fail("wallet shard top contains no complete transaction identity");
+      fail(
+        `wallet shard ${walletAccount.shardBlock.workchain}:${walletAccount.shardBlock.shard}:${walletAccount.shardBlock.seqno} contains no complete transaction identity (ids=${transactions.ids.length}, mode=${selected?.mode ?? "none"})`,
+      );
     }
+    const selectedLt = selected.lt;
     const transactionAddress = new Address(
       walletAccount.shardBlock.workchain,
       selected.account,
     );
-    const transaction = await client.getAccountTransaction(
-      transactionAddress,
-      selected.lt,
-      walletAccount.shardBlock,
-      queryArgs,
+    const transaction = await withLiteStageDeadline(
+      "wallet shard transaction proof",
+      () =>
+        client.getAccountTransaction(
+          transactionAddress,
+          selectedLt,
+          walletAccount.shardBlock,
+          queryArgs,
+        ),
     );
     const transactionRoots = Cell.fromBoc(transaction.transaction);
     if (
@@ -406,24 +519,19 @@ async function capture(args: CaptureArguments): Promise<void> {
       "official-global-config.json": configBytes,
       "checkpoint-proof.tl": encodePartialBlockProof(checkpoint),
       "masterchain-header-proof.boc": targetHeader.headerProof,
-      "masterchain-config-state-proof.boc": configInfo.stateProof,
       "masterchain-config-proof.boc": configInfo.configProof,
-      "masterchain-shards-proof.boc": allShards.proof,
       "masterchain-shards-data.boc": allShards.raw,
       "master-account-proof.boc": masterAccount.proof,
       "master-account-state.boc": masterAccount.raw,
-      "master-account-shard-proof.boc": masterAccount.shardProof,
       "master-account-shard-header-proof.boc": masterShardHeader.headerProof,
       "wallet-account-proof.boc": walletAccount.proof,
       "wallet-account-state.boc": walletAccount.raw,
-      "wallet-account-shard-proof.boc": walletAccount.shardProof,
       "wallet-account-shard-header-proof.boc": walletShardHeader.headerProof,
-      "wallet-shard-transactions-proof.boc": transactions.proof,
       "transaction-inclusion-proof.boc": transaction.proof,
       "transaction.boc": transaction.transaction,
     });
     const manifest = {
-      schemaVersion: 1,
+      schemaVersion: 2,
       kind: "TON_CAPTURED_PROOF_FIXTURE",
       network: args.network,
       globalId: network.globalId,
@@ -442,11 +550,12 @@ async function capture(args: CaptureArguments): Promise<void> {
         fileHash: Buffer.from(network.zeroState.fileHash, "hex"),
       }),
       trustedKeyBlock: blockId(trustedLookup.id),
-      targetMasterchainBlock: blockId(masterchain.last),
+      targetMasterchainBlock: blockId(targetBlock),
       masterAddress: args.masterAddress.toRawString(),
       ownerAddress: args.ownerAddress.toRawString(),
       walletAddress: args.walletAddress.toRawString(),
       walletCodeHash: walletStorage.state.code.hash(0).toString("hex"),
+      walletContractProfile: args.walletContractProfile,
       masterShardBlock: blockId(masterAccount.shardBlock),
       walletShardBlock: blockId(walletAccount.shardBlock),
       masterLastTransaction: masterAccount.lastTx
@@ -463,7 +572,7 @@ async function capture(args: CaptureArguments): Promise<void> {
         : null,
       selectedShardTransaction: {
         accountAddress: transactionAddress.toRawString(),
-        lt: selected.lt.toString(),
+        lt: selectedLt.toString(),
         hash: selected.hash.toString("hex"),
       },
       artifacts,
@@ -474,7 +583,7 @@ async function capture(args: CaptureArguments): Promise<void> {
       { flag: "wx" },
     );
     process.stdout.write(
-      `Captured ${args.network} fixture at masterchain ${masterchain.last.seqno} in ${args.outputDirectory}\n`,
+      `Captured ${args.network} fixture at masterchain ${targetBlock.seqno} in ${args.outputDirectory}\n`,
     );
   } finally {
     engine.close();

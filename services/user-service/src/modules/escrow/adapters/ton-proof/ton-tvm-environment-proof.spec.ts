@@ -66,7 +66,7 @@ function fixture(options: FixtureOptions = {}) {
       storeShardIdent({
         shardPrefixBits: 0,
         workchainId: -1,
-        shardPrefix: 1n << 63n,
+        shardPrefix: 0n,
       }),
     )
     .storeUint(options.seqno ?? 120, 32)

@@ -58,12 +58,17 @@ function merkleUpdate(): Cell {
     .endCell({ exotic: true });
 }
 
-function rawShard(value: string): bigint {
-  return BigInt.asUintN(64, BigInt(value));
+function shardPrefix(value: string, prefixBits: number): bigint {
+  const mask =
+    prefixBits === 0
+      ? 0n
+      : ((1n << BigInt(prefixBits)) - 1n) << BigInt(64 - prefixBits);
+  return BigInt.asUintN(64, BigInt(value)) & mask;
 }
 
 function shardBlock(options: BlockOptions = {}): Cell {
   const seqno = options.seqno ?? 77;
+  const prefixBits = options.shardPrefixBits ?? 0;
   const afterMerge = options.afterMerge ?? false;
   const previousSeqnos =
     options.previousSeqnos ?? (afterMerge ? [76, 75] : [76]);
@@ -89,9 +94,9 @@ function shardBlock(options: BlockOptions = {}): Cell {
     .storeUint(0, 32)
     .store(
       storeShardIdent({
-        shardPrefixBits: options.shardPrefixBits ?? 0,
+        shardPrefixBits: prefixBits,
         workchainId: options.workchain ?? 0,
-        shardPrefix: rawShard(options.shard ?? FULL_SHARD),
+        shardPrefix: shardPrefix(options.shard ?? FULL_SHARD, prefixBits),
       }),
     )
     .storeUint(options.generatedAtUnix ?? 1_800_000_190, 32)

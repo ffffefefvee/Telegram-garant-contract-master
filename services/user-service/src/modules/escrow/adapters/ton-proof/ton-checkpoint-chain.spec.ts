@@ -34,8 +34,6 @@ const IDS = {
   forward: 0x520fce1c,
   ordinary: 0xf644a6e6,
   simplex: 0xac249800,
-  signature: 0xa3def855,
-  vector: 0x1cb5c415,
   boolTrue: 0x997275b5,
   boolFalse: 0xbc799737,
 };
@@ -149,7 +147,7 @@ function blockInfo(input: {
       storeShardIdent({
         shardPrefixBits: 0,
         workchainId: -1,
-        shardPrefix: 1n << 63n,
+        shardPrefix: 0n,
       }),
     )
     .storeUint(input.generatedAtUnix, 32)
@@ -170,11 +168,16 @@ function keyBlockExtra(configRoot: Cell): Cell {
     .storeBit(true)
     .storeBit(false)
     .storeBit(false)
+    .storeCoins(0)
+    .storeBit(false)
+    .storeCoins(0)
+    .storeBit(false)
     .storeRef(dummy)
     .storeBuffer(Buffer.alloc(32, 0xc1))
     .storeRef(configRoot)
     .endCell();
   return beginCell()
+    .storeUint(0x4a33f6fd, 32)
     .storeRef(dummy)
     .storeRef(dummy)
     .storeRef(dummy)
@@ -298,7 +301,7 @@ function tlBytes(value: Buffer): Buffer {
 }
 
 function vector(values: readonly Buffer[]): Buffer {
-  return Buffer.concat([u32(IDS.vector), u32(values.length), ...values]);
+  return Buffer.concat([u32(values.length), ...values]);
 }
 
 function blockBytes(value: TonProofBlockId): Buffer {
@@ -313,7 +316,6 @@ function blockBytes(value: TonProofBlockId): Buffer {
 
 function signatureBytes(value: TonLiteSignature): Buffer {
   return Buffer.concat([
-    u32(IDS.signature),
     Buffer.from(value.nodeIdShort, "hex"),
     tlBytes(value.signature),
   ]);
@@ -536,7 +538,7 @@ describe("TON masterchain checkpoint chain", () => {
     ).toThrow("destination");
   });
 
-  it("rejects backward links under the trusted-key-block forward-only policy", () => {
+  it("rejects a non-final backward link", () => {
     const { expectation, sourceId, targetId, first } = fixture();
     const older = { ...sourceId, seqno: 90, rootHash: "9".repeat(64) };
     const raw = partialBytes(true, sourceId, targetId, [
@@ -544,7 +546,7 @@ describe("TON masterchain checkpoint chain", () => {
       forwardBytes({ ...first, from: older, to: targetId }),
     ]);
     expect(() => verifyTonMasterchainCheckpointChain(raw, expectation)).toThrow(
-      "not a forward link",
+      "only a final backward link from an authenticated key block is supported",
     );
   });
 

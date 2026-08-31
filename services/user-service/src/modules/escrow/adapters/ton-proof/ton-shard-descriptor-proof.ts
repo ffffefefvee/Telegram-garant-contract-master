@@ -11,6 +11,7 @@ import {
   TonForwardLinkProofError,
 } from "./ton-forward-link-proof";
 import type { TonProvenMasterchainHeader } from "./ton-masterchain-header-proof";
+import { canonicalTonShardId } from "./ton-shard-ident";
 import type {
   TonProofBlockId,
   TonProofResourceLimits,
@@ -152,7 +153,7 @@ function parseMasterchainState(
       globalId !== expectedGlobalId ||
       shard.workchainId !== -1 ||
       shard.shardPrefixBits !== 0 ||
-      signedUint64(shard.shardPrefix) !== MASTERCHAIN_SHARD ||
+      canonicalTonShardId(shard) !== MASTERCHAIN_SHARD ||
       beforeSplit ||
       minimumReferencedSeqno > seqno
     ) {

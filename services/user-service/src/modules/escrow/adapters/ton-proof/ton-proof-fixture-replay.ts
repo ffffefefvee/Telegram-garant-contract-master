@@ -189,6 +189,7 @@ export async function replayTonProofFixtureOffline(
       masterAddress: manifest.masterAddress,
       ownerAddress: manifest.ownerAddress,
       candidateWalletAddress: manifest.walletAddress,
+      walletContractProfile: manifest.walletContractProfile,
       gasLimit: 100_000_000n,
     },
   );
@@ -197,6 +198,7 @@ export async function replayTonProofFixtureOffline(
     masterAddress: manifest.masterAddress,
     candidateWalletAddress: manifest.walletAddress,
     pinnedWalletCodeHash: manifest.walletCodeHash,
+    walletContractProfile: manifest.walletContractProfile,
   });
   const transaction = verifyTonTransactionInclusionProof(
     walletShard,

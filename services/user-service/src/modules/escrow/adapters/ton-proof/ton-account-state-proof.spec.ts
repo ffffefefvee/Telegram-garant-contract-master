@@ -50,8 +50,12 @@ interface FixtureOptions {
   pruneUnrelatedSibling?: boolean;
 }
 
-function signedShard(value: string): bigint {
-  return BigInt.asUintN(64, BigInt(value));
+function shardPrefix(value: string, prefixBits: number): bigint {
+  const mask =
+    prefixBits === 0
+      ? 0n
+      : ((1n << BigInt(prefixBits)) - 1n) << BigInt(64 - prefixBits);
+  return BigInt.asUintN(64, BigInt(value)) & mask;
 }
 
 function depthBalance() {
@@ -63,7 +67,7 @@ function depthBalance() {
 
 function activeAccountRoot(options: FixtureOptions): Cell {
   const address = options.accountAddress ?? accountAddress;
-  const lastTransLt = options.accountLastTransactionLt ?? 700n;
+  const lastTransLt = options.accountLastTransactionLt ?? 702n;
   const state =
     options.accountState === "uninit"
       ? ({ type: "uninit" } as const)
@@ -194,7 +198,7 @@ function fixture(options: FixtureOptions = {}) {
       storeShardIdent({
         shardPrefixBits: prefixBits,
         workchainId: options.workchain ?? 0,
-        shardPrefix: signedShard(shard),
+        shardPrefix: shardPrefix(shard, prefixBits),
       }),
     )
     .storeUint(seqno, 32)
@@ -379,9 +383,9 @@ describe("TON finalized account-state proof", () => {
     );
   });
 
-  it("rejects disagreement between AccountStorage and ShardAccount LT", () => {
-    expect(() => verify(fixture({ accountLastTransactionLt: 701n }))).toThrow(
-      "last transaction LT",
+  it("rejects an AccountStorage end LT that does not advance ShardAccount LT", () => {
+    expect(() => verify(fixture({ accountLastTransactionLt: 700n }))).toThrow(
+      "does not advance",
     );
   });
 

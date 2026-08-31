@@ -31,8 +31,29 @@ function fixture() {
       Buffer.from(`artifact:${index}:${name}`),
     ]),
   ) as Record<string, Buffer>;
+  artifacts["official-global-config.json"] = Buffer.from(
+    JSON.stringify({
+      validator: {
+        zero_state: {
+          workchain: -1,
+          shard: -9223372036854776000,
+          seqno: 0,
+          root_hash: Buffer.from(MAINNET_ZERO_ROOT, "hex").toString("base64"),
+          file_hash: Buffer.from(MAINNET_ZERO_FILE, "hex").toString("base64"),
+        },
+      },
+      liteservers: Array.from({ length: 18 }, (_, index) => ({
+        ip: index + 1,
+        port: 1000 + index,
+        id: {
+          "@type": "pub.ed25519",
+          key: Buffer.alloc(32, index + 1).toString("base64"),
+        },
+      })),
+    }),
+  );
   const manifest = {
-    schemaVersion: 1,
+    schemaVersion: 2,
     kind: "TON_CAPTURED_PROOF_FIXTURE",
     network: "mainnet",
     globalId: -239,
@@ -55,6 +76,7 @@ function fixture() {
     ownerAddress: `0:${"22".repeat(32)}`,
     walletAddress: `0:${"33".repeat(32)}`,
     walletCodeHash: "77".repeat(32),
+    walletContractProfile: "tep74-reference-wallet-v1",
     masterShardBlock: block(0, 200, 3),
     walletShardBlock: block(0, 201, 4),
     masterLastTransaction: { lt: "1000", hash: "55".repeat(32) },
@@ -164,6 +186,29 @@ describe("TON proof fixture manifest", () => {
     ).toThrow("zerostate identity is not pinned");
   });
 
+  it("semantically validates the captured official config after its descriptor is rehashed", () => {
+    const value = fixture();
+    const config = JSON.parse(
+      value.artifacts["official-global-config.json"].toString("utf8"),
+    );
+    config.validator.zero_state.root_hash = Buffer.alloc(32, 0x99).toString(
+      "base64",
+    );
+    value.artifacts["official-global-config.json"] = Buffer.from(
+      JSON.stringify(config),
+    );
+    value.manifest.artifacts["official-global-config.json"] = {
+      bytes: value.artifacts["official-global-config.json"].length,
+      sha256: hash(value.artifacts["official-global-config.json"]),
+    };
+    expect(() =>
+      verifyTonProofFixtureManifest(
+        Buffer.from(JSON.stringify(value.manifest)),
+        value.artifacts,
+      ),
+    ).toThrow("config zerostate does not match the manifest");
+  });
+
   it("rejects unknown manifest fields and unsupported schemas", () => {
     const extra = fixture();
     const raw = Buffer.from(
@@ -173,7 +218,7 @@ describe("TON proof fixture manifest", () => {
       "manifest must contain exactly",
     );
     const schema = fixture();
-    schema.manifest.schemaVersion = 2;
+    schema.manifest.schemaVersion = 1;
     expect(() =>
       verifyTonProofFixtureManifest(
         Buffer.from(JSON.stringify(schema.manifest)),

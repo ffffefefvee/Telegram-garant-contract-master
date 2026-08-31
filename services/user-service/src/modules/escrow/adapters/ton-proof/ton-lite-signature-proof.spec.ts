@@ -24,8 +24,6 @@ const IDS = {
   candidateOrdinary: 0xe8f9bcdc,
   candidateEmpty: 0x72b4d933,
   candidateWithoutParents: 0x22cbcca9,
-  signature: 0xa3def855,
-  vector: 0x1cb5c415,
   boolTrue: 0x997275b5,
   boolFalse: 0xbc799737,
 };
@@ -70,7 +68,7 @@ function tlBytes(value: Buffer): Buffer {
 }
 
 function vector(items: readonly Buffer[]): Buffer {
-  return Buffer.concat([u32(IDS.vector), u32(items.length), ...items]);
+  return Buffer.concat([u32(items.length), ...items]);
 }
 
 function block(seqno: number, marker: number): TonProofBlockId {
@@ -95,7 +93,6 @@ function blockBytes(value: TonProofBlockId): Buffer {
 
 function signatureBytes(value: TonLiteSignature): Buffer {
   return Buffer.concat([
-    u32(IDS.signature),
     Buffer.from(value.nodeIdShort, "hex"),
     tlBytes(value.signature),
   ]);

@@ -112,6 +112,8 @@ function blockInfo(input: {
   validatorSetHash: number;
   catchainSeqno: number;
   keyBlock: boolean;
+  wantSplit?: boolean;
+  wantMerge?: boolean;
 }): Cell {
   return beginCell()
     .storeUint(0x9bc7a987, 32)
@@ -120,8 +122,8 @@ function blockInfo(input: {
     .storeBit(false)
     .storeBit(false)
     .storeBit(false)
-    .storeBit(false)
-    .storeBit(false)
+    .storeBit(input.wantSplit ?? false)
+    .storeBit(input.wantMerge ?? false)
     .storeBit(input.keyBlock)
     .storeBit(false)
     .storeUint(0, 8)
@@ -131,7 +133,7 @@ function blockInfo(input: {
       storeShardIdent({
         shardPrefixBits: 0,
         workchainId: -1,
-        shardPrefix: 1n << 63n,
+        shardPrefix: 0n,
       }),
     )
     .storeUint(1_800_000_000 + input.seqno, 32)
@@ -152,11 +154,16 @@ function keyBlockExtra(root: Cell): Cell {
     .storeBit(true)
     .storeBit(false)
     .storeBit(false)
+    .storeCoins(0)
+    .storeBit(false)
+    .storeCoins(0)
+    .storeBit(false)
     .storeRef(dummy)
     .storeBuffer(Buffer.alloc(32, 0xc1))
     .storeRef(root)
     .endCell();
   return beginCell()
+    .storeUint(0x4a33f6fd, 32)
     .storeRef(dummy)
     .storeRef(dummy)
     .storeRef(dummy)
@@ -188,6 +195,8 @@ interface FixtureOptions {
   signerIndexes?: number[];
   wrongDestinationValidatorHash?: boolean;
   simplex?: boolean;
+  wantSplit?: boolean;
+  wantMerge?: boolean;
 }
 
 function u32(value: number): Buffer {
@@ -253,6 +262,8 @@ function fixture(options: FixtureOptions = {}) {
       validatorSetHash: 0,
       catchainSeqno: 6,
       keyBlock: true,
+      wantSplit: options.wantSplit,
+      wantMerge: options.wantMerge,
     }),
     keyBlockExtra(proofConfigRoot),
   );
@@ -266,6 +277,8 @@ function fixture(options: FixtureOptions = {}) {
         : derived.validatorSetHash,
       catchainSeqno: 7,
       keyBlock: destinationKeyBlock,
+      wantSplit: options.wantSplit,
+      wantMerge: options.wantMerge,
     }),
     beginCell().storeBit(false).endCell(),
   );
@@ -412,6 +425,18 @@ describe("TON forward key-block link proof", () => {
       signedWeight: "70",
       totalWeight: "100",
       signerCount: 2,
+    });
+  });
+
+  it("allows advisory split and merge intent bits on signed masterchain headers", () => {
+    const { link, expectation } = fixture({
+      wantSplit: true,
+      wantMerge: true,
+    });
+    expect(verifyTonForwardKeyBlockLink(link, expectation)).toMatchObject({
+      headerBindingVerified: true,
+      signaturesVerified: true,
+      linkVerified: true,
     });
   });
 

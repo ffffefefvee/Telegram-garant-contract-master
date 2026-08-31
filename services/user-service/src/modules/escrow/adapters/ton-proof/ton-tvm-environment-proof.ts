@@ -6,6 +6,7 @@ import type {
   TonProofResourceLimits,
 } from "./ton-proof-envelope";
 import { parseTonMerkleProofBoc } from "./ton-proof-envelope";
+import { canonicalTonShardId } from "./ton-shard-ident";
 
 const SHARD_STATE_TAG = 0x9023afe2;
 const MASTERCHAIN_STATE_EXTRA_TAG = 0xcc26;
@@ -51,10 +52,6 @@ function blockIdsEqual(left: TonProofBlockId, right: TonProofBlockId): boolean {
     left.rootHash === right.rootHash &&
     left.fileHash === right.fileHash
   );
-}
-
-function signedUint64(value: bigint): string {
-  return (value >= 1n << 63n ? value - (1n << 64n) : value).toString();
 }
 
 function requireCompleteOrdinaryGraph(root: Cell): void {
@@ -137,7 +134,7 @@ export function verifyTonTvmEnvironmentProof(
       globalId !== header.globalId ||
       shard.workchainId !== -1 ||
       shard.shardPrefixBits !== 0 ||
-      signedUint64(shard.shardPrefix) !== MASTERCHAIN_SHARD ||
+      canonicalTonShardId(shard) !== MASTERCHAIN_SHARD ||
       seqno !== header.block.seqno ||
       verticalSeqno !== header.verticalSeqno ||
       generatedAtUnix !== header.generatedAtUnix ||

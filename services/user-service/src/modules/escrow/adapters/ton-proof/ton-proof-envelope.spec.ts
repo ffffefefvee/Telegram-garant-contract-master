@@ -70,7 +70,7 @@ function masterchainHeaderProof(input?: {
       storeShardIdent({
         shardPrefixBits: 0,
         workchainId: -1,
-        shardPrefix: 1n << 63n,
+        shardPrefix: 0n,
       }),
     )
     .storeUint(input?.generatedAtUnix ?? NOW - 20, 32)

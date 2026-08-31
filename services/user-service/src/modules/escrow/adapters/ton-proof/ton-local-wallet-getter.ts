@@ -3,6 +3,7 @@ import {
   Address,
   beginCell,
   Cell,
+  CellType,
   getMethodId,
   parseTuple,
   TupleReader,
@@ -11,8 +12,13 @@ import { Executor, loadConfig } from "@ton/sandbox";
 import type { TonProvenActiveAccountState } from "./ton-account-state-proof";
 import type { TonProofBlockId } from "./ton-proof-envelope";
 import type { TonProvenTvmEnvironment } from "./ton-tvm-environment-proof";
+import {
+  isTonJettonWalletContractProfile,
+  type TonJettonWalletContractProfile,
+} from "./ton-jetton-wallet-profile";
 
 const GET_WALLET_ADDRESS = "get_wallet_address";
+const GET_JETTON_DATA = "get_jetton_data";
 const GETTER_POLICY_VERSION = "ton-local-getter-v1/sandbox-0.40.0";
 const MAX_GETTER_GAS = 100_000_000n;
 
@@ -20,6 +26,7 @@ export interface TonLocalWalletGetterExpectation {
   masterAddress: string;
   ownerAddress: string;
   candidateWalletAddress: string;
+  walletContractProfile: TonJettonWalletContractProfile;
   gasLimit: bigint;
 }
 
@@ -37,6 +44,10 @@ export interface TonVerifiedLocalWalletGetterResult {
   masterAddress: string;
   ownerAddress: string;
   canonicalWalletAddress: string;
+  walletContractProfile: TonJettonWalletContractProfile;
+  masterWalletCodeHash: string | null;
+  walletCodeGetterMethodId: number | null;
+  walletCodeGetterGasUsed: string | null;
   methodId: number;
   gasLimit: string;
   gasUsed: string;
@@ -50,6 +61,30 @@ export interface TonVerifiedLocalWalletGetterResult {
   getterInputHash: string;
   deterministicRandomSeedHash: string;
   executionTranscriptHash: string;
+}
+
+function stablecoinMasterWalletCodeHash(master: TonProvenActiveAccountState): string {
+  if (master.data.type !== CellType.Ordinary) {
+    reject("stablecoin master data must be an ordinary cell");
+  }
+  try {
+    const data = master.data.beginParse();
+    data.loadCoins();
+    data.loadAddress();
+    data.loadMaybeAddress();
+    const walletCode = data.loadRef();
+    data.loadRef();
+    data.endParse();
+    if (walletCode.type !== CellType.Library) {
+      reject("stablecoin master wallet code must be a library reference");
+    }
+    return walletCode.hash(0).toString("hex");
+  } catch (error) {
+    if (error instanceof TonLocalWalletGetterError) throw error;
+    reject(
+      `stablecoin master data is malformed: ${error instanceof Error ? error.message : "unknown error"}`,
+    );
+  }
 }
 
 export class TonLocalWalletGetterError extends Error {
@@ -164,6 +199,13 @@ export async function executeTonCanonicalWalletGetter(
     expectation.candidateWalletAddress,
     "candidateWalletAddress",
   );
+  if (!isTonJettonWalletContractProfile(expectation.walletContractProfile)) {
+    reject("walletContractProfile is unsupported");
+  }
+  const masterWalletCodeHash =
+    expectation.walletContractProfile === "ton-stablecoin-governance-wallet-v1"
+      ? stablecoinMasterWalletCodeHash(master)
+      : null;
   if (master.accountAddress !== masterAddress.toRawString()) {
     reject("expected Jetton master address does not match the proven account");
   }
@@ -255,6 +297,83 @@ export async function executeTonCanonicalWalletGetter(
     reject("locally derived wallet does not match the candidate wallet");
   }
 
+  let boundMasterWalletCodeHash = masterWalletCodeHash;
+  let walletCodeGetterMethodId: number | null = null;
+  let walletCodeGetterGasUsed: bigint | null = null;
+  if (expectation.walletContractProfile === "tep74-library-wallet-v1") {
+    walletCodeGetterMethodId = getMethodId(GET_JETTON_DATA);
+    let walletCodeExecution;
+    try {
+      walletCodeExecution = await executor.runGetMethod({
+        code: master.code,
+        data: master.data,
+        methodId: walletCodeGetterMethodId,
+        stack: [],
+        config: environment.configurationRoot
+          .toBoc({ idx: false, crc32: false })
+          .toString("base64"),
+        verbosity: "short",
+        address: masterAddress,
+        unixTime: environment.generatedAtUnix,
+        balance: canonicalUint(master.balanceNanotons, "master balance"),
+        randomSeed: hashParts("TON_LOCAL_JETTON_DATA_RANDOM_SEED_V1", [
+          environment.masterchainBlock.rootHash,
+          master.accountStateHash,
+        ]),
+        gasLimit: expectation.gasLimit,
+        debugEnabled: false,
+      });
+    } catch (error) {
+      reject(
+        `local get_jetton_data execution failed: ${error instanceof Error ? error.message : "unknown error"}`,
+      );
+    }
+    if (!walletCodeExecution.output.success) {
+      reject(
+        `local get_jetton_data execution failed: ${walletCodeExecution.output.error}`,
+      );
+    }
+    if (walletCodeExecution.output.vm_exit_code !== 0) {
+      reject(
+        `local get_jetton_data exited with code ${walletCodeExecution.output.vm_exit_code}`,
+      );
+    }
+    if (walletCodeExecution.output.missing_library !== null) {
+      reject("local get_jetton_data requires an unproven global library");
+    }
+    walletCodeGetterGasUsed = canonicalUint(
+      walletCodeExecution.output.gas_used,
+      "get_jetton_data gas usage",
+    );
+    if (walletCodeGetterGasUsed > expectation.gasLimit) {
+      reject("local get_jetton_data exceeded its gas limit");
+    }
+    try {
+      const stack = new TupleReader(
+        parseTuple(Cell.fromBase64(walletCodeExecution.output.stack)),
+      );
+      stack.readBigNumber();
+      stack.readBigNumber();
+      const admin = stack.readCell().beginParse();
+      admin.loadMaybeAddress();
+      admin.endParse();
+      stack.readCell();
+      const walletCode = stack.readCell();
+      if (stack.remaining !== 0) {
+        reject("local get_jetton_data returned trailing stack items");
+      }
+      if (walletCode.type !== CellType.Library) {
+        reject("local get_jetton_data wallet code is not a library reference");
+      }
+      boundMasterWalletCodeHash = walletCode.hash(0).toString("hex");
+    } catch (error) {
+      if (error instanceof TonLocalWalletGetterError) throw error;
+      reject(
+        `local get_jetton_data result is malformed: ${error instanceof Error ? error.message : "unknown error"}`,
+      );
+    }
+  }
+
   const executionTranscriptHash = hashParts("TON_LOCAL_GETTER_TRANSCRIPT_V1", [
     GETTER_POLICY_VERSION,
     environment.networkGlobalId.toString(),
@@ -265,6 +384,10 @@ export async function executeTonCanonicalWalletGetter(
     master.accountStateHash,
     master.codeHash,
     master.dataHash,
+    expectation.walletContractProfile,
+    boundMasterWalletCodeHash ?? "none",
+    walletCodeGetterMethodId?.toString() ?? "none",
+    walletCodeGetterGasUsed?.toString() ?? "none",
     getterInputHash,
     returnedWallet.toRawString(),
     gasUsed.toString(),
@@ -284,6 +407,10 @@ export async function executeTonCanonicalWalletGetter(
     masterAddress: masterAddress.toRawString(),
     ownerAddress: ownerAddress.toRawString(),
     canonicalWalletAddress: returnedWallet.toRawString(),
+    walletContractProfile: expectation.walletContractProfile,
+    masterWalletCodeHash: boundMasterWalletCodeHash,
+    walletCodeGetterMethodId,
+    walletCodeGetterGasUsed: walletCodeGetterGasUsed?.toString() ?? null,
     methodId,
     gasLimit: expectation.gasLimit.toString(),
     gasUsed: gasUsed.toString(),

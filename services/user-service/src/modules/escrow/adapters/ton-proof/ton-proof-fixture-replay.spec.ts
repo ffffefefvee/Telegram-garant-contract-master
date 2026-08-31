@@ -78,8 +78,35 @@ function fixture() {
       Buffer.from(`offline:${index}:${name}`),
     ]),
   ) as Record<string, Buffer>;
+  artifacts["official-global-config.json"] = Buffer.from(
+    JSON.stringify({
+      validator: {
+        zero_state: {
+          workchain: -1,
+          shard: -9223372036854776000,
+          seqno: 0,
+          root_hash: Buffer.from(
+            "17a3a92992aabea785a7a090985a265cd31f323d849da51239737e321fb05569",
+            "hex",
+          ).toString("base64"),
+          file_hash: Buffer.from(
+            "5e994fcf4d425c0a6ce6a792594b7173205f740a39cd56f537defd28b48a0f6e",
+            "hex",
+          ).toString("base64"),
+        },
+      },
+      liteservers: Array.from({ length: 18 }, (_, index) => ({
+        ip: index + 1,
+        port: 1000 + index,
+        id: {
+          "@type": "pub.ed25519",
+          key: Buffer.alloc(32, index + 1).toString("base64"),
+        },
+      })),
+    }),
+  );
   const manifest = {
-    schemaVersion: 1,
+    schemaVersion: 2,
     kind: "TON_CAPTURED_PROOF_FIXTURE",
     network: "mainnet",
     globalId: -239,
@@ -109,6 +136,7 @@ function fixture() {
     ownerAddress: `0:${"52".repeat(32)}`,
     walletAddress: `0:${"53".repeat(32)}`,
     walletCodeHash: "54".repeat(32),
+    walletContractProfile: "tep74-reference-wallet-v1",
     masterShardBlock: masterShard,
     walletShardBlock: walletShard,
     masterLastTransaction: null,

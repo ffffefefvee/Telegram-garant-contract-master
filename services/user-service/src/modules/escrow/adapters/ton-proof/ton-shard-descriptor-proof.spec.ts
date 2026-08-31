@@ -128,7 +128,7 @@ function masterchainState(input?: {
       storeShardIdent({
         shardPrefixBits: 0,
         workchainId: input?.workchain ?? -1,
-        shardPrefix: 1n << 63n,
+        shardPrefix: 0n,
       }),
     )
     .storeUint(input?.seqno ?? 115, 32)
