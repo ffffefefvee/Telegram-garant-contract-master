@@ -10,6 +10,10 @@ import type {
 } from "./ton-proof-envelope";
 import type { TonVerifiedForwardKeyBlockLink } from "./ton-forward-link-proof";
 import { verifyTonForwardKeyBlockLink } from "./ton-forward-link-proof";
+import {
+  verifyTonBackwardBlockLink,
+  type TonVerifiedBackwardBlockLink,
+} from "./ton-backward-link-proof";
 
 const MAX_LITESERVER_LINKS = 16;
 
@@ -32,7 +36,9 @@ export interface TonProvenMasterchainCheckpointChain {
   endpointsVerified: true;
   completenessVerified: true;
   allLinksVerified: true;
-  ordinaryConsensusVerified: true;
+  supportedConsensusVerified: true;
+  ordinaryConsensusVerified: boolean;
+  simplexConsensusVerified: boolean;
   masterchainFinalityProven: true;
   finalityProven: true;
   authorizationAllowed: false;
@@ -47,7 +53,10 @@ export interface TonProvenMasterchainCheckpointChain {
   latestKeyBlock: TonProofBlockId | null;
   rawProofHash: string;
   checkpointEvidenceHash: string;
-  links: readonly TonVerifiedForwardKeyBlockLink[];
+  links: readonly (
+    | TonVerifiedForwardKeyBlockLink
+    | TonVerifiedBackwardBlockLink
+  )[];
 }
 
 export class TonCheckpointChainError extends Error {
@@ -150,28 +159,40 @@ function verifyDecodedChain(
     reject("checkpoint chain exceeds the LiteServer link cap");
   }
 
-  const links: TonVerifiedForwardKeyBlockLink[] = [];
+  const links: Array<
+    TonVerifiedForwardKeyBlockLink | TonVerifiedBackwardBlockLink
+  > = [];
   let trustedSource = { ...expectation.trustedKeyBlock };
   let latestKeyBlock: TonProofBlockId | null = { ...trustedSource };
   for (let index = 0; index < proof.steps.length; index += 1) {
     const step = proof.steps[index];
-    if (step.kind !== "forward") {
-      reject(`checkpoint chain link ${index} is not a forward link`);
-    }
-    const verified = verifyTonForwardKeyBlockLink(step, {
-      globalId: expectation.globalId,
-      trustedSourceKeyBlock: trustedSource,
-      limits: expectation.bocLimits,
-    });
     const isLast = index === proof.steps.length - 1;
-    if (!isLast && !verified.destinationIsKeyBlock) {
-      reject(`checkpoint chain link ${index} does not end at a key block`);
+    if (step.kind === "forward") {
+      const verified = verifyTonForwardKeyBlockLink(step, {
+        globalId: expectation.globalId,
+        trustedSourceKeyBlock: trustedSource,
+        limits: expectation.bocLimits,
+      });
+      if (!isLast && !verified.destinationIsKeyBlock) {
+        reject(`checkpoint chain link ${index} does not end at a key block`);
+      }
+      if (verified.destinationIsKeyBlock) {
+        latestKeyBlock = { ...verified.destinationBlock };
+      }
+      trustedSource = { ...verified.destinationBlock };
+      links.push(verified);
+    } else {
+      if (!isLast || latestKeyBlock === null || !blockIdsEqual(trustedSource, latestKeyBlock)) {
+        reject("only a final backward link from an authenticated key block is supported");
+      }
+      const verified = verifyTonBackwardBlockLink(step, {
+        globalId: expectation.globalId,
+        authenticatedSourceBlock: trustedSource,
+        limits: expectation.bocLimits,
+      });
+      trustedSource = { ...verified.destinationBlock };
+      links.push(verified);
     }
-    if (verified.destinationIsKeyBlock) {
-      latestKeyBlock = { ...verified.destinationBlock };
-    }
-    trustedSource = { ...verified.destinationBlock };
-    links.push(verified);
   }
 
   const targetGeneratedAtUnix =
@@ -203,21 +224,37 @@ function verifyDecodedChain(
     targetBlock: expectation.targetBlock,
     observedAtUnix: expectation.observedAtUnix,
     rawProofHash: proof.rawHash,
-    links: links.map((link) => ({
-      sourceBlock: link.sourceBlock,
-      destinationBlock: link.destinationBlock,
-      destinationIsKeyBlock: link.destinationIsKeyBlock,
-      configProofRootHash: link.configProofRootHash,
-      destinationProofRootHash: link.destinationProofRootHash,
-      configRootHash: link.configRootHash,
-      validatorParameter: link.validatorParameter,
-      catchainParameter: link.catchainParameter,
-      catchainSeqno: link.catchainSeqno,
-      validatorSetHash: link.validatorSetHash,
-      signedWeight: link.signedWeight,
-      totalWeight: link.totalWeight,
-      signerCount: link.signerCount,
-    })),
+    links: links.map((link) =>
+      link.kind === "TON_VERIFIED_FORWARD_KEY_BLOCK_LINK"
+        ? {
+            kind: link.kind,
+            sourceBlock: link.sourceBlock,
+            destinationBlock: link.destinationBlock,
+            destinationIsKeyBlock: link.destinationIsKeyBlock,
+            configProofRootHash: link.configProofRootHash,
+            destinationProofRootHash: link.destinationProofRootHash,
+            configRootHash: link.configRootHash,
+            validatorParameter: link.validatorParameter,
+            catchainParameter: link.catchainParameter,
+            catchainSeqno: link.catchainSeqno,
+            validatorSetHash: link.validatorSetHash,
+            consensus: link.consensus,
+            signedDataHash: link.signedDataHash,
+            signedWeight: link.signedWeight,
+            totalWeight: link.totalWeight,
+            signerCount: link.signerCount,
+          }
+        : {
+            kind: link.kind,
+            sourceBlock: link.sourceBlock,
+            destinationBlock: link.destinationBlock,
+            destinationIsKeyBlock: link.destinationIsKeyBlock,
+            sourceStateHash: link.sourceStateHash,
+            sourceProofRootHash: link.sourceProofRootHash,
+            sourceStateProofRootHash: link.sourceStateProofRootHash,
+            destinationProofRootHash: link.destinationProofRootHash,
+          },
+    ),
   };
 
   return {
@@ -226,7 +263,18 @@ function verifyDecodedChain(
     endpointsVerified: true,
     completenessVerified: true,
     allLinksVerified: true,
-    ordinaryConsensusVerified: true,
+    supportedConsensusVerified: true,
+    ordinaryConsensusVerified: links
+      .filter(
+        (link): link is TonVerifiedForwardKeyBlockLink =>
+          link.kind === "TON_VERIFIED_FORWARD_KEY_BLOCK_LINK",
+      )
+      .every((link) => link.consensus === "ordinary"),
+    simplexConsensusVerified: links.some(
+      (link) =>
+        link.kind === "TON_VERIFIED_FORWARD_KEY_BLOCK_LINK" &&
+        link.consensus === "simplex",
+    ),
     masterchainFinalityProven: true,
     finalityProven: true,
     authorizationAllowed: false,

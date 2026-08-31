@@ -1,0 +1,8 @@
+[extend]
+useDefault = true
+
+[allowlist]
+description = "Public TON validator and LiteServer keys in pinned official configs"
+paths = [
+  '''^services/user-service/fixtures/ton-proof/(?:mainnet|testnet)/official-global-config\.json$''',
+]

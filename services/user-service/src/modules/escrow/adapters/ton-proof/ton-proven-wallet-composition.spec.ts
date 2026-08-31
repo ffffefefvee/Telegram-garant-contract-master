@@ -15,6 +15,11 @@ const walletAddress = Address.parseRaw(`0:${"33".repeat(32)}`);
 const other = Address.parseRaw(`0:${"44".repeat(32)}`);
 const walletCode = beginCell().storeUint(0xcafe, 16).endCell();
 const otherCode = beginCell().storeUint(0xbeef, 16).endCell();
+const walletLibraryHash = Buffer.from("ab".repeat(32), "hex");
+const libraryWalletCode = beginCell()
+  .storeUint(2, 8)
+  .storeBuffer(walletLibraryHash)
+  .endCell({ exotic: true });
 
 function anchor() {
   return {
@@ -47,6 +52,10 @@ function getter(): TonVerifiedLocalWalletGetterResult {
     masterAddress: master.toRawString(),
     ownerAddress: owner.toRawString(),
     canonicalWalletAddress: walletAddress.toRawString(),
+    walletContractProfile: "tep74-reference-wallet-v1",
+    masterWalletCodeHash: null,
+    walletCodeGetterMethodId: null,
+    walletCodeGetterGasUsed: null,
     methodId: 103289,
     gasLimit: "10000000",
     gasUsed: "453",
@@ -74,6 +83,21 @@ function walletData(
     .storeAddress(storedOwner)
     .storeAddress(storedMaster)
     .storeRef(embeddedCode);
+  if (trailing) builder.storeBit(true);
+  return builder.endCell();
+}
+
+function stablecoinWalletData(
+  storedOwner = owner,
+  storedMaster = master,
+  status = 0,
+  trailing = false,
+): Cell {
+  const builder = beginCell()
+    .storeUint(status, 4)
+    .storeCoins(123_456n)
+    .storeAddress(storedOwner)
+    .storeAddress(storedMaster);
   if (trailing) builder.storeBit(true);
   return builder.endCell();
 }
@@ -127,6 +151,23 @@ function expectation() {
     masterAddress: master.toRawString(),
     candidateWalletAddress: walletAddress.toRawString(),
     pinnedWalletCodeHash: walletCode.hash(0).toString("hex"),
+    walletContractProfile: "tep74-reference-wallet-v1" as const,
+  };
+}
+
+function stablecoinGetter(): TonVerifiedLocalWalletGetterResult {
+  return {
+    ...getter(),
+    walletContractProfile: "ton-stablecoin-governance-wallet-v1",
+    masterWalletCodeHash: libraryWalletCode.hash(0).toString("hex"),
+  };
+}
+
+function stablecoinExpectation() {
+  return {
+    ...expectation(),
+    pinnedWalletCodeHash: libraryWalletCode.hash(0).toString("hex"),
+    walletContractProfile: "ton-stablecoin-governance-wallet-v1" as const,
   };
 }
 
@@ -185,6 +226,57 @@ describe("TON proven canonical-wallet composition", () => {
     const first = composeTonProvenCanonicalWallet(getter(), wallet(), expectation());
     const second = composeTonProvenCanonicalWallet(getter(), wallet(), expectation());
     expect(second.proofCompositionHash).toBe(first.proofCompositionHash);
+  });
+
+  it("composes the governance stablecoin wallet through its master-bound library reference", () => {
+    const result = composeTonProvenCanonicalWallet(
+      stablecoinGetter(),
+      wallet(stablecoinWalletData(undefined, undefined, 3), libraryWalletCode),
+      stablecoinExpectation(),
+    );
+    expect(result).toMatchObject({
+      walletContractProfile: "ton-stablecoin-governance-wallet-v1",
+      walletStatus: "3",
+      walletLibraryHash: walletLibraryHash.toString("hex"),
+      jettonBalance: "123456",
+      embeddedCodeHashVerified: true,
+      authorizationAllowed: false,
+    });
+  });
+
+  it("rejects a stablecoin wallet whose library reference differs from the proven master", () => {
+    const input = stablecoinGetter();
+    input.masterWalletCodeHash = otherCode.hash(0).toString("hex");
+    expect(() =>
+      composeTonProvenCanonicalWallet(
+        input,
+        wallet(stablecoinWalletData(), libraryWalletCode),
+        stablecoinExpectation(),
+      ),
+    ).toThrow("embedded wallet code");
+  });
+
+  it("rejects the stablecoin profile with ordinary active code", () => {
+    expect(() =>
+      composeTonProvenCanonicalWallet(
+        stablecoinGetter(),
+        wallet(stablecoinWalletData(), walletCode),
+        {
+          ...stablecoinExpectation(),
+          pinnedWalletCodeHash: walletCode.hash(0).toString("hex"),
+        },
+      ),
+    ).toThrow("library reference");
+  });
+
+  it("rejects trailing stablecoin wallet-data fields", () => {
+    expect(() =>
+      composeTonProvenCanonicalWallet(
+        stablecoinGetter(),
+        wallet(stablecoinWalletData(undefined, undefined, 0, true), libraryWalletCode),
+        stablecoinExpectation(),
+      ),
+    ).toThrow("wallet data is malformed");
   });
 
   it("rejects a getter result from another finalized anchor", () => {
@@ -272,7 +364,7 @@ describe("TON proven canonical-wallet composition", () => {
         wallet(prunedBranch(walletData())),
         expectation(),
       ),
-    ).toThrow("ordinary cells");
+    ).toThrow("ordinary cell");
   });
 
   it("rejects an embedded code cell hidden by pruning", () => {

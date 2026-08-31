@@ -1,11 +1,18 @@
-import { Cell, CellType, loadShardIdent, Slice } from "@ton/core";
+import {
+  Cell,
+  CellType,
+  loadCurrencyCollection,
+  loadShardIdent,
+  Slice,
+} from "@ton/core";
 import type {
   TonProofBlockId,
   TonProofResourceLimits,
 } from "./ton-proof-envelope";
 import { parseTonMerkleProofBoc } from "./ton-proof-envelope";
 import type { TonLiteBlockLinkForward } from "./ton-lite-signature-proof";
-import { verifyTonOrdinaryForwardLinkSignatures } from "./ton-lite-signature-proof";
+import { verifyTonForwardLinkSignatures } from "./ton-lite-signature-proof";
+import { canonicalTonShardId } from "./ton-shard-ident";
 import {
   computeTonValidatorSetHash,
   deriveTonMasterchainValidatorSet,
@@ -15,6 +22,7 @@ import {
 
 const BLOCK_TAG = 0x11ef55aa;
 const BLOCK_INFO_TAG = 0x9bc7a987;
+const BLOCK_EXTRA_TAG = 0x4a33f6fd;
 const MASTERCHAIN_EXTRA_TAG = 0xcca5;
 const MASTERCHAIN_SHARD = "-9223372036854775808";
 
@@ -38,6 +46,7 @@ export interface TonVerifiedForwardKeyBlockLink {
   headerBindingVerified: true;
   signaturesVerified: true;
   thresholdVerified: true;
+  consensus: "ordinary" | "simplex";
   linkVerified: true;
   finalityProven: false;
   sourceBlock: TonProofBlockId;
@@ -50,6 +59,7 @@ export interface TonVerifiedForwardKeyBlockLink {
   signedWeight: string;
   totalWeight: string;
   signerCount: number;
+  signedDataHash: string;
   configAddress: string;
   configRootHash: string;
   validatorParameter: 34 | 35;
@@ -189,10 +199,6 @@ interface ParsedForwardHeader {
   extra: Cell;
 }
 
-function signedShardString(shard: bigint): string {
-  return (shard >= 1n << 63n ? shard - (1n << 64n) : shard).toString();
-}
-
 function parseForwardHeader(
   root: Cell,
   expected: TonProofBlockId,
@@ -225,8 +231,8 @@ function parseForwardHeader(
     const afterMerge = info.loadBit();
     const beforeSplit = info.loadBit();
     const afterSplit = info.loadBit();
-    const wantSplit = info.loadBit();
-    const wantMerge = info.loadBit();
+    info.loadBit(); // want_split is advisory and remains hash/signature committed
+    info.loadBit(); // want_merge is advisory and remains hash/signature committed
     const keyBlock = info.loadBit();
     const verticalSeqnoIncrement = info.loadBit();
     const flags = info.loadUint(8);
@@ -254,16 +260,14 @@ function parseForwardHeader(
       notMaster ||
       afterMerge ||
       beforeSplit ||
-      afterSplit ||
-      wantSplit ||
-      wantMerge
+      afterSplit
     ) {
       reject(`${label} is not a canonical masterchain header`);
     }
     if (
       shard.workchainId !== -1 ||
       shard.shardPrefixBits !== 0 ||
-      signedShardString(shard.shardPrefix) !== MASTERCHAIN_SHARD
+      canonicalTonShardId(shard) !== MASTERCHAIN_SHARD
     ) {
       reject(`${label} BlockInfo shard is not the masterchain`);
     }
@@ -299,6 +303,9 @@ function extractKeyBlockConfig(extraCell: Cell): {
     reject("source BlockExtra is absent");
   try {
     const extra = extraCell.beginParse();
+    if (extra.loadUint(32) !== BLOCK_EXTRA_TAG) {
+      reject("source BlockExtra tag is invalid");
+    }
     extra.loadRef();
     extra.loadRef();
     extra.loadRef();
@@ -316,7 +323,9 @@ function extractKeyBlockConfig(extraCell: Cell): {
     }
     if (!source.loadBit()) reject("source block is not a key block");
     source.loadMaybeRef(); // ShardHashes
-    source.loadMaybeRef(); // ShardFees
+    source.loadMaybeRef(); // ShardFees dictionary root
+    loadCurrencyCollection(source); // ShardFees aggregate fees
+    loadCurrencyCollection(source); // ShardFees aggregate created funds
     source.loadRef(); // signatures/messages bracket remains hash-committed
     const configAddress = source.loadBuffer(32).toString("hex");
     const configRoot = source.loadRef();
@@ -433,7 +442,7 @@ export function verifyTonForwardKeyBlockLink(
       "destination validator-list hash does not match proven configuration",
     );
   }
-  const signatures = verifyTonOrdinaryForwardLinkSignatures(
+  const signatures = verifyTonForwardLinkSignatures(
     link,
     derived.signatureValidatorSet,
   );
@@ -447,6 +456,7 @@ export function verifyTonForwardKeyBlockLink(
     headerBindingVerified: true,
     signaturesVerified: true,
     thresholdVerified: true,
+    consensus: signatures.consensus,
     linkVerified: true,
     finalityProven: false,
     sourceBlock: { ...link.from },
@@ -459,6 +469,7 @@ export function verifyTonForwardKeyBlockLink(
     signedWeight: signatures.signedWeight,
     totalWeight: signatures.totalWeight,
     signerCount: signatures.signerCount,
+    signedDataHash: signatures.signedDataHash,
     configAddress,
     configRootHash: configRoot.hash(0).toString("hex"),
     validatorParameter,

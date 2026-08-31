@@ -26,6 +26,8 @@ interface FixtureOverrides {
   version?: number;
   flags?: number;
   splitFlag?: boolean;
+  wantSplit?: boolean;
+  wantMerge?: boolean;
   notMaster?: boolean;
   stateUpdate?: Cell;
   valueFlow?: Cell;
@@ -64,8 +66,8 @@ function fixture(overrides: FixtureOverrides = {}) {
     .storeBit(false)
     .storeBit(overrides.splitFlag ?? false)
     .storeBit(false)
-    .storeBit(false)
-    .storeBit(false)
+    .storeBit(overrides.wantSplit ?? false)
+    .storeBit(overrides.wantMerge ?? false)
     .storeBit(false)
     .storeBit(false)
     .storeUint(flags, 8)
@@ -75,7 +77,7 @@ function fixture(overrides: FixtureOverrides = {}) {
       storeShardIdent({
         shardPrefixBits: overrides.shardPrefixBits ?? 0,
         workchainId: overrides.workchain ?? -1,
-        shardPrefix: overrides.shardPrefix ?? 1n << 63n,
+        shardPrefix: overrides.shardPrefix ?? 0n,
       }),
     )
     .storeUint(1_800_000_000, 32)
@@ -148,6 +150,19 @@ describe("TON masterchain header Merkle proof", () => {
     ).toBeNull();
   });
 
+  it("accepts advisory split and merge intent bits", () => {
+    const { proof, expectation } = fixture({
+      wantSplit: true,
+      wantMerge: true,
+    });
+    expect(
+      verifyTonMasterchainHeaderCell(proof.refs[0], expectation),
+    ).toMatchObject({
+      kind: "TON_PROVEN_MASTERCHAIN_HEADER",
+      rootHashVerified: true,
+    });
+  });
+
   it.each([
     ["global ID", { globalId: -239 }, "global_id"],
     ["sequence", { seqno: 102 }, "seqno"],
@@ -155,7 +170,7 @@ describe("TON masterchain header Merkle proof", () => {
     ["key anchor", { previousKeyBlockSeqno: 99 }, "trusted anchor"],
     ["workchain", { workchain: 0 }, "masterchain"],
     ["prefix bits", { shardPrefixBits: 1 }, "masterchain"],
-    ["prefix", { shardPrefix: 0n }, "masterchain"],
+    ["prefix", { shardPrefix: 1n }, "non-canonical suffix bits"],
     ["version", { version: 1 }, "version"],
     ["flags", { flags: 2 }, "flags"],
     ["split flag", { splitFlag: true }, "split/merge"],

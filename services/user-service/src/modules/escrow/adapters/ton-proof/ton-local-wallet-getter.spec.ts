@@ -22,6 +22,10 @@ const trailingStackGetterCode = Cell.fromBase64(
   "te6ccgEBBAEAHQABFP8A9KQT9LzyyAsBAgFiAgMABtBfAwAHoSbyQQ==",
 );
 const getterData = beginCell().storeAddress(walletAddress).endCell();
+const libraryWalletCode = beginCell()
+  .storeUint(2, 8)
+  .storeBuffer(Buffer.from("ab".repeat(32), "hex"))
+  .endCell({ exotic: true });
 const configurationRoot = Cell.fromBase64(defaultConfig);
 
 function anchor() {
@@ -113,6 +117,27 @@ function replaceMasterCode(
   master.accountStateHash = master.accountStateRoot.hash(0).toString("hex");
 }
 
+function stablecoinMaster(): TonProvenActiveAccountState {
+  const master = provenMaster();
+  const data = beginCell()
+    .storeCoins(1_000_000n)
+    .storeAddress(ownerAddress)
+    .storeAddress(null)
+    .storeRef(libraryWalletCode)
+    .storeRef(beginCell().storeUint(0, 8).endCell())
+    .endCell();
+  replaceMasterCode(master, ownerEchoGetterCode);
+  master.data = data;
+  master.dataHash = data.hash(0).toString("hex");
+  master.accountStateRoot = beginCell()
+    .storeUint(0xa, 4)
+    .storeRef(master.code)
+    .storeRef(data)
+    .endCell();
+  master.accountStateHash = master.accountStateRoot.hash(0).toString("hex");
+  return master;
+}
+
 function execute(
   master = provenMaster(),
   environment = provenEnvironment(),
@@ -122,6 +147,7 @@ function execute(
     masterAddress: masterAddress.toRawString(),
     ownerAddress: ownerAddress.toRawString(),
     candidateWalletAddress,
+    walletContractProfile: "tep74-reference-wallet-v1",
     gasLimit: 10_000_000n,
   });
 }
@@ -174,6 +200,25 @@ describe("TON local canonical-wallet getter", () => {
     expect(result.canonicalWalletAddress).toBe(ownerAddress.toRawString());
   });
 
+  it("binds the stablecoin wallet library reference from proven master data", async () => {
+    const result = await executeTonCanonicalWalletGetter(
+      stablecoinMaster(),
+      provenEnvironment(),
+      {
+        masterAddress: masterAddress.toRawString(),
+        ownerAddress: ownerAddress.toRawString(),
+        candidateWalletAddress: ownerAddress.toRawString(),
+        walletContractProfile: "ton-stablecoin-governance-wallet-v1",
+        gasLimit: 10_000_000n,
+      },
+    );
+    expect(result).toMatchObject({
+      walletContractProfile: "ton-stablecoin-governance-wallet-v1",
+      masterWalletCodeHash: libraryWalletCode.hash(0).toString("hex"),
+      authorizationAllowed: false,
+    });
+  });
+
   it("rejects a getter that returns an address plus a trailing stack item", async () => {
     const master = provenMaster();
     replaceMasterCode(master, trailingStackGetterCode);
@@ -204,6 +249,7 @@ describe("TON local canonical-wallet getter", () => {
         masterAddress: ownerAddress.toRawString(),
         ownerAddress: ownerAddress.toRawString(),
         candidateWalletAddress: walletAddress.toRawString(),
+        walletContractProfile: "tep74-reference-wallet-v1",
         gasLimit: 10_000_000n,
       }),
     ).rejects.toThrow("does not match the proven account");
@@ -231,6 +277,7 @@ describe("TON local canonical-wallet getter", () => {
           masterAddress: masterAddress.toRawString(),
           ownerAddress: ownerAddress.toRawString(),
           candidateWalletAddress: walletAddress.toRawString(),
+          walletContractProfile: "tep74-reference-wallet-v1",
           gasLimit,
         }),
       ).rejects.toThrow("gasLimit");
@@ -243,6 +290,7 @@ describe("TON local canonical-wallet getter", () => {
         masterAddress: masterAddress.toRawString(),
         ownerAddress: ownerAddress.toRawString(),
         candidateWalletAddress: walletAddress.toRawString(),
+        walletContractProfile: "tep74-reference-wallet-v1",
         gasLimit: 1n,
       }),
     ).rejects.toThrow("local getter");
@@ -254,6 +302,7 @@ describe("TON local canonical-wallet getter", () => {
         masterAddress: `0:${"AA".repeat(32)}`,
         ownerAddress: ownerAddress.toRawString(),
         candidateWalletAddress: walletAddress.toRawString(),
+        walletContractProfile: "tep74-reference-wallet-v1",
         gasLimit: 10_000_000n,
       }),
     ).rejects.toThrow("canonical raw lowercase");

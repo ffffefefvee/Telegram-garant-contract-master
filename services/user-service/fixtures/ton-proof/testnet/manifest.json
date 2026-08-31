@@ -1,0 +1,119 @@
+{
+  "schemaVersion": 2,
+  "kind": "TON_CAPTURED_PROOF_FIXTURE",
+  "network": "testnet",
+  "globalId": -3,
+  "capturedAtUnix": 1788213959,
+  "source": {
+    "globalConfigUrl": "https://ton.org/testnet-global.config.json",
+    "liteServerCount": 8,
+    "captureTool": "scripts/capture-ton-proof-fixture.ts"
+  },
+  "zeroState": {
+    "workchain": -1,
+    "shard": "-9223372036854775808",
+    "seqno": 0,
+    "rootHash": "823f81f306ff02694f935cf5021548e3ce2b86b529812af6a12148879e95a128",
+    "fileHash": "67e20ac184b9e039a62667acc3f9c00f90f359a76738233379efa47604980ce8"
+  },
+  "trustedKeyBlock": {
+    "workchain": -1,
+    "shard": "-9223372036854775808",
+    "seqno": 81805441,
+    "rootHash": "fa66dce6b9e31f0d0ff78390c70d7e6a67ca7eed378fa55cd97a734f9b7c0420",
+    "fileHash": "9aa5737d53298bc6b1ba7cb3e650ff7f9070fbaa15e6e063acf8ca41f5203cbf"
+  },
+  "targetMasterchainBlock": {
+    "workchain": -1,
+    "shard": "-9223372036854775808",
+    "seqno": 81805570,
+    "rootHash": "5ec035437ae35d90119a226aa5af632c7085faae2a1b880570784321cf50b0df",
+    "fileHash": "b3356f0bcf9a0c0fcf6923096b27b8dd794e2345a6231c7a7099aeecc6d5fde9"
+  },
+  "masterAddress": "0:395e1099fae91e832e4885b592930ae4f7f196523a09482fca1f2ddc4abe242e",
+  "ownerAddress": "0:e81763a4c6c23781ce6302ec65aa8ccdf47fd28043940a8a4c6b5c94e1d8cb69",
+  "walletAddress": "0:eb091ded66df184e32acff3e5f12f65265a67df390d721f914e206173a12cbfe",
+  "walletCodeHash": "79e1b30be8104692fb216ed3422c1794881477b99eaa37d1685be37188e2aa6f",
+  "walletContractProfile": "tep74-library-wallet-v1",
+  "masterShardBlock": {
+    "workchain": 0,
+    "shard": "2305843009213693952",
+    "seqno": 87051050,
+    "rootHash": "2818a74b1f6b7741e99562906784a0003a4dd7a4676c859ef4b8c13bd27280cd",
+    "fileHash": "ac1e99b150a43d0b43b86b588afe5997694c87d9369570e0970e51ebc884fb27"
+  },
+  "walletShardBlock": {
+    "workchain": 0,
+    "shard": "-2305843009213693952",
+    "seqno": 87051067,
+    "rootHash": "85d797bafb668f52c947e6c245f1931290826dc7a45f1df9a241145fb027269d",
+    "fileHash": "b75548b21bf5dd18bfbb9663eaaaa9a5c9a767c7e278e7859780f0df5ec6c23f"
+  },
+  "masterLastTransaction": {
+    "lt": "70549204000009",
+    "hash": "096cc6333ba47b9e9cd4a8ca16a4a1dfd724284f84e1499b208f2be8ed74b7ad"
+  },
+  "walletLastTransaction": {
+    "lt": "70549204000011",
+    "hash": "fb305dd94adf8a0987e00e1f3eebea45cdec8283d89dc1b3389549e90ae0ce2d"
+  },
+  "selectedShardTransaction": {
+    "accountAddress": "0:c2097093051296497a2c1f5b27c2a6449713667e6fd9360a0e0d4c6c59bb2965",
+    "lt": "93563038000001",
+    "hash": "4519f962994ea9670d7528a57d0f07f851b7f3b6d5d46d9625a45c947d50ee32"
+  },
+  "artifacts": {
+    "checkpoint-proof.tl": {
+      "bytes": 8128,
+      "sha256": "831e5182660ae3dd4fcdd043b7fbfc9a924df5d244ed05993b677a8d0aa9b0d4"
+    },
+    "master-account-proof.boc": {
+      "bytes": 2869,
+      "sha256": "c9ce2d18d5ed91dc1ec1a86d2432932331ace979d9558125fc1332c38ac06563"
+    },
+    "master-account-shard-header-proof.boc": {
+      "bytes": 597,
+      "sha256": "54fba84da1a40d1202febaf8d3849c6767aa62bfce0ad6b7973f218a37fe766c"
+    },
+    "master-account-state.boc": {
+      "bytes": 1775,
+      "sha256": "6afe0dcd1d15f4cddc69eb7c9e100a54e08f56d4fe281fa3e241a2b7c9fcbf1e"
+    },
+    "masterchain-config-proof.boc": {
+      "bytes": 18583,
+      "sha256": "625a8a8d523ce0860af3037ff315180cb709aff433a7e5b76ffc3dd624e8047a"
+    },
+    "masterchain-header-proof.boc": {
+      "bytes": 518,
+      "sha256": "c7f9ce2863b0220815cd2db78a5bb44482e64d4306f4915448205bb6ce433867"
+    },
+    "masterchain-shards-data.boc": {
+      "bytes": 536,
+      "sha256": "8535c17828e25b83bee7523ea05d5b6406e92c7b0288cb59e71182db10cacd2c"
+    },
+    "official-global-config.json": {
+      "bytes": 6196,
+      "sha256": "1059ec9e4ad6b0febb871cd6b047b22028f526f67c066020c48205cceb844502"
+    },
+    "transaction-inclusion-proof.boc": {
+      "bytes": 1055,
+      "sha256": "ed69fe88ed2d0ee07335a97487d98359a51db6e72ded5629a97e157d2103e431"
+    },
+    "transaction.boc": {
+      "bytes": 1541,
+      "sha256": "678e1a3d3e3fd30d23eadc6c301fa18e88afa90ad45ce68a7fddb67c85475549"
+    },
+    "wallet-account-proof.boc": {
+      "bytes": 2820,
+      "sha256": "302d7612e915f365aadfe7c2907fbf7884acbc09882ec62e54f1f5bbcfe1cb17"
+    },
+    "wallet-account-shard-header-proof.boc": {
+      "bytes": 597,
+      "sha256": "46ebec0d3d9af63c0f0016f0af0cd6b25028456950108603ba9c2c7cbb3b7649"
+    },
+    "wallet-account-state.boc": {
+      "bytes": 190,
+      "sha256": "8756d28a6dfdbe3661705fb9564f8fa042cfced5b38f7ff255c366962522bd91"
+    }
+  }
+}

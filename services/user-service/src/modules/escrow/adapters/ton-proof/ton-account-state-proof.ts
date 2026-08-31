@@ -16,6 +16,7 @@ import {
   parseTonSingleRootBoc,
 } from "./ton-proof-envelope";
 import type { TonProvenShardBlockHeader } from "./ton-shard-block-proof";
+import { canonicalTonShardId } from "./ton-shard-ident";
 
 const SHARD_STATE_TAG = 0x9023afe2;
 
@@ -70,10 +71,6 @@ export class TonAccountStateProofError extends Error {
 
 function reject(message: string): never {
   throw new TonAccountStateProofError(message);
-}
-
-function signedShard(value: bigint): string {
-  return (value >= 1n << 63n ? value - (1n << 64n) : value).toString();
 }
 
 function parseRawAddress(value: string): Address {
@@ -223,7 +220,7 @@ function accountDictionaryLookup(
     if (
       globalId !== block.networkGlobalId ||
       shard.workchainId !== block.block.workchain ||
-      signedShard(shard.shardPrefix) !== block.block.shard ||
+      canonicalTonShardId(shard) !== block.block.shard ||
       seqno !== block.block.seqno ||
       verticalSeqno !== block.verticalSeqno ||
       generatedAtUnix !== block.generatedAtUnix ||
@@ -325,8 +322,13 @@ export function verifyTonAccountStateProof(
     source.endParse();
     if (!account.addr.equals(address))
       reject("account state address is substituted");
-    if (account.storage.lastTransLt !== lookup.entry.lastTransactionLt) {
-      reject("account storage last transaction LT does not match ShardAccount");
+    if (
+      (account.storage.lastTransLt < 1n ? 1n : account.storage.lastTransLt) <=
+      lookup.entry.lastTransactionLt
+    ) {
+      reject(
+        `account storage end LT ${account.storage.lastTransLt} does not advance ShardAccount transaction LT ${lookup.entry.lastTransactionLt}`,
+      );
     }
     if (account.storage.state.type !== "active") {
       reject("proven account is not active");

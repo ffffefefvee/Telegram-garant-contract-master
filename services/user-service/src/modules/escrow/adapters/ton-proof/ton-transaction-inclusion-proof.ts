@@ -17,6 +17,7 @@ import {
 import type { TonProvenShardBlockHeader } from "./ton-shard-block-proof";
 
 const BLOCK_TAG = 0x11ef55aa;
+const BLOCK_EXTRA_TAG = 0x4a33f6fd;
 const ACCOUNT_BLOCK_TAG = 0x5;
 const HASH_UPDATE_TAG = 0x72;
 const HASH = /^[0-9a-f]{64}$/;
@@ -310,6 +311,7 @@ function accountBlocksFromProof(root: Cell, globalId: number): Cell {
     block.endParse();
     if (extraCell.type !== CellType.Ordinary) reject("BlockExtra is hidden by pruning");
     const extra = extraCell.beginParse();
+    if (extra.loadUint(32) !== BLOCK_EXTRA_TAG) reject("BlockExtra tag is invalid");
     extra.loadRef();
     extra.loadRef();
     const accountBlocks = extra.loadRef();

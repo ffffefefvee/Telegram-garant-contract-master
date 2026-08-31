@@ -74,6 +74,8 @@ jobs:
           JWT_SECRET: test-jwt-secret-for-ci-only
           TELEGRAM_BOT_TOKEN: 0:test_token_ci
           AUTH_DEV_MODE: true
+      - name: Replay and corrupt immutable TON mainnet and testnet proof corpora
+        run: npm run fixture:ton:gate
 
   mini-app:
     name: mini-app build

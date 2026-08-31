@@ -26,6 +26,6 @@
       "@database/*": ["src/database/*"]
     }
   },
-  "include": ["src/**/*", "src/types/**/*.d.ts"],
+  "include": ["src/**/*", "src/types/**/*.d.ts", "scripts/**/*.ts"],
   "exclude": ["node_modules", "dist", "test", "src/migrations"]
 }

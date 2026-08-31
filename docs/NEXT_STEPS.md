@@ -27,7 +27,7 @@ must let eligible users choose TON or Polygon.
 - Release candidate, Ed25519 threshold approval and deployment-input locks are
   implemented. The deployment lock re-verifies the original policy/signatures;
   it does not trust an unsigned approval JSON or possess deploy/signing access.
-- The current backend suite passes 87 suites / 882 tests, including the
+- The current backend suite passes 93 suites / 956 tests, including the
   unwired durable-ingestion and corrected raw-evidence reconciliation slices.
   Both npm dependency audits reported zero vulnerabilities.
 
@@ -74,11 +74,13 @@ signature weight and key-block transitions remain mandatory. See
 A strict LiteServer signature primitive is now also isolated and unwired. It
 decodes raw `partialBlockProof` TL bytes with exact consumption and bounded
 links/signatures/proof blobs, validates contiguous masterchain paths, reproduces
-TON's `ton.blockId` signed bytes and Ed25519 node IDs, and requires unique known
-signers with strictly more than two-thirds weight. Its typed result deliberately
-keeps `validatorSetProven: false` and `finalityProven: false`, because the supplied
-validator set is not yet derived from a proven key-block configuration. Simplex
-sets fail closed. See `ADR-004-TON-ORDINARY-SIGNATURE-PROOF.md`.
+TON's ordinary `ton.blockId` and finalized Simplex vote domains plus Ed25519
+node IDs, and requires unique known signers with strictly more than two-thirds
+weight. Its typed primitive deliberately keeps `validatorSetProven: false` and
+`finalityProven: false` until composed with proven configuration. Unknown
+signature-set constructors fail closed. See
+`ADR-004-TON-ORDINARY-SIGNATURE-PROOF.md` and
+`ADR-016-TON-SIMPLEX-FINALITY-AND-FIXTURE-CAPTURE.md`.
 
 The masterchain validator-set derivation primitive now parses both canonical
 validator-set cell formats and catchain parameter 28, reproduces TON's optional
@@ -88,7 +90,8 @@ Merkle-proven, so every artifact keeps `sourceConfigProven: false`,
 `validatorSetProven: false` and `finalityProven: false`. See
 `ADR-005-TON-VALIDATOR-SET-DERIVATION.md`.
 
-One ordinary forward link can now authenticate those inputs. The strict
+One ordinary or finalized-Simplex forward link can now authenticate those
+inputs. The strict
 `config_proof` binds the trusted source key block and its configuration
 dictionary; the independent `dest_proof` binds the destination header.
 Authenticated Patricia lookups distinguish presence, proven absence and a
@@ -99,14 +102,16 @@ upgrades proof and validator provenance for one link, but deliberately keeps
 `finalityProven: false`; complete checkpoint-chain validation is still absent.
 See `ADR-006-TON-FORWARD-LINK-CONFIG-PROOF.md`.
 
-Complete forward-only ordinary checkpoint paths can now be composed from the
+Complete forward-only ordinary or finalized-Simplex checkpoint paths can now
+be composed from the
 exact trusted key block through proven intermediate key blocks to the exact
 fresh target. Only this complete artifact sets `masterchainFinalityProven` and
 `finalityProven` true; it still fixes `authorizationAllowed: false` and keeps
 `verificationEvidenceHash` null. Backward links fail closed because their
 distinct source-state/old-block proof path is outside the trusted-key-block
-policy, and Simplex remains unsupported. See
-`ADR-007-TON-MASTERCHAIN-CHECKPOINT-FINALITY.md`.
+policy. Each evidence link commits its consensus mode and signed-data hash.
+See `ADR-007-TON-MASTERCHAIN-CHECKPOINT-FINALITY.md` and
+`ADR-016-TON-SIMPLEX-FINALITY-AND-FIXTURE-CAPTURE.md`.
 
 The finalized target can now authenticate a basechain shard descriptor. The
 state proof is bound to the header's `newStateHash`; exact authenticated
@@ -175,14 +180,20 @@ payload before the pure result can express authorization. No key custody,
 message composition, broadcast, persistence or adapter wiring is included.
 See `ADR-015-TON-VERIFICATION-EVIDENCE-AND-THRESHOLD-APPROVAL.md`.
 
-The fourteen proof-kernel/evidence suites currently pass 236 focused tests;
+The nineteen proof-kernel/evidence suites currently pass 291 focused tests;
 finalized reconciliation composition adds 23 adversarial tests.
 
-Complete the proof pipeline before lifecycle work: capture
-offline-replayable mainnet/testnet proofs and validate the local executor policy;
-define a separate domain-separated verification commitment; and require an
-audited threshold or multisig initializer approval. The structural or local
-execution transcript hash must never be used as the contract's seal evidence.
+Complete the proof pipeline before lifecycle work: the pinned capture tool now
+understands ordinary and Simplex LiteServer responses, and strict manifest
+validation plus provider-free full replay are implemented. Immutable mainnet
+and testnet corpora are committed; both replay offline and both reject every
+case in their 13-artifact rehashed one-bit matrices. The combined corpus gate is
+blocking in hosted CI. Independent proof/executor-policy review remains
+required.
+The separate domain-separated verification commitment and threshold approval
+boundary exist but remain pure and unwired. The structural or local execution
+transcript hash must never be used as the contract's seal evidence.
+See `ADR-017-TON-OFFLINE-PROOF-FIXTURE-REPLAY.md`.
 The initializer and reconciliation authority are money-critical and must remain
 distinct from every transaction role.
 

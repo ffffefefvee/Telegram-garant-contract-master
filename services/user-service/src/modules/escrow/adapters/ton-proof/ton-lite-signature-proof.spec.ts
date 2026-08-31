@@ -4,6 +4,8 @@ import {
   decodeTonLitePartialBlockProof,
   tonNodeIdShort,
   tonOrdinaryBlockSignedData,
+  tonSimplexBlockSignedData,
+  verifyTonForwardLinkSignatures,
   verifyTonOrdinaryForwardLinkSignatures,
 } from "./ton-lite-signature-proof";
 import type {
@@ -18,8 +20,10 @@ const IDS = {
   back: 0xef7e1bef,
   forward: 0x520fce1c,
   ordinary: 0xf644a6e6,
-  signature: 0xa3def855,
-  vector: 0x1cb5c415,
+  simplex: 0xac249800,
+  candidateOrdinary: 0xe8f9bcdc,
+  candidateEmpty: 0x72b4d933,
+  candidateWithoutParents: 0x22cbcca9,
   boolTrue: 0x997275b5,
   boolFalse: 0xbc799737,
 };
@@ -64,7 +68,7 @@ function tlBytes(value: Buffer): Buffer {
 }
 
 function vector(items: readonly Buffer[]): Buffer {
-  return Buffer.concat([u32(IDS.vector), u32(items.length), ...items]);
+  return Buffer.concat([u32(items.length), ...items]);
 }
 
 function block(seqno: number, marker: number): TonProofBlockId {
@@ -89,7 +93,6 @@ function blockBytes(value: TonProofBlockId): Buffer {
 
 function signatureBytes(value: TonLiteSignature): Buffer {
   return Buffer.concat([
-    u32(IDS.signature),
     Buffer.from(value.nodeIdShort, "hex"),
     tlBytes(value.signature),
   ]);
@@ -112,6 +115,49 @@ function forwardBytes(
     u32(0x11223344),
     u32(17),
     vector(signatures.map(signatureBytes)),
+  ]);
+}
+
+function ordinaryCandidateBytes(
+  value: TonProofBlockId,
+  collatedMarker = 0x55,
+): Buffer {
+  return Buffer.concat([
+    u32(IDS.candidateOrdinary),
+    blockBytes(value),
+    Buffer.alloc(32, collatedMarker),
+    u32(IDS.candidateWithoutParents),
+  ]);
+}
+
+function emptyCandidateBytes(value: TonProofBlockId): Buffer {
+  return Buffer.concat([
+    u32(IDS.candidateEmpty),
+    blockBytes(value),
+    u32(9),
+    Buffer.alloc(32, 0x77),
+  ]);
+}
+
+function simplexForwardBytes(
+  fromBlock: TonProofBlockId,
+  toBlock: TonProofBlockId,
+  candidate = ordinaryCandidateBytes(toBlock),
+): Buffer {
+  return Buffer.concat([
+    u32(IDS.forward),
+    u32(IDS.boolFalse),
+    blockBytes(fromBlock),
+    blockBytes(toBlock),
+    tlBytes(Buffer.from([1, 2, 3])),
+    tlBytes(Buffer.from([4, 5, 6])),
+    u32(IDS.simplex),
+    u32(17),
+    u32(0x11223344),
+    vector([]),
+    Buffer.alloc(32, 0x66),
+    u32(23),
+    tlBytes(candidate),
   ]);
 }
 
@@ -186,6 +232,36 @@ function signedLink(signerIndexes: readonly number[]): TonLiteBlockLinkForward {
   };
 }
 
+
+function signedSimplexLink(
+  signerIndexes: readonly number[],
+  candidate = ordinaryCandidateBytes(to),
+): TonLiteBlockLinkForward {
+  const link: TonLiteBlockLinkForward = {
+    kind: "forward",
+    toKeyBlock: false,
+    from,
+    to,
+    destProof: Buffer.from([1]),
+    configProof: Buffer.from([2]),
+    signatures: {
+      kind: "simplex",
+      validatorSetHash: 0x11223344,
+      catchainSeqno: 17,
+      signatures: [],
+      sessionId: Buffer.alloc(32, 0x66),
+      slot: 23,
+      candidate,
+    },
+  };
+  const data = tonSimplexBlockSignedData(link);
+  link.signatures.signatures = signerIndexes.map((index) => ({
+    nodeIdShort: tonNodeIdShort(keys[index].publicKey).toString("hex"),
+    signature: sign(data, keys[index].secretKey),
+  }));
+  return link;
+}
+
 describe("TON LiteServer partial block proof decoding", () => {
   it("strictly decodes a contiguous ordinary forward link", () => {
     const parsed = decode(partialBytes(from, to, [forwardBytes(from, to)]));
@@ -256,10 +332,40 @@ describe("TON LiteServer partial block proof decoding", () => {
     ).toThrow("steps exceeds its item limit");
   });
 
-  it("rejects a Simplex or unknown signature set without reinterpretation", () => {
+  it("strictly decodes the current LiteServer Simplex signature set", () => {
+    const parsed = decode(
+      partialBytes(from, to, [simplexForwardBytes(from, to)]),
+    );
+    expect(parsed.steps[0]).toMatchObject({
+      kind: "forward",
+      signatures: {
+        kind: "simplex",
+        validatorSetHash: 0x11223344,
+        catchainSeqno: 17,
+        slot: 23,
+      },
+    });
+    const step = parsed.steps[0];
+    if (step.kind !== "forward" || step.signatures.kind !== "simplex") {
+      throw new Error("expected a Simplex forward link");
+    }
+    expect(step.signatures.sessionId).toEqual(Buffer.alloc(32, 0x66));
+    expect(step.signatures.candidate).toEqual(ordinaryCandidateBytes(to));
+  });
+
+  it("rejects an unknown signature set without reinterpretation", () => {
     expect(() =>
       decode(partialBytes(from, to, [forwardBytes(from, to, [], 0x01020304)])),
-    ).toThrow("unsupported non-ordinary signature set");
+    ).toThrow("unsupported signature set constructor");
+  });
+
+  it("enforces the embedded-byte limit on a Simplex candidate", () => {
+    expect(() =>
+      decode(
+        partialBytes(from, to, [simplexForwardBytes(from, to)]),
+        { maxEmbeddedProofBytes: ordinaryCandidateBytes(to).length - 1 },
+      ),
+    ).toThrow("simplex candidate exceeds its byte limit");
   });
 
   it("rejects a discontinuous step", () => {
@@ -390,5 +496,93 @@ describe("TON ordinary validator signatures", () => {
     expect(() =>
       verifyTonOrdinaryForwardLinkSignatures(signedLink([0]), invalidWeight),
     ).toThrow("not a canonical weight");
+  });
+});
+
+describe("TON Simplex validator signatures", () => {
+  it("serializes the finalized Simplex vote in the validator-node domain", () => {
+    const data = tonSimplexBlockSignedData(signedSimplexLink([]));
+    expect(data.toString("hex")).toBe(
+      "f83de3a866666666666666666666666666666666666666666666666666666666666666662c05e1a7403fcd91b617000000ef19a32cd864b65983e6d29569011aef69da53700157097c1cb071d946024f43000000",
+    );
+  });
+
+  it("verifies unique finalized Simplex signatures above two-thirds weight", () => {
+    const result = verifyTonForwardLinkSignatures(
+      signedSimplexLink([0, 1]),
+      validatorSet(),
+    );
+    expect(result).toMatchObject({
+      kind: "TON_FORWARD_LINK_SIGNATURES_VERIFIED",
+      consensus: "simplex",
+      signaturesVerified: true,
+      thresholdVerified: true,
+      signedWeight: "7",
+      totalWeight: "10",
+      signerCount: 2,
+      block: to,
+    });
+  });
+
+  it("accepts the empty-candidate wire variant", () => {
+    expect(
+      verifyTonForwardLinkSignatures(
+        signedSimplexLink([0, 1], emptyCandidateBytes(to)),
+        validatorSet(),
+      ).consensus,
+    ).toBe("simplex");
+  });
+
+  it("rejects a candidate for a different block", () => {
+    expect(() =>
+      signedSimplexLink([0, 1], ordinaryCandidateBytes(block(102, 3))),
+    ).toThrow("does not match the forward-link target");
+  });
+
+  it("binds the session, slot, and raw candidate bytes", () => {
+    const link = signedSimplexLink([0, 1]);
+    if (link.signatures.kind !== "simplex") throw new Error("expected simplex");
+    link.signatures.sessionId[0] ^= 1;
+    expect(() =>
+      verifyTonForwardLinkSignatures(link, validatorSet()),
+    ).toThrow("invalid validator signature");
+
+    const wrongSlot = signedSimplexLink([0, 1]);
+    if (wrongSlot.signatures.kind !== "simplex") {
+      throw new Error("expected simplex");
+    }
+    wrongSlot.signatures.slot += 1;
+    expect(() =>
+      verifyTonForwardLinkSignatures(wrongSlot, validatorSet()),
+    ).toThrow("invalid validator signature");
+
+    const wrongCandidate = signedSimplexLink([0, 1]);
+    if (wrongCandidate.signatures.kind !== "simplex") {
+      throw new Error("expected simplex");
+    }
+    wrongCandidate.signatures.candidate[84] ^= 1;
+    expect(() =>
+      verifyTonForwardLinkSignatures(wrongCandidate, validatorSet()),
+    ).toThrow("invalid validator signature");
+  });
+
+  it("rejects malformed and trailing candidate encodings", () => {
+    const unknown = ordinaryCandidateBytes(to);
+    unknown.writeUInt32LE(0, 0);
+    expect(() => signedSimplexLink([], unknown)).toThrow(
+      "unsupported constructor",
+    );
+    expect(() =>
+      signedSimplexLink([], Buffer.concat([ordinaryCandidateBytes(to), u32(0)])),
+    ).toThrow("trailing bytes");
+  });
+
+  it("does not let the legacy ordinary-only API reinterpret Simplex", () => {
+    expect(() =>
+      verifyTonOrdinaryForwardLinkSignatures(
+        signedSimplexLink([0, 1]),
+        validatorSet(),
+      ),
+    ).toThrow("does not contain ordinary signatures");
   });
 });

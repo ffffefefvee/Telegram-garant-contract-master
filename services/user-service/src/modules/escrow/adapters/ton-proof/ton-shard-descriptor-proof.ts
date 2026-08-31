@@ -11,11 +11,15 @@ import {
   TonForwardLinkProofError,
 } from "./ton-forward-link-proof";
 import type { TonProvenMasterchainHeader } from "./ton-masterchain-header-proof";
+import { canonicalTonShardId } from "./ton-shard-ident";
 import type {
   TonProofBlockId,
   TonProofResourceLimits,
 } from "./ton-proof-envelope";
-import { parseTonMerkleProofBoc } from "./ton-proof-envelope";
+import {
+  parseTonMerkleProofBoc,
+  parseTonSingleRootBoc,
+} from "./ton-proof-envelope";
 
 const SHARD_STATE_TAG = 0x9023afe2;
 const MASTERCHAIN_STATE_EXTRA_TAG = 0xcc26;
@@ -149,7 +153,7 @@ function parseMasterchainState(
       globalId !== expectedGlobalId ||
       shard.workchainId !== -1 ||
       shard.shardPrefixBits !== 0 ||
-      signedUint64(shard.shardPrefix) !== MASTERCHAIN_SHARD ||
+      canonicalTonShardId(shard) !== MASTERCHAIN_SHARD ||
       beforeSplit ||
       minimumReferencedSeqno > seqno
     ) {
@@ -163,8 +167,8 @@ function parseMasterchainState(
       reject("masterchain state extra tag is invalid");
     }
     const shardHashesRoot = extra.loadMaybeRef();
-    if (!shardHashesRoot || shardHashesRoot.type !== CellType.Ordinary) {
-      reject("ShardHashes root is absent or hidden by pruning");
+    if (!shardHashesRoot) {
+      reject("ShardHashes root is absent");
     }
     extra.loadBuffer(32); // configuration address
     extra.loadRef(); // configuration dictionary
@@ -338,6 +342,7 @@ export function verifyTonShardDescriptorProof(
   header: TonProvenMasterchainHeader,
   stateProofBoc: Buffer,
   expectation: TonShardDescriptorExpectation,
+  supplementalShardHashesBoc?: Buffer,
 ): TonProvenShardDescriptor {
   if (
     chain.masterchainFinalityProven !== true ||
@@ -369,10 +374,40 @@ export function verifyTonShardDescriptorProof(
   ) {
     reject("masterchain state does not match the finalized block metadata");
   }
+  let shardHashesRoot = state.shardHashesRoot;
+  if (supplementalShardHashesBoc) {
+    const supplemental = parseTonSingleRootBoc(
+      supplementalShardHashesBoc,
+      expectation.limits,
+      "supplemental_shard_hashes",
+    );
+    if (supplemental.root.type !== CellType.Ordinary) {
+      reject("supplemental ShardHashes wrapper is not ordinary");
+    }
+    try {
+      const source = supplemental.root.beginParse();
+      const fullRoot = source.loadMaybeRef();
+      source.endParse();
+      if (!fullRoot || fullRoot.type !== CellType.Ordinary) {
+        reject("supplemental ShardHashes dictionary is absent");
+      }
+      if (fullRoot.hash(0).toString("hex") !== shardHashesRoot.hash(0).toString("hex")) {
+        reject("supplemental ShardHashes do not match the proven state commitment");
+      }
+      shardHashesRoot = fullRoot;
+    } catch (error) {
+      if (error instanceof TonShardDescriptorProofError) throw error;
+      reject(
+        `supplemental ShardHashes are malformed: ${error instanceof Error ? error.message : "unknown error"}`,
+      );
+    }
+  } else if (shardHashesRoot.type === CellType.PrunedBranch) {
+    reject("ShardHashes root is hidden by pruning");
+  }
   let workchainLookup;
   try {
     workchainLookup = lookupTonHashmapRef(
-      state.shardHashesRoot,
+      shardHashesRoot,
       expectation.workchain.toString(2).padStart(32, "0"),
     );
   } catch (error) {

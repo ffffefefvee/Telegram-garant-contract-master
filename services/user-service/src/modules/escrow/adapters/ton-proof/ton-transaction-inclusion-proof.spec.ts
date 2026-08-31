@@ -199,6 +199,7 @@ function fixture(options: FixtureOptions = {}) {
     .endCell();
   const dummy = beginCell().storeBit(false).endCell();
   const extra = beginCell()
+    .storeUint(0x4a33f6fd, 32)
     .storeRef(dummy)
     .storeRef(dummy)
     .storeRef(accountBlocks)

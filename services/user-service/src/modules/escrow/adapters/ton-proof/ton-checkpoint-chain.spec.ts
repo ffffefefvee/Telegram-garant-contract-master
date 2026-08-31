@@ -15,6 +15,7 @@ import type {
 import {
   tonNodeIdShort,
   tonOrdinaryBlockSignedData,
+  tonSimplexBlockSignedData,
 } from "./ton-lite-signature-proof";
 import type { TonProofBlockId } from "./ton-proof-envelope";
 import {
@@ -32,8 +33,7 @@ const IDS = {
   back: 0xef7e1bef,
   forward: 0x520fce1c,
   ordinary: 0xf644a6e6,
-  signature: 0xa3def855,
-  vector: 0x1cb5c415,
+  simplex: 0xac249800,
   boolTrue: 0x997275b5,
   boolFalse: 0xbc799737,
 };
@@ -147,7 +147,7 @@ function blockInfo(input: {
       storeShardIdent({
         shardPrefixBits: 0,
         workchainId: -1,
-        shardPrefix: 1n << 63n,
+        shardPrefix: 0n,
       }),
     )
     .storeUint(input.generatedAtUnix, 32)
@@ -168,11 +168,16 @@ function keyBlockExtra(configRoot: Cell): Cell {
     .storeBit(true)
     .storeBit(false)
     .storeBit(false)
+    .storeCoins(0)
+    .storeBit(false)
+    .storeCoins(0)
+    .storeBit(false)
     .storeRef(dummy)
     .storeBuffer(Buffer.alloc(32, 0xc1))
     .storeRef(configRoot)
     .endCell();
   return beginCell()
+    .storeUint(0x4a33f6fd, 32)
     .storeRef(dummy)
     .storeRef(dummy)
     .storeRef(dummy)
@@ -212,9 +217,9 @@ function forwardLink(
   destination: TonProofBlockId,
   destinationIsKeyBlock: boolean,
   sourceConfig: ReturnType<typeof config>,
+  simplex = false,
 ): TonLiteBlockLinkForward {
-  const signedData = tonOrdinaryBlockSignedData(destination);
-  return {
+  const link: TonLiteBlockLinkForward = {
     kind: "forward",
     toKeyBlock: destinationIsKeyBlock,
     from: source,
@@ -228,19 +233,36 @@ function forwardLink(
       crc32: false,
     }),
     signatures: {
-      kind: "ordinary",
+      ...(simplex
+        ? {
+            kind: "simplex" as const,
+            sessionId: Buffer.alloc(32, 0x66),
+            slot: 23,
+            candidate: Buffer.concat([
+              u32(0xe8f9bcdc),
+              blockBytes(destination),
+              Buffer.alloc(32, 0x55),
+              u32(0x22cbcca9),
+            ]),
+          }
+        : { kind: "ordinary" as const }),
       validatorSetHash: sourceConfig.derived.validatorSetHash,
       catchainSeqno: sourceConfig.derived.catchainSeqno,
-      signatures: [
-        {
-          nodeIdShort: tonNodeIdShort(
-            sourceConfig.validators[0].publicKey,
-          ).toString("hex"),
-          signature: sign(signedData, sourceConfig.validators[0].secretKey),
-        },
-      ],
+      signatures: [],
     },
   };
+  const signedData = simplex
+    ? tonSimplexBlockSignedData(link)
+    : tonOrdinaryBlockSignedData(destination);
+  link.signatures.signatures = [
+    {
+      nodeIdShort: tonNodeIdShort(
+        sourceConfig.validators[0].publicKey,
+      ).toString("hex"),
+      signature: sign(signedData, sourceConfig.validators[0].secretKey),
+    },
+  ];
+  return link;
 }
 
 function u32(value: number): Buffer {
@@ -279,7 +301,7 @@ function tlBytes(value: Buffer): Buffer {
 }
 
 function vector(values: readonly Buffer[]): Buffer {
-  return Buffer.concat([u32(IDS.vector), u32(values.length), ...values]);
+  return Buffer.concat([u32(values.length), ...values]);
 }
 
 function blockBytes(value: TonProofBlockId): Buffer {
@@ -294,24 +316,38 @@ function blockBytes(value: TonProofBlockId): Buffer {
 
 function signatureBytes(value: TonLiteSignature): Buffer {
   return Buffer.concat([
-    u32(IDS.signature),
     Buffer.from(value.nodeIdShort, "hex"),
     tlBytes(value.signature),
   ]);
 }
 
 function forwardBytes(link: TonLiteBlockLinkForward): Buffer {
-  return Buffer.concat([
+  const prefix = [
     u32(IDS.forward),
     u32(link.toKeyBlock ? IDS.boolTrue : IDS.boolFalse),
     blockBytes(link.from),
     blockBytes(link.to),
     tlBytes(link.destProof),
     tlBytes(link.configProof),
-    u32(IDS.ordinary),
-    u32(link.signatures.validatorSetHash),
+  ];
+  if (link.signatures.kind === "ordinary") {
+    return Buffer.concat([
+      ...prefix,
+      u32(IDS.ordinary),
+      u32(link.signatures.validatorSetHash),
+      u32(link.signatures.catchainSeqno),
+      vector(link.signatures.signatures.map(signatureBytes)),
+    ]);
+  }
+  return Buffer.concat([
+    ...prefix,
+    u32(IDS.simplex),
     u32(link.signatures.catchainSeqno),
+    u32(link.signatures.validatorSetHash),
     vector(link.signatures.signatures.map(signatureBytes)),
+    link.signatures.sessionId,
+    u32(link.signatures.slot),
+    tlBytes(link.signatures.candidate),
   ]);
 }
 
@@ -342,7 +378,7 @@ function partialBytes(
   ]).toString("base64");
 }
 
-function fixture(intermediateIsKeyBlock = true) {
+function fixture(intermediateIsKeyBlock = true, simplex = false) {
   const firstConfig = config(0, 7);
   const secondConfig = config(10, 8);
   const source = block(
@@ -388,6 +424,7 @@ function fixture(intermediateIsKeyBlock = true) {
     intermediateId,
     intermediateIsKeyBlock,
     firstConfig,
+    simplex,
   );
   const second = forwardLink(
     intermediate,
@@ -396,6 +433,7 @@ function fixture(intermediateIsKeyBlock = true) {
     targetId,
     false,
     secondConfig,
+    simplex,
   );
   const raw = partialBytes(true, sourceId, targetId, [
     forwardBytes(first),
@@ -439,7 +477,9 @@ describe("TON masterchain checkpoint chain", () => {
       endpointsVerified: true,
       completenessVerified: true,
       allLinksVerified: true,
+      supportedConsensusVerified: true,
       ordinaryConsensusVerified: true,
+      simplexConsensusVerified: false,
       masterchainFinalityProven: true,
       finalityProven: true,
       authorizationAllowed: false,
@@ -451,6 +491,19 @@ describe("TON masterchain checkpoint chain", () => {
     expect(result.links.every((link) => link.finalityProven === false)).toBe(
       true,
     );
+  });
+
+  it("proves a complete two-link finalized Simplex chain", () => {
+    const { raw, expectation } = fixture(true, true);
+    expect(verifyTonMasterchainCheckpointChain(raw, expectation)).toMatchObject({
+      supportedConsensusVerified: true,
+      ordinaryConsensusVerified: false,
+      simplexConsensusVerified: true,
+      masterchainFinalityProven: true,
+      finalityProven: true,
+      linkCount: 2,
+      links: [{ consensus: "simplex" }, { consensus: "simplex" }],
+    });
   });
 
   it("produces deterministic evidence for identical raw proof and policy", () => {
@@ -485,7 +538,7 @@ describe("TON masterchain checkpoint chain", () => {
     ).toThrow("destination");
   });
 
-  it("rejects backward links under the trusted-key-block forward-only policy", () => {
+  it("rejects a non-final backward link", () => {
     const { expectation, sourceId, targetId, first } = fixture();
     const older = { ...sourceId, seqno: 90, rootHash: "9".repeat(64) };
     const raw = partialBytes(true, sourceId, targetId, [
@@ -493,7 +546,7 @@ describe("TON masterchain checkpoint chain", () => {
       forwardBytes({ ...first, from: older, to: targetId }),
     ]);
     expect(() => verifyTonMasterchainCheckpointChain(raw, expectation)).toThrow(
-      "not a forward link",
+      "only a final backward link from an authenticated key block is supported",
     );
   });
 

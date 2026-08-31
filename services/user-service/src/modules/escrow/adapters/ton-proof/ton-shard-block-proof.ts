@@ -5,6 +5,7 @@ import type {
 } from "./ton-proof-envelope";
 import { parseTonMerkleProofBoc } from "./ton-proof-envelope";
 import type { TonProvenShardDescriptor } from "./ton-shard-descriptor-proof";
+import { canonicalTonShardId } from "./ton-shard-ident";
 
 const BLOCK_TAG = 0x11ef55aa;
 const BLOCK_INFO_TAG = 0x9bc7a987;
@@ -277,7 +278,7 @@ export function verifyTonShardBlockProof(
     if (!notMaster || keyBlock) reject("BlockInfo is not a shardchain block");
     if (
       shard.workchainId !== descriptor.block.workchain ||
-      signedShard(shard.shardPrefix) !== descriptor.block.shard ||
+      canonicalTonShardId(shard) !== descriptor.block.shard ||
       seqno !== descriptor.block.seqno
     ) {
       reject("shard BlockInfo identity does not match the descriptor");

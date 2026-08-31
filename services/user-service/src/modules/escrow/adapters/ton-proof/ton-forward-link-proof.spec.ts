@@ -13,6 +13,7 @@ import type { TonLiteBlockLinkForward } from "./ton-lite-signature-proof";
 import {
   tonNodeIdShort,
   tonOrdinaryBlockSignedData,
+  tonSimplexBlockSignedData,
 } from "./ton-lite-signature-proof";
 import type { TonProofBlockId } from "./ton-proof-envelope";
 import {
@@ -111,6 +112,8 @@ function blockInfo(input: {
   validatorSetHash: number;
   catchainSeqno: number;
   keyBlock: boolean;
+  wantSplit?: boolean;
+  wantMerge?: boolean;
 }): Cell {
   return beginCell()
     .storeUint(0x9bc7a987, 32)
@@ -119,8 +122,8 @@ function blockInfo(input: {
     .storeBit(false)
     .storeBit(false)
     .storeBit(false)
-    .storeBit(false)
-    .storeBit(false)
+    .storeBit(input.wantSplit ?? false)
+    .storeBit(input.wantMerge ?? false)
     .storeBit(input.keyBlock)
     .storeBit(false)
     .storeUint(0, 8)
@@ -130,7 +133,7 @@ function blockInfo(input: {
       storeShardIdent({
         shardPrefixBits: 0,
         workchainId: -1,
-        shardPrefix: 1n << 63n,
+        shardPrefix: 0n,
       }),
     )
     .storeUint(1_800_000_000 + input.seqno, 32)
@@ -151,11 +154,16 @@ function keyBlockExtra(root: Cell): Cell {
     .storeBit(true)
     .storeBit(false)
     .storeBit(false)
+    .storeCoins(0)
+    .storeBit(false)
+    .storeCoins(0)
+    .storeBit(false)
     .storeRef(dummy)
     .storeBuffer(Buffer.alloc(32, 0xc1))
     .storeRef(root)
     .endCell();
   return beginCell()
+    .storeUint(0x4a33f6fd, 32)
     .storeRef(dummy)
     .storeRef(dummy)
     .storeRef(dummy)
@@ -186,6 +194,40 @@ interface FixtureOptions {
   toKeyBlock?: boolean;
   signerIndexes?: number[];
   wrongDestinationValidatorHash?: boolean;
+  simplex?: boolean;
+  wantSplit?: boolean;
+  wantMerge?: boolean;
+}
+
+function u32(value: number): Buffer {
+  const result = Buffer.alloc(4);
+  result.writeUInt32LE(value >>> 0);
+  return result;
+}
+
+function i32(value: number): Buffer {
+  const result = Buffer.alloc(4);
+  result.writeInt32LE(value);
+  return result;
+}
+
+function u64(value: bigint): Buffer {
+  const result = Buffer.alloc(8);
+  result.writeBigUInt64LE(value);
+  return result;
+}
+
+function simplexCandidate(value: TonProofBlockId): Buffer {
+  return Buffer.concat([
+    u32(0xe8f9bcdc),
+    i32(value.workchain),
+    u64(BigInt.asUintN(64, BigInt(value.shard))),
+    u32(value.seqno),
+    Buffer.from(value.rootHash, "hex"),
+    Buffer.from(value.fileHash, "hex"),
+    Buffer.alloc(32, 0x55),
+    u32(0x22cbcca9),
+  ]);
 }
 
 function fixture(options: FixtureOptions = {}) {
@@ -220,6 +262,8 @@ function fixture(options: FixtureOptions = {}) {
       validatorSetHash: 0,
       catchainSeqno: 6,
       keyBlock: true,
+      wantSplit: options.wantSplit,
+      wantMerge: options.wantMerge,
     }),
     keyBlockExtra(proofConfigRoot),
   );
@@ -233,6 +277,8 @@ function fixture(options: FixtureOptions = {}) {
         : derived.validatorSetHash,
       catchainSeqno: 7,
       keyBlock: destinationKeyBlock,
+      wantSplit: options.wantSplit,
+      wantMerge: options.wantMerge,
     }),
     beginCell().storeBit(false).endCell(),
   );
@@ -250,14 +296,7 @@ function fixture(options: FixtureOptions = {}) {
     rootHash: destinationBlock.hash(0).toString("hex"),
     fileHash: "b".repeat(64),
   };
-  const signedData = tonOrdinaryBlockSignedData(to);
   const signerIndexes = options.signerIndexes ?? [0, 1];
-  const signatures = signerIndexes.map((index) => ({
-    nodeIdShort: tonNodeIdShort(selectedValidators[index].publicKey).toString(
-      "hex",
-    ),
-    signature: sign(signedData, selectedValidators[index].secretKey),
-  }));
   const link: TonLiteBlockLinkForward = {
     kind: "forward",
     toKeyBlock: options.toKeyBlock ?? destinationKeyBlock,
@@ -272,12 +311,28 @@ function fixture(options: FixtureOptions = {}) {
       crc32: false,
     }),
     signatures: {
-      kind: "ordinary",
+      ...(options.simplex
+        ? {
+            kind: "simplex" as const,
+            sessionId: Buffer.alloc(32, 0x66),
+            slot: 23,
+            candidate: simplexCandidate(to),
+          }
+        : { kind: "ordinary" as const }),
       catchainSeqno: 7,
       validatorSetHash: derived.validatorSetHash,
-      signatures,
+      signatures: [],
     },
   };
+  const signedData = options.simplex
+    ? tonSimplexBlockSignedData(link)
+    : tonOrdinaryBlockSignedData(to);
+  link.signatures.signatures = signerIndexes.map((index) => ({
+    nodeIdShort: tonNodeIdShort(selectedValidators[index].publicKey).toString(
+      "hex",
+    ),
+    signature: sign(signedData, selectedValidators[index].secretKey),
+  }));
   return {
     link,
     expectation: {
@@ -347,6 +402,7 @@ describe("TON forward key-block link proof", () => {
       headerBindingVerified: true,
       signaturesVerified: true,
       thresholdVerified: true,
+      consensus: "ordinary",
       linkVerified: true,
       finalityProven: false,
       validatorParameter: 34,
@@ -356,6 +412,31 @@ describe("TON forward key-block link proof", () => {
       signedWeight: "70",
       totalWeight: "100",
       signerCount: 2,
+    });
+  });
+
+  it("authenticates a finalized Simplex signature set against the same proven validator configuration", () => {
+    const { link, expectation } = fixture({ simplex: true });
+    expect(verifyTonForwardKeyBlockLink(link, expectation)).toMatchObject({
+      consensus: "simplex",
+      signaturesVerified: true,
+      thresholdVerified: true,
+      validatorSetProven: true,
+      signedWeight: "70",
+      totalWeight: "100",
+      signerCount: 2,
+    });
+  });
+
+  it("allows advisory split and merge intent bits on signed masterchain headers", () => {
+    const { link, expectation } = fixture({
+      wantSplit: true,
+      wantMerge: true,
+    });
+    expect(verifyTonForwardKeyBlockLink(link, expectation)).toMatchObject({
+      headerBindingVerified: true,
+      signaturesVerified: true,
+      linkVerified: true,
     });
   });
 
