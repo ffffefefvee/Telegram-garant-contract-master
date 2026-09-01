@@ -15,8 +15,8 @@ import {
 } from "../wrappers/TonJettonEscrow";
 
 const GOLDEN_HASHES = {
-  config: "3866a81cbccb7e97ea184c94b7a8b7c25ce70398adfba905d80c75e1989a0d53",
-  data: "5b3a2d86ab124e31842cb698e3f4a1191ad608b2549902ccef97b8d3470a63d0",
+  config: "b3f0ea38e04be6ec4d051409bebf0c830be042e4f31512793a1b6d702c94fe95",
+  data: "cdb9948678dd71ec350a036dde50afe7a4af8faf7977bffc5f9c5a832f61c29f",
   seal: "ac25e6ec0b5588052684bdf2faa5148da6782880c3e0ef4e3be9bdde37e03026",
   notificationInline:
     "33b3dcdaa4882797d3abb911a0460a321802cc7c2d1e3db83a971329b02742cd",
@@ -42,6 +42,8 @@ function goldenConfig(): TonJettonEscrowConfig {
     termsHash: 0x11112222n,
     quoteHash: 0x33334444n,
     fundingDeadline: 2_100_000_100n,
+    deliveryDeadline: 2_100_000_200n,
+    confirmationDeadline: 2_100_000_300n,
     expectedQueryId: 9_001n,
     forwardPayloadHash: BigInt(`0x${payload.hash().toString("hex")}`),
     buyer: fixedAddress(1),
@@ -65,7 +67,7 @@ function expectSliceEnd(slice: ReturnType<Cell["beginParse"]>): void {
   expect(slice.remainingRefs).toBe(0);
 }
 
-describe("TonJettonEscrow v0.2 TypeScript ABI", () => {
+describe("TonJettonEscrow v0.3 TypeScript ABI", () => {
   it("locks cross-checkable golden hashes for StateInit data and both accepted messages", () => {
     const config = goldenConfig();
     const payload = goldenPayload();
@@ -115,6 +117,7 @@ describe("TonJettonEscrow v0.2 TypeScript ABI", () => {
     expect(data.loadUintBig(64)).toBe(0n);
     const configCell = data.loadRef();
     expect(data.loadRef().equals(beginCell().endCell())).toBe(true);
+    expect(data.loadRef().equals(beginCell().endCell())).toBe(true);
     expectSliceEnd(data);
 
     const outer = configCell.beginParse();
@@ -122,6 +125,8 @@ describe("TonJettonEscrow v0.2 TypeScript ABI", () => {
     expect(outer.loadUintBig(256)).toBe(config.termsHash);
     expect(outer.loadUintBig(256)).toBe(config.quoteHash);
     expect(outer.loadUintBig(64)).toBe(config.fundingDeadline);
+    expect(outer.loadUintBig(64)).toBe(config.deliveryDeadline);
+    expect(outer.loadUintBig(64)).toBe(config.confirmationDeadline);
     const commitment = outer.loadRef().beginParse();
     expectSliceEnd(outer);
 
@@ -310,6 +315,8 @@ describe("TonJettonEscrow wrapper against the compiled Tolk contract", () => {
       ...goldenConfig(),
       dealId: 501n,
       fundingDeadline: 2_100_000_100n,
+      deliveryDeadline: 2_100_000_200n,
+      confirmationDeadline: 2_100_000_300n,
       forwardPayloadHash: BigInt(`0x${payload.hash().toString("hex")}`),
       buyer: actors.buyer.address,
       seller: actors.seller.address,
@@ -374,5 +381,115 @@ describe("TonJettonEscrow wrapper against the compiled Tolk contract", () => {
     expect(await escrow.getStatus()).toBe(TON_JETTON_ESCROW_STATUS.FUNDED);
     expect(await escrow.getFundedAmount()).toBe(config.buyerTotal);
     expect(await escrow.getLastQueryId()).toBe(config.expectedQueryId);
+
+    const delivered = await escrow.sendMarkDelivered(actors.seller.getSender(), {
+      value: toNano("0.05"),
+      queryId: 9_002n,
+    });
+    expect(delivered.transactions).toHaveTransaction({
+      from: actors.seller.address,
+      to: escrow.address,
+      success: true,
+    });
+    expect(await escrow.getStatus()).toBe(TON_JETTON_ESCROW_STATUS.DELIVERED);
+
+    const released = await escrow.sendRelease(actors.buyer.getSender(), {
+      value: toNano("0.2"),
+      queryId: 9_003n,
+      settlementId: 0x501n,
+      buyerQueryId: 0n,
+      sellerQueryId: 9_004n,
+      treasuryQueryId: 9_005n,
+    });
+    expect(released.transactions).toHaveTransaction({
+      from: actors.buyer.address,
+      to: escrow.address,
+      success: true,
+    });
+    expect(released.transactions).toHaveTransaction({
+      from: escrow.address,
+      to: actors.wallet.address,
+      success: true,
+    });
+    expect(await escrow.getStatus()).toBe(
+      TON_JETTON_ESCROW_STATUS.SETTLEMENT_PENDING,
+    );
+    expect(await escrow.getLastQueryId()).toBe(9_005n);
+
+    const mixed = await escrow.sendReconcileAttempt(
+      actors.reconciliation.getSender(),
+      {
+        value: toNano("0.05"),
+        queryId: 9_006n,
+        settlementId: 0x501n,
+        attempt: 0,
+        activeMask: 6,
+        confirmedMask: 2,
+        failedMask: 4,
+        evidenceHash: 0xabc001n,
+      },
+    );
+    expect(mixed.transactions).toHaveTransaction({
+      from: actors.reconciliation.address,
+      to: escrow.address,
+      success: true,
+    });
+    expect(await escrow.getStatus()).toBe(
+      TON_JETTON_ESCROW_STATUS.RECOVERY_REQUIRED,
+    );
+
+    const retry = await escrow.sendRetryFailedLegs(
+      actors.reconciliation.getSender(),
+      {
+        value: toNano("0.15"),
+        queryId: 9_007n,
+        settlementId: 0x501n,
+        previousAttempt: 0,
+        buyerQueryId: 0n,
+        sellerQueryId: 0n,
+        treasuryQueryId: 9_008n,
+      },
+    );
+    expect(retry.transactions).toHaveTransaction({
+      from: actors.reconciliation.address,
+      to: escrow.address,
+      success: true,
+    });
+    expect(await escrow.getStatus()).toBe(
+      TON_JETTON_ESCROW_STATUS.SETTLEMENT_PENDING,
+    );
+
+    await escrow.sendReconcileAttempt(actors.reconciliation.getSender(), {
+      value: toNano("0.05"),
+      queryId: 9_009n,
+      settlementId: 0x501n,
+      attempt: 1,
+      activeMask: 4,
+      confirmedMask: 4,
+      failedMask: 0,
+      evidenceHash: 0xabc002n,
+    });
+    expect(await escrow.getStatus()).toBe(
+      TON_JETTON_ESCROW_STATUS.SETTLEMENT_PENDING,
+    );
+
+    const finalized = await escrow.sendFinalizeSettlement(
+      actors.reconciliation.getSender(),
+      {
+        value: toNano("0.05"),
+        queryId: 9_010n,
+        settlementId: 0x501n,
+        attempt: 1,
+        evidenceHash: 0xabc002n,
+      },
+    );
+    expect(finalized.transactions).toHaveTransaction({
+      from: actors.reconciliation.address,
+      to: escrow.address,
+      success: true,
+    });
+    expect(await escrow.getStatus()).toBe(
+      TON_JETTON_ESCROW_STATUS.SETTLED_FINALIZED,
+    );
   });
 });
