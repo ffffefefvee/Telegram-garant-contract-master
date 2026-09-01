@@ -85,6 +85,9 @@ function deal(value = input()): Deal {
     assetContract: value.masterAddress,
     termsVersion: value.termsVersion,
     termsHash: value.termsHash,
+    settlementQuoteId: value.quoteId,
+    settlementQuoteVersion: value.quoteVersion,
+    settlementQuoteHash: value.quoteHash,
     quoteId: null,
     escrowAddress: null,
     buyerWalletAddress: null,
@@ -226,6 +229,9 @@ describe("TonJettonPreparationService", () => {
       quoteId: "33333333-3333-4333-8333-333333333333",
       quoteHash: HASH("b"),
     });
+    h.lockedDeal.settlementQuoteId = changed.quoteId;
+    h.lockedDeal.settlementQuoteVersion = changed.quoteVersion;
+    h.lockedDeal.settlementQuoteHash = changed.quoteHash;
 
     const result = await h.service.prepare(changed);
 
@@ -243,6 +249,8 @@ describe("TonJettonPreparationService", () => {
     const current = persisted();
     const h = harness(current);
     h.lockedDeal.fundedAt = new Date();
+    h.lockedDeal.settlementQuoteId = "33333333-3333-4333-8333-333333333333";
+    h.lockedDeal.settlementQuoteHash = HASH("b");
 
     await expect(
       h.service.prepare(
@@ -254,6 +262,16 @@ describe("TonJettonPreparationService", () => {
     ).rejects.toThrow("JETTON_FUNDED_PREPARATION_VERSION_IS_IMMUTABLE");
     expect(h.preparationRepo.save).not.toHaveBeenCalled();
     expect(h.dealRepo.update).not.toHaveBeenCalled();
+  });
+
+  it("rejects a preparation that is not bound to the authoritative quote", async () => {
+    const h = harness();
+    h.lockedDeal.settlementQuoteHash = HASH("b");
+
+    await expect(h.service.prepare(input())).rejects.toThrow(
+      "JETTON_DEAL_QUOTE_MISMATCH",
+    );
+    expect(h.preparationRepo.save).not.toHaveBeenCalled();
   });
 
   it("rejects a deal bound to another Jetton master", async () => {
