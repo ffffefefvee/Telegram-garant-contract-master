@@ -156,11 +156,13 @@ jobs:
         run: npm run build
       - name: TON Sandbox tests
         run: npm test
-      - name: Upload development artifact for reproducibility comparison
+      - name: Upload development artifacts for reproducibility comparison
         uses: actions/upload-artifact@v4
         with:
-          name: ton-native-escrow-development-artifact
-          path: contracts-ton/build/TonNativeEscrow.compiled.json
+          name: ton-escrow-development-artifacts
+          path: |
+            contracts-ton/build/TonNativeEscrow.compiled.json
+            contracts-ton/build/TonJettonEscrow.compiled.json
           if-no-files-found: error
 
   contracts-ton-acton:
@@ -196,11 +198,13 @@ jobs:
         run: acton test tests-acton --mutate --mutate-contract TonNativeEscrow --mutation-levels critical,major --mutation-minimum-percent 100 --mutation-workers 2
       - name: Enforce Jetton critical and major mutation score
         run: acton test tests-acton --mutate --mutate-contract TonJettonEscrow --mutation-levels critical,major --mutation-minimum-percent 100 --mutation-workers 2
-      - name: Upload authoritative Acton artifact
+      - name: Upload authoritative Acton artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: ton-native-escrow-acton-artifact
-          path: contracts-ton/build/TonNativeEscrow.json
+          name: ton-escrow-acton-artifacts
+          path: |
+            contracts-ton/build/TonNativeEscrow.json
+            contracts-ton/build/TonJettonEscrow.json
           if-no-files-found: error
 
   contracts-ton-reproducibility:
@@ -224,21 +228,28 @@ jobs:
       - name: Download Blueprint compatibility artifact
         uses: actions/download-artifact@v4
         with:
-          name: ton-native-escrow-development-artifact
+          name: ton-escrow-development-artifacts
           path: contracts-ton/build/cross/blueprint
       - name: Download authoritative Acton artifact
         uses: actions/download-artifact@v4
         with:
-          name: ton-native-escrow-acton-artifact
+          name: ton-escrow-acton-artifacts
           path: contracts-ton/build/cross/acton
-      - name: Verify declared BOCs and exact code-cell hash agreement
+      - name: Verify native declared BOCs and exact code-cell hash agreement
         run: npm run release:verify-cross-build
         env:
           ACTON_VERSION: "1.1.0"
           GITHUB_SHA: ${{ github.sha }}
-      - name: Upload unsigned release candidate
+      - name: Verify Jetton declared BOCs and exact code-cell hash agreement
+        run: npm run release:verify-jetton-cross-build
+        env:
+          ACTON_VERSION: "1.1.0"
+          GITHUB_SHA: ${{ github.sha }}
+      - name: Upload unsigned native candidate and non-authorizing Jetton evidence
         uses: actions/upload-artifact@v4
         with:
-          name: ton-native-escrow-unsigned-release-candidate
-          path: contracts-ton/build/TonNativeEscrow.release-candidate.json
+          name: ton-escrow-reproducibility-evidence
+          path: |
+            contracts-ton/build/TonNativeEscrow.release-candidate.json
+            contracts-ton/build/TonJettonEscrow.cross-build-verification.json
           if-no-files-found: error

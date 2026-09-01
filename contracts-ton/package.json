@@ -7,6 +7,7 @@
   "scripts": {
     "build": "ts-node scripts/build.ts",
     "release:verify-cross-build": "ts-node scripts/verify-cross-build.ts",
+    "release:verify-jetton-cross-build": "ts-node scripts/verify-jetton-cross-build.ts",
     "release:verify-approval": "ts-node scripts/verify-release-approval.ts",
     "release:authorize-deployment": "ts-node scripts/authorize-deployment.ts",
     "test": "jest --runInBand",

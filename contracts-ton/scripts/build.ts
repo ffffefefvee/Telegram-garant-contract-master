@@ -5,30 +5,33 @@ import { compile } from '@ton/blueprint';
 import { getTolkCompilerVersion } from '@ton/tolk-js';
 
 async function main() {
-  const code = await compile('TonNativeEscrow');
   const compilerVersion = await getTolkCompilerVersion();
   if (compilerVersion !== '1.4.1') {
     throw new Error(`Unexpected Tolk compiler version: ${compilerVersion}`);
   }
-  const boc = code.toBoc();
-  const artifact = {
-    contract: 'TonNativeEscrow',
-    sourceLanguage: 'tolk',
-    compilerVersion,
-    codeHash: code.hash().toString('hex'),
-    codeHashBase64: code.hash().toString('base64'),
-    bocSha256: createHash('sha256').update(boc).digest('hex'),
-    bocHex: boc.toString('hex'),
-    minOperationalReserveNano: '200000000',
-  };
-
   const buildDirectory = resolve(process.cwd(), 'build');
-  const artifactPath = resolve(buildDirectory, 'TonNativeEscrow.compiled.json');
   await mkdir(buildDirectory, { recursive: true });
-  await writeFile(artifactPath, `${JSON.stringify(artifact, null, 2)}\n`, 'utf8');
 
-  process.stdout.write(`Compiled TonNativeEscrow ${artifact.codeHash}\n`);
-  process.stdout.write(`Wrote ${artifactPath}\n`);
+  for (const contract of ['TonNativeEscrow', 'TonJettonEscrow'] as const) {
+    const code = await compile(contract);
+    const boc = code.toBoc();
+    const artifact = {
+      contract,
+      sourceLanguage: 'tolk',
+      compilerVersion,
+      codeHash: code.hash().toString('hex'),
+      codeHashBase64: code.hash().toString('base64'),
+      bocSha256: createHash('sha256').update(boc).digest('hex'),
+      bocHex: boc.toString('hex'),
+      ...(contract === 'TonNativeEscrow'
+        ? { minOperationalReserveNano: '200000000' }
+        : {}),
+    };
+    const artifactPath = resolve(buildDirectory, `${contract}.compiled.json`);
+    await writeFile(artifactPath, `${JSON.stringify(artifact, null, 2)}\n`, 'utf8');
+    process.stdout.write(`Compiled ${contract} ${artifact.codeHash}\n`);
+    process.stdout.write(`Wrote ${artifactPath}\n`);
+  }
 }
 
 void main().catch((error: unknown) => {
