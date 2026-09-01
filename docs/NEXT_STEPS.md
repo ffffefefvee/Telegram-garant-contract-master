@@ -33,6 +33,22 @@ must let eligible users choose TON or Polygon.
 
 None of these statements authorizes real funds or public launch.
 
+## Phase 3 local candidate (hosted gate pending)
+
+The durable Jetton backend described in
+`ADR-019-DURABLE-TON-JETTON-BACKEND.md` is now implemented on the Phase 3
+branch. It adds immutable versioned preparations, watches and action intents;
+append-only observation/cursor/review evidence; atomic ledger/FSM/intent/watch
+application with `appliedAt` last; cryptographic replay of the Phase 1 evidence
+policy and signer threshold; TON/Polygon/global breakers; and append-only
+assets/liabilities reconciliation.
+
+Focused suites and the backend build pass locally. The decisive PostgreSQL
+crash/concurrency suite and full hosted CI matrix have not yet passed on the
+branch, so Phase 3 remains open. The adapter remains hard-disabled. After the
+hosted gate and merge, proceed to the Phase 4 common-domain freeze; do not skip
+the sequential release gates documented below.
+
 ## P0 — complete the money path
 
 ### 1. Complete the canonical-wallet seal workflow
