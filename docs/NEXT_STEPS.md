@@ -1,6 +1,6 @@
 # Implementation handoff and remaining work
 
-Date: 2026-08-20
+Date: 2026-09-01
 
 This is the execution handoff for the next development session. Confirmed
 product scope remains in `PRODUCT_PLAN.md`. Polygon remains a first-class
@@ -13,11 +13,11 @@ must let eligible users choose TON or Polygon.
   slices exist, but `TonEscrowAdapter.isReady()` is deliberately hard-disabled.
 - The native contract passed 14 authoritative Acton tests, 64 deterministic
   fuzz runs, zero-drift gas checks and 110/110 critical/major mutations.
-- The funding-only Jetton contract now removes the canonical-wallet StateInit
-  circularity through one-time wallet sealing and authenticates one exact
-  TEP-74 notification only after sealing. It passed 12 authoritative tests,
-  zero-drift gas checks and 145/145 critical/major mutations. It is not yet a
-  complete escrow lifecycle.
+- The Jetton contract removes the canonical-wallet StateInit circularity
+  through one-time wallet sealing, authenticates exact TEP-74 funding and now
+  implements the complete on-chain settlement/recovery lifecycle. It passes 26
+  authoritative Jetton tests, zero-drift gas checks and 384/384 executable
+  critical/major mutations. This does not enable real funds.
 - Canonical Jetton wallet/notification and finalized funding-envelope
   validators exist, together with a pure payout/retry state model.
 - Durable Jetton event storage is implemented but intentionally unwired. It
@@ -220,24 +220,25 @@ add proof-vector/adversarial tests, and only then introduce a result capable of
 authorizing durable settlement. Do not convert agreement on provider block
 metadata into finality.
 
-### 3. Complete the Jetton escrow lifecycle
+### 3. Jetton escrow lifecycle — implementation gate complete
 
-Extend the funding-only contract with delivery, release, refund, timeouts,
-dispute and resolution. Jetton transfers are asynchronous, so payout
-instruction must enter `SETTLEMENT_PENDING`, not a terminal success state.
+The contract now implements delivery, release, voluntary and timeout refunds,
+buyer-timeout release, dispute, resolution, immutable settlement plans,
+`SETTLEMENT_PENDING`, complete-mask reconciliation, `RECOVERY_REQUIRED`,
+failed-leg-only retry with fresh ordered query IDs, rich-bounce authentication
+and explicit finalized-evidence completion. Sending transfer instructions alone
+cannot set `SETTLED_FINALIZED`.
 
-Use a separate immutable reconciliation authority (intended to be a threshold
-or multisig identity), distinct from buyer, seller, arbitrator, treasury and
-the Jetton wallet. Only finalized reconciliation may mark settlement complete
-or identify failed legs. Retries must use fresh query IDs and resend only the
-failed legs. Bind confirmations to settlement ID, attempt/query range, exact
-leg mask and amount commitment. The arbitrator remains limited to dispute
-awards.
+Local evidence is 26 Jetton Acton tests plus 14 native tests and 64 deterministic
+fuzz runs, zero gas drift, 384/384 executable Jetton and 110/110 native
+critical/major mutants killed, 69 TypeScript tests, exact TypeScript/Tolk layout
+tests and Blueprint/Acton Jetton code-hash agreement. See
+`ADR-018-TON-JETTON-SETTLEMENT-LIFECYCLE.md` and
+`PHASE2_JETTON_LIFECYCLE_REPORT.md`.
 
-Definition of done: all immutable role/economic/deadline boundaries are tested;
-immediate instruction bounces and downstream restore/retry paths are tested;
-gas baseline is stable; both contract mutation gates remain 100%; independent
-contract review is complete.
+Independent contract review remains an external prerequisite. The lifecycle
+must not be wired to durable production money movement until the proof and
+backend gates pass, and no real-funds readiness flag is enabled by this phase.
 
 ### 4. Wire durable Jetton ingestion only after 1, 2 and 3
 

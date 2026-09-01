@@ -1,21 +1,25 @@
-# Native TON escrow
+# TON escrow contracts
 
 This package contains isolated per-deal TON escrows. `TonNativeEscrow` provides
-the native-TON lifecycle. `TonJettonEscrow` currently provides only a two-phase,
-funding-authentication slice for an allowlisted Jetton. StateInit commits the
-master and wallet-code hash without precommitting the owner wallet; a distinct
+the native-TON lifecycle. `TonJettonEscrow` provides the complete on-chain
+Jetton lifecycle after two-phase canonical-wallet sealing: delivery, release,
+refunds, timeouts, disputes, resolution, proof-gated reconciliation,
+failed-leg-only retry and explicit finalization. StateInit commits the master
+and wallet-code hash without precommitting the owner wallet; a distinct
 initializer must later seal independently verified canonical-wallet evidence
-before funding is possible. This is not a complete or deployable real-funds
-lifecycle. Polygon remains a separate settlement option;
+before funding is possible. This is not approval for real-funds deployment:
+the proof, durable integration, testnet, audit and operational gates remain.
+Polygon remains a separate settlement option;
 this package does not bridge, swap, or share custody with the Polygon contract.
 
 The implementation follows `docs/ADR-001-NATIVE-TON-ESCROW.md`. Tolk source is
 the contract authority. Blueprint and TON Sandbox provide a Windows-compatible
 local loop. Acton 1.1.0 is pinned in `Acton.toml` for the authoritative Linux
 build, format, lint, deterministic fuzz, gas-regression and mutation gates. CI
-independently decodes the Acton and Blueprint BOCs, verifies their declared
-hashes, requires exact code-cell hash agreement and emits an unsigned release
-candidate. Two-person signing and the remaining release ceremony are still
+independently decodes the Acton and Blueprint BOCs for both contracts, verifies
+their declared hashes and requires exact code-cell hash agreement. Native TON
+emits an unsigned release candidate; Jetton emits non-authorizing verification
+evidence. Two-person signing and the remaining release ceremony are still
 required before promotion.
 
 ## Commands
@@ -41,9 +45,9 @@ acton test tests-acton --mutate --mutate-contract TonJettonEscrow --mutation-lev
 ```
 
 The shared gas baseline is committed. Critical/major mutation gating requires
-100% for both the complete native contract and the funding-only Jetton contract.
-That test score does not replace an external review or make the incomplete
-Jetton lifecycle releasable. The initializer is a money-critical authority:
+100% for both complete contract state machines. That test score does not
+replace proof verification, testnet drills or external review and does not make
+Jetton releasable. The initializer is a money-critical authority:
 the contract cannot independently execute the master getter, so the release
 workflow must verify the wallet address, owner, master and pinned code hash
 from finalized independent evidence before threshold approval and sealing.
@@ -68,6 +72,11 @@ npm run release:verify-approval -- <candidate> <policy> <signatures> <output>
 The verifier requires at least two distinct enabled Ed25519 signers and writes
 approval evidence; it never signs or deploys. See
 `docs/TON_RELEASE_CEREMONY.md`.
+
+`npm run release:verify-jetton-cross-build` independently checks the Jetton
+Acton and Blueprint BOCs. Its manifest fixes `authorizationAllowed: false` and
+is reproducibility evidence only; it cannot be promoted through the native
+release-approval scripts.
 
 A separately controlled deployment preparation step must re-run that
 cryptographic verification instead of trusting the evidence JSON alone:

@@ -1,6 +1,6 @@
-# Native TON implementation status
+# TON implementation status
 
-Date: 2026-08-20
+Date: 2026-09-01
 
 Polygon remains a first-class, independent settlement option. This status is
 only for the native TON implementation and does not change Polygon behavior or
@@ -22,8 +22,8 @@ enable any production flag.
   SHA-256.
 - Backend release-artifact verification against an operator-approved exact-file
   digest and code-cell hash.
-- Sixty-six `contracts-ton` Jest tests plus twenty-six authoritative Acton tests
-  (fourteen native and twelve funding-only Jetton), including 64 deterministic
+- Sixty-nine `contracts-ton` Jest tests plus forty authoritative Acton tests
+  (fourteen native and twenty-six Jetton lifecycle), including 64 deterministic
   fuzz runs, sampled
   award-conservation properties, explicit participant-path fee ceilings,
   maximum encodable economics, outbound-action rollback and cross-build
@@ -33,10 +33,12 @@ enable any production flag.
   deterministic fuzz, a committed zero-drift gas baseline and critical/major
   mutation testing. The current local mutation score is 100% (110/110 killed),
   and CI now requires the full 100% floor for these mutation levels.
-- A dependent reproducibility CI gate decodes both independent BOCs, verifies
-  each declared hash, requires exact code-cell hash agreement and emits a
-  source-hashed, unsigned, two-approval release candidate. The release ceremony
-  explicitly separates this evidence from later signatures and authorization.
+- A dependent reproducibility CI gate decodes both independent BOCs for each
+  contract, verifies every declared hash and requires exact code-cell hash
+  agreement. Native TON emits a source-hashed unsigned two-approval release
+  candidate. Jetton emits a separate verification-only artifact with
+  `authorizationAllowed: false`; the release ceremony explicitly separates
+  reproducibility evidence from later signatures and authorization.
 - A non-signing release-policy verifier binds the exact candidate-file digest
   to a domain and policy ID, verifies at least two distinct authorized Ed25519
   signatures and emits approval evidence. Sixteen verifier tests cover malformed
@@ -138,19 +140,27 @@ enable any production flag.
   masters, wrong wallet/owner/destination/buyer/query/amount/payload, bounced
   notifications, trailing data and malformed BOCs. It is not yet wired to a
   deal or enabled for settlement.
-- A separate funding-only `TonJettonEscrow` now avoids the canonical-wallet
+- `TonJettonEscrow` avoids the canonical-wallet
   StateInit fixed-point: its address is derived from configuration containing
   the allowlisted master and pinned wallet-code hash, but not the wallet. A
   distinct immutable initializer may seal one independently verified wallet
   and evidence commitment; funding is impossible before sealing and afterward
-  accepts one matching TEP-74 notification only from that wallet. Twelve
-  authoritative Acton tests cover the two-phase bootstrap, identity separation,
-  seal replay/query/config boundaries, canonical inline/reference funding,
-  fake-wallet, malformed, bounced, late and impossible-state paths. The
-  critical/major mutation score is 100% (145/145 killed), with a committed
-  zero-drift 13-opcode gas baseline. This is not yet a complete
-  release/refund/dispute/payout contract, and the initializer workflow still
-  needs finalized independent wallet proof and threshold approval.
+  accepts one matching TEP-74 notification only from that wallet. It now also
+  implements delivery, release/refund timeouts, voluntary refund, disputes,
+  arbitrator resolution, immutable multi-leg settlement plans,
+  `SETTLEMENT_PENDING`, complete-mask reconciliation, failed-leg-only retry,
+  authenticated rich bounces and explicit finalization. Twenty-six authoritative
+  Jetton tests cover the bootstrap, exact two/three-leg payout actions, zero
+  legs, every role/state/deadline/query boundary, action rollback, top-ups,
+  unexpected funding, partial success, retries, stale/repeated bounces and
+  corrupted persisted state. Critical/major mutation is 100% (384/384
+  executable mutants killed; two invalid mutants fail compilation), with a
+  committed zero-drift gas baseline. Blueprint Tolk 1.4.1 and Acton 1.1.0 agree
+  on code hash
+  `cbe811eb5df11ae64a03f2960154816011df82789ffb5b8a9b0976c26ea6ac73`.
+  The proof-backed initializer/reconciliation workflow, durable integration,
+  testnet and audit gates still remain, so this implementation does not enable
+  real funds.
 - A pure finalized Jetton funding-envelope validator now composes canonical
   wallet and notification evidence with durable transaction identity,
   masterchain inclusion, explicit successful non-emulated execution, exact
@@ -391,12 +401,12 @@ still classified as a legacy migration path, not native TON escrow.
    finalized proofs; bind a domain-separated evidence commitment; require an
    audited threshold initializer approval; and update deterministic config,
    StateInit and seal-message generation for the two-phase ABI.
-7. Extend the funding-only `TonJettonEscrow` into an audited lifecycle and wire
-   the finalized funding validator into durable, replay-safe ingestion. Add
-   verified post-transaction wallet balance deltas, outbound transfers/excess,
-   on-chain bounce handling and recovery reconciliation. Keep expanding the
-   dedicated Jetton mutation/test gate with each lifecycle addition. The current
-   isolated contract, envelope and recovery model do not imply Jetton readiness.
+7. Independently review the implemented `TonJettonEscrow` lifecycle, then wire
+   only proof-authorized funding and settlement evidence into durable,
+   replay-safe ingestion. Preserve verified post-transaction wallet balance
+   deltas, outbound transfers/excess, bounce evidence and recovery
+   reconciliation. The completed isolated contract and 100% mutation gate do
+   not imply Jetton readiness.
 8. Deploy to testnet, run release/refund/dispute/recovery drills, obtain an
    independent contract/backend funds-flow audit, remediate, and only then run
    a value-capped closed beta.
