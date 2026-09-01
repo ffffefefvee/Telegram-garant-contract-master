@@ -29,6 +29,7 @@ export class AddMultichainSettlementFields1716800000000 implements MigrationInte
 
     await queryRunner.query(`
       ALTER TABLE deals
+        ADD COLUMN IF NOT EXISTS escrow_address VARCHAR(64),
         ADD COLUMN IF NOT EXISTS settlement_network settlement_network_enum,
         ADD COLUMN IF NOT EXISTS settlement_chain_id VARCHAR(64),
         ADD COLUMN IF NOT EXISTS settlement_asset settlement_asset_enum,
@@ -74,6 +75,7 @@ export class AddMultichainSettlementFields1716800000000 implements MigrationInte
     );
     await queryRunner.query(`
       ALTER TABLE deals
+        DROP COLUMN IF EXISTS escrow_address,
         DROP COLUMN IF EXISTS funded_at,
         DROP COLUMN IF EXISTS seller_wallet_address,
         DROP COLUMN IF EXISTS buyer_wallet_address,

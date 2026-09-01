@@ -35,7 +35,7 @@ export class Deal {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Column({ type: 'varchar', length: 50, unique: true })
+  @Column({ type: 'varchar', length: 50, unique: true, name: 'deal_number' })
   dealNumber: string;
 
   @Column({
@@ -82,52 +82,52 @@ export class Deal {
   })
   currency: Currency;
 
-  @Column({ type: 'decimal', precision: 5, scale: 2, default: 0 })
+  @Column({ type: 'decimal', precision: 5, scale: 2, default: 0, name: 'commission_rate' })
   commissionRate: number;
 
-  @Column({ type: 'decimal', precision: 12, scale: 2, default: 0 })
+  @Column({ type: 'decimal', precision: 12, scale: 2, default: 0, name: 'commission_amount' })
   commissionAmount: number;
 
   /**
    * Цена в валюте котировки (RUB или USDT), введённая пользователем (§9).
    */
-  @Column({ type: 'decimal', precision: 18, scale: 6, nullable: true })
+  @Column({ type: 'decimal', precision: 18, scale: 6, nullable: true, name: 'quote_amount' })
   quoteAmount: number | null;
 
   /**
    * Валюта котировки: 'RUB' или 'USDT' (§9).
    */
-  @Column({ type: 'varchar', length: 8, nullable: true })
+  @Column({ type: 'varchar', length: 8, nullable: true, name: 'quote_currency' })
   quoteCurrency: 'RUB' | 'USDT' | null;
 
   /**
    * Зафиксированный USDT-эквивалент суммы сделки, устанавливается при funding (§9).
    */
-  @Column({ type: 'decimal', precision: 18, scale: 6, nullable: true })
+  @Column({ type: 'decimal', precision: 18, scale: 6, nullable: true, name: 'amount_usdt' })
   amountUsdt: number | null;
 
   /**
    * Момент фиксации курса RUB/USDT (§9).
    */
-  @Column({ type: 'timestamp', nullable: true })
+  @Column({ type: 'timestamp', nullable: true, name: 'fx_rate_locked_at' })
   fxRateLockedAt: Date | null;
 
   /**
    * Модель распределения комиссии (D4): SPLIT_50_50 / BUYER_PAYS / SELLER_PAYS.
    */
-  @Column({ type: 'enum', enum: FeeModel, default: FeeModel.BUYER_PAYS })
+  @Column({ type: 'enum', enum: FeeModel, default: FeeModel.BUYER_PAYS, name: 'fee_model' })
   feeModel: FeeModel;
 
   /**
    * Доля комиссии, которую платит покупатель (в USDT, D5).
    */
-  @Column({ type: 'decimal', precision: 18, scale: 6, default: 0 })
+  @Column({ type: 'decimal', precision: 18, scale: 6, default: 0, name: 'fee_buyer_usdt' })
   feeBuyerUsdt: number;
 
   /**
    * Доля комиссии, которую платит продавец (в USDT, D5).
    */
-  @Column({ type: 'decimal', precision: 18, scale: 6, default: 0 })
+  @Column({ type: 'decimal', precision: 18, scale: 6, default: 0, name: 'fee_seller_usdt' })
   feeSellerUsdt: number;
 
   @Column({ type: 'text' })
@@ -145,10 +145,10 @@ export class Deal {
   @Column({ type: 'jsonb', default: {} })
   metadata: Record<string, any>;
 
-  @Column({ type: 'boolean', default: false })
+  @Column({ type: 'boolean', default: false, name: 'is_public' })
   isPublic: boolean;
 
-  @Column({ type: 'varchar', length: 50, nullable: true })
+  @Column({ type: 'varchar', length: 50, nullable: true, name: 'public_slug' })
   publicSlug: string | null;
 
   @OneToMany(() => DealMessage, (message) => message.deal, { cascade: true })
@@ -163,34 +163,34 @@ export class Deal {
   @OneToMany(() => DealEvent, (event) => event.deal, { cascade: true })
   events: DealEvent[];
 
-  @CreateDateColumn({ type: 'timestamp' })
+  @CreateDateColumn({ type: 'timestamp', name: 'created_at' })
   createdAt: Date;
 
-  @UpdateDateColumn({ type: 'timestamp' })
+  @UpdateDateColumn({ type: 'timestamp', name: 'updated_at' })
   updatedAt: Date;
 
-  @Column({ type: 'timestamp', nullable: true })
+  @Column({ type: 'timestamp', nullable: true, name: 'accepted_at' })
   acceptedAt: Date | null;
 
-  @Column({ type: 'timestamp', nullable: true })
+  @Column({ type: 'timestamp', nullable: true, name: 'paid_at' })
   paidAt: Date | null;
 
-  @Column({ type: 'timestamp', nullable: true })
+  @Column({ type: 'timestamp', nullable: true, name: 'completed_at' })
   completedAt: Date | null;
 
-  @Column({ type: 'timestamp', nullable: true })
+  @Column({ type: 'timestamp', nullable: true, name: 'cancelled_at' })
   cancelledAt: Date | null;
 
-  @Column({ type: 'timestamp', nullable: true })
+  @Column({ type: 'timestamp', nullable: true, name: 'disputed_at' })
   disputedAt: Date | null;
 
-  @Column({ type: 'uuid', nullable: true })
+  @Column({ type: 'uuid', nullable: true, name: 'arbitrator_id' })
   arbitratorId: string | null;
 
-  @Column({ type: 'varchar', length: 255, nullable: true })
+  @Column({ type: 'varchar', length: 255, nullable: true, name: 'cancel_reason' })
   cancelReason: string | null;
 
-  @Column({ type: 'varchar', length: 255, nullable: true })
+  @Column({ type: 'varchar', length: 255, nullable: true, name: 'refund_reason' })
   refundReason: string | null;
 
   @Column({ type: 'varchar', length: 64, nullable: true, name: 'escrow_address' })
