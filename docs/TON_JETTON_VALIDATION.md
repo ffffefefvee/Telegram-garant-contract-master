@@ -1,10 +1,10 @@
 # USDT-TON Jetton validation boundary
 
-Date: 2026-08-20
+Date: 2026-09-01
 
-Status: funding authentication and a raw-evidence payout structural precheck
-implemented; finalized payout proof is not implemented and no Jetton real-money
-capability is enabled
+Status: funding authentication, complete isolated on-chain lifecycle and a
+raw-evidence payout structural precheck implemented; durable wiring, external
+review and real-funds capability remain disabled
 
 ## Purpose
 
@@ -42,7 +42,7 @@ inbound message to the exact escrow, no unexplained outbound messages and a
 transaction timestamp within the immutable funding deadline. It remains pure
 and unwired: acceptance cannot mutate a deal or enable an adapter.
 
-The isolated funding-only `TonJettonEscrow` uses a two-phase wallet-sealing
+The isolated `TonJettonEscrow` uses a two-phase wallet-sealing
 design. StateInit commits the master, pinned wallet-code hash, buyer, amount,
 funding query, payload, economic conservation, deadlines and immutable
 initializer/reconciliation authorities, but deliberately does not contain the
@@ -67,6 +67,23 @@ domain-separated `structuralEvidenceHash` for audit comparison. It always
 returns `sealingAuthorized: false`; `verificationEvidenceHash` remains null
 until masterchain, shard and account proofs plus local getter execution are
 implemented. The structural hash is not valid seal authorization.
+
+After exact funding, the contract supports delivery, release, voluntary and
+timeout refund, buyer-timeout release, dispute and arbitrator resolution. The
+first settlement action persists an immutable plan containing its ID, outcome,
+exact destinations and amounts, conservation commitment and active-leg mask,
+then enters `SETTLEMENT_PENDING` before emitting complete TEP-74 transfer
+messages. Transfer emission is never terminal success.
+
+The immutable reconciliation authority must classify the complete current
+attempt with disjoint confirmed/failed masks and nonzero evidence. Mixed
+success enters `RECOVERY_REQUIRED`; a retry uses fresh ordered query IDs and
+sends only failed legs. Rich bounces are accepted only from the sealed wallet
+and bind the complete original transfer body, settlement/plan/attempt/leg,
+query, destination, amount, response destination and canonical empty forward
+payload. Bounces record evidence but cannot retry or finalize. Explicit
+finalization requires the full immutable active mask confirmed and matching
+nonzero reconciliation evidence.
 
 `ton-jetton-payout-state` is a separate pure recovery model. It creates
 conserving buyer/seller/treasury legs, assigns non-reusable uint64 query IDs and
@@ -143,8 +160,6 @@ caller/integration must additionally provide:
 - a two-source, finalized canonical-wallet seal verifier and threshold-approved
   initializer workflow, including immutable approval/evidence persistence and
   the audited contract-message composition boundary;
-- an asynchronous lifecycle contract with `SETTLEMENT_PENDING`, finalized
-  leg-mask confirmation and failed-leg-only retries using fresh query IDs; and
 - durable ingestion, transactional ledger/FSM application, scheduler/backfill,
   alerts and dual-authorized recovery around the pure validation result.
 
