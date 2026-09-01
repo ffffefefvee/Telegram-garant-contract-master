@@ -22,6 +22,20 @@ import { TonNativeEscrowWatch } from "./modules/deal/entities/ton-native-escrow-
 import { TonNativeChainEvent } from "./modules/deal/entities/ton-native-chain-event.entity";
 import { TonNativeLifecycleIntent } from "./modules/deal/entities/ton-native-lifecycle-intent.entity";
 import { TonNativeRecoveryRequest } from "./modules/deal/entities/ton-native-recovery-request.entity";
+import { TonJettonEscrowPreparation } from "./modules/deal/entities/ton-jetton-escrow-preparation.entity";
+import { TonJettonEscrowWatch } from "./modules/deal/entities/ton-jetton-escrow-watch.entity";
+import { TonJettonLedgerReconciliation } from "./modules/deal/entities/ton-jetton-ledger-reconciliation.entity";
+import {
+  TonJettonActionIntent,
+  TonJettonActionIntentConsumption,
+} from "./modules/deal/entities/ton-jetton-action-intent.entity";
+import {
+  TonJettonChainEvent,
+  TonJettonApplicationReview,
+  TonJettonEventApplication,
+  TonJettonIngestionCursor,
+  TonJettonIngestionCursorCheckpoint,
+} from "./modules/deal/entities/ton-jetton-chain-event.entity";
 import { DealModule } from "./modules/deal/deal.module";
 import { Payment } from "./modules/payment/entities/payment.entity";
 import { CommissionRate } from "./modules/payment/entities/commission-rate.entity";
@@ -69,6 +83,11 @@ import {
   JobSchedule,
 } from "./modules/monitoring/entities/monitoring.entity";
 import { validateEnvironment } from "./config/environment.validation";
+import {
+  SettlementCircuitBreaker,
+  SettlementCircuitBreakerAudit,
+} from "./modules/safety/entities/settlement-circuit-breaker.entity";
+import { SafetyModule } from "./modules/safety/safety.module";
 
 @Module({
   imports: [
@@ -122,6 +141,18 @@ import { validateEnvironment } from "./config/environment.validation";
               TonNativeChainEvent,
               TonNativeLifecycleIntent,
               TonNativeRecoveryRequest,
+              TonJettonEscrowPreparation,
+              TonJettonEscrowWatch,
+              TonJettonLedgerReconciliation,
+              TonJettonActionIntent,
+              TonJettonActionIntentConsumption,
+              TonJettonChainEvent,
+              TonJettonApplicationReview,
+              TonJettonEventApplication,
+              TonJettonIngestionCursor,
+              TonJettonIngestionCursorCheckpoint,
+              SettlementCircuitBreaker,
+              SettlementCircuitBreakerAudit,
               Payment,
               CommissionRate,
               CurrencyRate,
@@ -181,6 +212,18 @@ import { validateEnvironment } from "./config/environment.validation";
             TonNativeChainEvent,
             TonNativeLifecycleIntent,
             TonNativeRecoveryRequest,
+            TonJettonEscrowPreparation,
+            TonJettonEscrowWatch,
+            TonJettonLedgerReconciliation,
+            TonJettonActionIntent,
+            TonJettonActionIntentConsumption,
+            TonJettonChainEvent,
+            TonJettonApplicationReview,
+            TonJettonEventApplication,
+            TonJettonIngestionCursor,
+            TonJettonIngestionCursorCheckpoint,
+            SettlementCircuitBreaker,
+            SettlementCircuitBreakerAudit,
             Payment,
             CommissionRate,
             CurrencyRate,
@@ -272,6 +315,7 @@ import { validateEnvironment } from "./config/environment.validation";
     OpsModule,
     NotificationsModule,
     AntiScamModule,
+    SafetyModule,
   ],
   providers: [
     {

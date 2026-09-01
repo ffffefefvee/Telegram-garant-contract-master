@@ -10,6 +10,20 @@ import { TonNativeEscrowWatch } from "./entities/ton-native-escrow-watch.entity"
 import { TonNativeChainEvent } from "./entities/ton-native-chain-event.entity";
 import { TonNativeLifecycleIntent } from "./entities/ton-native-lifecycle-intent.entity";
 import { TonNativeRecoveryRequest } from "./entities/ton-native-recovery-request.entity";
+import { TonJettonEscrowPreparation } from "./entities/ton-jetton-escrow-preparation.entity";
+import { TonJettonEscrowWatch } from "./entities/ton-jetton-escrow-watch.entity";
+import { TonJettonLedgerReconciliation } from "./entities/ton-jetton-ledger-reconciliation.entity";
+import {
+  TonJettonActionIntent,
+  TonJettonActionIntentConsumption,
+} from "./entities/ton-jetton-action-intent.entity";
+import {
+  TonJettonChainEvent,
+  TonJettonApplicationReview,
+  TonJettonEventApplication,
+  TonJettonIngestionCursor,
+  TonJettonIngestionCursorCheckpoint,
+} from "./entities/ton-jetton-chain-event.entity";
 import { DealService } from "./deal.service";
 import { DealController } from "./deal.controller";
 import { DealGateway } from "./deal.gateway";
@@ -31,6 +45,16 @@ import { TonNativeEventApplyLockService } from "./ton-native-event-apply-lock.se
 import { TonNativeReconciliationService } from "./ton-native-reconciliation.service";
 import { TonNativeRecoveryService } from "./ton-native-recovery.service";
 import { TonNativeBackfillService } from "./ton-native-backfill.service";
+import { TonJettonPreparationService } from "./ton-jetton-preparation.service";
+import { SafetyModule } from "../safety/safety.module";
+import { TonJettonDurableIngestionService } from "./ton-jetton-durable-ingestion.service";
+import {
+  TonJettonApplicationEvidenceVerifier,
+  TonJettonTransactionalApplicationService,
+} from "./ton-jetton-transactional-application.service";
+import { TonJettonActionIntentService } from "./ton-jetton-action-intent.service";
+import { TonJettonApplicationScheduler } from "./ton-jetton-application.scheduler";
+import { TonJettonLedgerReconciliationService } from "./ton-jetton-ledger-reconciliation.service";
 
 @Module({
   imports: [
@@ -45,6 +69,16 @@ import { TonNativeBackfillService } from "./ton-native-backfill.service";
       TonNativeChainEvent,
       TonNativeLifecycleIntent,
       TonNativeRecoveryRequest,
+      TonJettonEscrowPreparation,
+      TonJettonEscrowWatch,
+      TonJettonLedgerReconciliation,
+      TonJettonActionIntent,
+      TonJettonActionIntentConsumption,
+      TonJettonChainEvent,
+      TonJettonApplicationReview,
+      TonJettonEventApplication,
+      TonJettonIngestionCursor,
+      TonJettonIngestionCursorCheckpoint,
     ]),
     forwardRef(() => UserModule),
     forwardRef(() => ReviewModule),
@@ -52,6 +86,7 @@ import { TonNativeBackfillService } from "./ton-native-backfill.service";
     EscrowModule,
     OpsModule,
     AuthModule,
+    SafetyModule,
   ],
   controllers: [DealController],
   providers: [
@@ -67,6 +102,13 @@ import { TonNativeBackfillService } from "./ton-native-backfill.service";
     TonNativeReconciliationService,
     TonNativeRecoveryService,
     TonNativeBackfillService,
+    TonJettonPreparationService,
+    TonJettonDurableIngestionService,
+    TonJettonApplicationEvidenceVerifier,
+    TonJettonTransactionalApplicationService,
+    TonJettonActionIntentService,
+    TonJettonApplicationScheduler,
+    TonJettonLedgerReconciliationService,
     DealGateway,
     DealGatewayService,
   ],
@@ -78,6 +120,11 @@ import { TonNativeBackfillService } from "./ton-native-backfill.service";
     TonNativeLifecycleIngestionService,
     TonNativeRecoveryService,
     TonNativeBackfillService,
+    TonJettonPreparationService,
+    TonJettonDurableIngestionService,
+    TonJettonTransactionalApplicationService,
+    TonJettonActionIntentService,
+    TonJettonLedgerReconciliationService,
     TypeOrmModule,
     DealGatewayService,
   ],

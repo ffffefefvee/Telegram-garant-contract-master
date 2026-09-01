@@ -3,6 +3,9 @@ import { createPgEnum, dropPgEnum } from '../database/migration-enum.helper';
 
 export class CreateUserTables1702300000000 implements MigrationInterface {
   public async up(queryRunner: QueryRunner): Promise<void> {
+    if (queryRunner.connection.options.type === 'postgres') {
+      await queryRunner.query('CREATE EXTENSION IF NOT EXISTS "uuid-ossp"');
+    }
     await createPgEnum(queryRunner, 'user_status_enum', [
       'active',
       'inactive',

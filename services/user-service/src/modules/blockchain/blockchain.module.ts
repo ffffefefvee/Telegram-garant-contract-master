@@ -1,15 +1,16 @@
-import { Module } from '@nestjs/common';
-import { ConfigModule } from '@nestjs/config';
-import { BlockchainConfig } from './blockchain.config';
-import { BlockchainProvider } from './blockchain.provider';
-import { Erc20Client } from './erc20.client';
-import { FactoryClient } from './factory.client';
-import { EscrowClient } from './escrow.client';
-import { TreasuryClient } from './treasury.client';
-import { RegistryClient } from './registry.client';
-import { RelayService } from './relay.service';
-import { RelayTxQueue } from './relay-tx-queue';
-import { MoneyMovementGate } from './money-movement.gate';
+import { Module } from "@nestjs/common";
+import { ConfigModule } from "@nestjs/config";
+import { BlockchainConfig } from "./blockchain.config";
+import { BlockchainProvider } from "./blockchain.provider";
+import { Erc20Client } from "./erc20.client";
+import { FactoryClient } from "./factory.client";
+import { EscrowClient } from "./escrow.client";
+import { TreasuryClient } from "./treasury.client";
+import { RegistryClient } from "./registry.client";
+import { RelayService } from "./relay.service";
+import { RelayTxQueue } from "./relay-tx-queue";
+import { MoneyMovementGate } from "./money-movement.gate";
+import { SafetyModule } from "../safety/safety.module";
 
 /**
  * BlockchainModule — single source of truth for on-chain interactions.
@@ -27,7 +28,7 @@ import { MoneyMovementGate } from './money-movement.gate';
  * values, write methods throw. Useful for local dev without a Hardhat node.
  */
 @Module({
-  imports: [ConfigModule],
+  imports: [ConfigModule, SafetyModule],
   providers: [
     BlockchainConfig,
     BlockchainProvider,
