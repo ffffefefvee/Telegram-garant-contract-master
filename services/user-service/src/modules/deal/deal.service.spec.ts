@@ -1,6 +1,10 @@
 import { BadRequestException, ForbiddenException } from "@nestjs/common";
 import { Deal } from "./entities/deal.entity";
-import { DealStatus } from "./enums/deal.enum";
+import {
+  DealStatus,
+  SettlementMode,
+  SettlementNetwork,
+} from "./enums/deal.enum";
 import { TonNativeLifecycleAction } from "./ton-native-lifecycle";
 import { DealService } from "./deal.service";
 
@@ -186,5 +190,53 @@ describe("DealService finalized native TON replay", () => {
 
     expect(confirmReceipt).toHaveBeenCalledTimes(1);
     expect(confirmReceipt).toHaveBeenCalledWith(pending.id, pending.buyerId);
+  });
+});
+
+describe("DealService settlement agreement funding gate", () => {
+  it("fails before deal mutation when exact dual confirmation is absent", async () => {
+    const deal = Object.assign(new Deal(), {
+      id: "deal-funding-1",
+      status: DealStatus.PENDING_PAYMENT,
+      buyerId: "buyer-1",
+      sellerId: "seller-1",
+      settlementNetwork: SettlementNetwork.POLYGON,
+      settlementMode: SettlementMode.NATIVE,
+      fundedAt: null,
+    });
+    const dealRepository = { save: jest.fn() };
+    const agreement = {
+      assertFundingAuthorized: jest
+        .fn()
+        .mockRejectedValue(new Error("both confirmations required")),
+    };
+    const service = new DealService(
+      dealRepository as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      {} as any,
+      agreement as any,
+    );
+    jest.spyOn(service, "findById").mockResolvedValue(deal);
+
+    await expect(service.confirmPayment(deal.id, 100, "USDT")).rejects.toThrow(
+      "both confirmations required",
+    );
+    expect(agreement.assertFundingAuthorized).toHaveBeenCalledWith(
+      deal.id,
+      expect.any(Date),
+      false,
+    );
+    expect(dealRepository.save).not.toHaveBeenCalled();
   });
 });

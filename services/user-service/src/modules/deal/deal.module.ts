@@ -14,6 +14,10 @@ import { TonJettonEscrowPreparation } from "./entities/ton-jetton-escrow-prepara
 import { TonJettonEscrowWatch } from "./entities/ton-jetton-escrow-watch.entity";
 import { TonJettonLedgerReconciliation } from "./entities/ton-jetton-ledger-reconciliation.entity";
 import {
+  SettlementConfirmationRecord,
+  SettlementQuote,
+} from "./entities/settlement-quote.entity";
+import {
   TonJettonActionIntent,
   TonJettonActionIntentConsumption,
 } from "./entities/ton-jetton-action-intent.entity";
@@ -55,6 +59,7 @@ import {
 import { TonJettonActionIntentService } from "./ton-jetton-action-intent.service";
 import { TonJettonApplicationScheduler } from "./ton-jetton-application.scheduler";
 import { TonJettonLedgerReconciliationService } from "./ton-jetton-ledger-reconciliation.service";
+import { SettlementAgreementService } from "./settlement-agreement.service";
 
 @Module({
   imports: [
@@ -72,6 +77,8 @@ import { TonJettonLedgerReconciliationService } from "./ton-jetton-ledger-reconc
       TonJettonEscrowPreparation,
       TonJettonEscrowWatch,
       TonJettonLedgerReconciliation,
+      SettlementQuote,
+      SettlementConfirmationRecord,
       TonJettonActionIntent,
       TonJettonActionIntentConsumption,
       TonJettonChainEvent,
@@ -109,6 +116,7 @@ import { TonJettonLedgerReconciliationService } from "./ton-jetton-ledger-reconc
     TonJettonActionIntentService,
     TonJettonApplicationScheduler,
     TonJettonLedgerReconciliationService,
+    SettlementAgreementService,
     DealGateway,
     DealGatewayService,
   ],
@@ -125,6 +133,7 @@ import { TonJettonLedgerReconciliationService } from "./ton-jetton-ledger-reconc
     TonJettonTransactionalApplicationService,
     TonJettonActionIntentService,
     TonJettonLedgerReconciliationService,
+    SettlementAgreementService,
     TypeOrmModule,
     DealGatewayService,
   ],
