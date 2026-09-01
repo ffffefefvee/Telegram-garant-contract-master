@@ -49,6 +49,22 @@ branch, so Phase 3 remains open. The adapter remains hard-disabled. After the
 hosted gate and merge, proceed to the Phase 4 common-domain freeze; do not skip
 the sequential release gates documented below.
 
+## Phase 4 local candidate (hosted gate pending)
+
+The versioned common multichain contract described in
+`ADR-020-COMMON-MULTICHAIN-DOMAIN-CONTRACT.md` is implemented on a stacked Phase
+4 branch. It freezes chain-bound terms, quote, transaction, funding, settlement,
+payout, balance, and reconciliation types; expands both adapters through the
+same conformance boundary; and adds immutable quote/party-confirmation storage.
+PostgreSQL rejects one-unit quote drift, missing dual confirmation, and any
+network/asset/terms/quote change after funding. Jetton preparation must match
+the authoritative common quote pointer.
+
+The backend build and 102 suites / 1,035 tests pass locally. The six-case Phase
+4 PostgreSQL gate and complete hosted CI matrix remain pending, so Phase 4 is
+not yet closed. Polygon results remain non-finalizing pending Phase 5, and the
+TON adapter remains hard-disabled. See `PHASE4_MULTICHAIN_DOMAIN_REPORT.md`.
+
 ## P0 — complete the money path
 
 ### 1. Complete the canonical-wallet seal workflow
