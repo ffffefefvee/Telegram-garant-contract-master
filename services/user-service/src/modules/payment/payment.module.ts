@@ -50,7 +50,7 @@ import { PaymentOperationService } from './payment-operation.service';
     forwardRef(() => UserModule),
     EscrowModule,
     BlockchainModule,
-    OpsModule,
+    forwardRef(() => OpsModule),
   ],
   controllers: [PaymentController, CryptomusWebhookController],
   providers: [

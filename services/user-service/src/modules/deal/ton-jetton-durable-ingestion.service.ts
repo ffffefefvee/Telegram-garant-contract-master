@@ -1,5 +1,5 @@
 import { createHash } from "crypto";
-import { Injectable } from "@nestjs/common";
+import { Inject, Injectable, Optional } from "@nestjs/common";
 import { DataSource, EntityManager } from "typeorm";
 import { TonNetwork } from "../user/entities/ton-wallet-binding.entity";
 import {
@@ -91,6 +91,8 @@ export class TonJettonEvidenceConflictError extends Error {
 export class TonJettonDurableIngestionService {
   constructor(
     private readonly dataSource: DataSource,
+    @Optional()
+    @Inject("TON_JETTON_MAX_APPLY_FAILURES")
     private readonly maxApplyFailures = 3,
   ) {
     if (

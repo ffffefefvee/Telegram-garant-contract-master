@@ -75,23 +75,21 @@ export class EscrowClient {
   }
 
   async notifyFunded(address: string): Promise<string> {
-    return this.txQueue.submit(`escrow.notifyFunded ${address}`, async () => {
+    const hash = await this.txQueue.submit(`escrow.notifyFunded ${address}`, async (overrides) => {
       const c = this.writeContract(address);
-      const tx = await c.notifyFunded();
-      const receipt = await tx.wait();
-      this.logger.log(`notifyFunded ${address}, tx=${receipt.hash}`);
-      return receipt.hash as string;
+      return c.notifyFunded(overrides ?? {});
     });
+    this.logger.log(`notifyFunded ${address}, tx=${hash}`);
+    return hash;
   }
 
   async assignArbitrator(address: string, arbitrator: string): Promise<string> {
-    return this.txQueue.submit(`escrow.assignArbitrator ${address}`, async () => {
+    const hash = await this.txQueue.submit(`escrow.assignArbitrator ${address} ${arbitrator}`, async (overrides) => {
       const c = this.writeContract(address);
-      const tx = await c.assignArbitrator(arbitrator);
-      const receipt = await tx.wait();
-      this.logger.log(`assignArbitrator ${address} → ${arbitrator}, tx=${receipt.hash}`);
-      return receipt.hash as string;
+      return c.assignArbitrator(arbitrator, overrides ?? {});
     });
+    this.logger.log(`assignArbitrator ${address} → ${arbitrator}, tx=${hash}`);
+    return hash;
   }
 
   /**
@@ -117,27 +115,25 @@ export class EscrowClient {
    * on-chain; used by admin recovery when a buyer's money arrived late.
    */
   async extendFundingDeadline(address: string, newDeadlineUnix: number): Promise<string> {
-    return this.txQueue.submit(`escrow.extendFundingDeadline ${address}`, async () => {
+    const hash = await this.txQueue.submit(`escrow.extendFundingDeadline ${address} ${newDeadlineUnix}`, async (overrides) => {
       const c = this.writeContract(address);
-      const tx = await c.extendFundingDeadline(newDeadlineUnix);
-      const receipt = await tx.wait();
-      this.logger.log(
-        `extendFundingDeadline ${address} → ${newDeadlineUnix}, tx=${receipt.hash}`,
-      );
-      return receipt.hash as string;
+      return c.extendFundingDeadline(newDeadlineUnix, overrides ?? {});
     });
+    this.logger.log(
+      `extendFundingDeadline ${address} → ${newDeadlineUnix}, tx=${hash}`,
+    );
+    return hash;
   }
 
   /**
    * Force-expire an unfunded deal past its deadline. Anyone can call.
    */
   async expire(address: string): Promise<string> {
-    return this.txQueue.submit(`escrow.expire ${address}`, async () => {
+    const hash = await this.txQueue.submit(`escrow.expire ${address}`, async (overrides) => {
       const c = this.writeContract(address);
-      const tx = await c.expire();
-      const receipt = await tx.wait();
-      this.logger.log(`expire ${address}, tx=${receipt.hash}`);
-      return receipt.hash as string;
+      return c.expire(overrides ?? {});
     });
+    this.logger.log(`expire ${address}, tx=${hash}`);
+    return hash;
   }
 }
