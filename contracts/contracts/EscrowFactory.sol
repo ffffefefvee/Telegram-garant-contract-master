@@ -4,6 +4,7 @@ pragma solidity 0.8.20;
 import {Clones} from "@openzeppelin/contracts/proxy/Clones.sol";
 import {AccessControl} from "@openzeppelin/contracts/access/AccessControl.sol";
 import {IERC20} from "@openzeppelin/contracts/token/ERC20/IERC20.sol";
+import {IERC20Metadata} from "@openzeppelin/contracts/token/ERC20/extensions/IERC20Metadata.sol";
 
 import {EscrowImplementation} from "./EscrowImplementation.sol";
 import {PlatformTreasury} from "./PlatformTreasury.sol";
@@ -15,6 +16,8 @@ import {ArbitratorRegistry} from "./ArbitratorRegistry.sol";
 contract EscrowFactory is AccessControl {
     bytes32 public constant ADMIN_ROLE = keccak256("ADMIN_ROLE");
     bytes32 public constant RELAY_ROLE = keccak256("RELAY_ROLE");
+    bytes32 public constant PAUSER_ROLE = keccak256("PAUSER_ROLE");
+    bytes32 public constant RECOVERY_ROLE = keccak256("RECOVERY_ROLE");
 
     enum FeeModel {
         SPLIT_50_50, // дефолт по D4: каждая сторона платит 50% totalFee
@@ -41,6 +44,7 @@ contract EscrowFactory is AccessControl {
     PlatformTreasury public immutable treasury;
     ArbitratorRegistry public immutable registry;
     address public relay;
+    bool public settlementPaused;
 
     /// @notice Минимальная сумма сделки (D6, ≈ 300 ₽ в USDT).
     uint256 public minDealAmount;
@@ -63,6 +67,9 @@ contract EscrowFactory is AccessControl {
     event MinDealAmountUpdated(uint256 oldMin, uint256 newMin);
     event TariffUpdated(TariffConfig newTariff);
     event FineUpdated(FineConfig newFine);
+    event SettlementPaused(address indexed by);
+    event SettlementUnpaused(address indexed by);
+    event EmergencyRefundRequested(bytes32 indexed dealId, address indexed escrow, address indexed by);
 
     error ZeroAddress();
     error AmountBelowMinimum();
@@ -72,6 +79,11 @@ contract EscrowFactory is AccessControl {
     error FeeExceedsAmount();
     error TariffTooHigh();
     error GovernanceRequired();
+    error SettlementIsPaused();
+    error SettlementIsNotPaused();
+    error InvalidTokenContract();
+    error InvalidTokenDecimals();
+    error UnknownEscrow();
 
     /// @notice Верхняя граница процентной комиссии (10%): защита от опечатки/злоупотребления админом.
     uint16 public constant MAX_PERCENT_FEE_BPS = 1000;
@@ -83,6 +95,8 @@ contract EscrowFactory is AccessControl {
         ArbitratorRegistry registry_,
         address relay_,
         address admin,
+        address pauser,
+        address recovery,
         uint256 minDealAmount_,
         TariffConfig memory tariff_,
         FineConfig memory fine_
@@ -93,9 +107,17 @@ contract EscrowFactory is AccessControl {
             address(treasury_) == address(0) ||
             address(registry_) == address(0) ||
             relay_ == address(0) ||
-            admin == address(0)
+            admin == address(0) ||
+            pauser == address(0) ||
+            recovery == address(0)
         ) revert ZeroAddress();
 
+        if (address(token_).code.length == 0) revert InvalidTokenContract();
+        try IERC20Metadata(address(token_)).decimals() returns (uint8 tokenDecimals) {
+            if (tokenDecimals != 6) revert InvalidTokenDecimals();
+        } catch {
+            revert InvalidTokenContract();
+        }
         if (tariff_.percentFeeBps > MAX_PERCENT_FEE_BPS) revert TariffTooHigh();
         if (block.chainid != 31337 && block.chainid != 1337 && admin.code.length == 0) revert GovernanceRequired();
 
@@ -111,6 +133,8 @@ contract EscrowFactory is AccessControl {
         _grantRole(DEFAULT_ADMIN_ROLE, admin);
         _grantRole(ADMIN_ROLE, admin);
         _grantRole(RELAY_ROLE, relay_);
+        _grantRole(PAUSER_ROLE, pauser);
+        _grantRole(RECOVERY_ROLE, recovery);
     }
 
     /// @notice Расчёт платформенной комиссии по тарифной сетке (D5).
@@ -155,6 +179,7 @@ contract EscrowFactory is AccessControl {
         FeeModel feeModel,
         uint64 fundingDeadline
     ) external onlyRole(RELAY_ROLE) returns (address escrow) {
+        if (settlementPaused) revert SettlementIsPaused();
         if (buyer == address(0) || seller == address(0)) revert ZeroAddress();
         if (amount < minDealAmount) revert AmountBelowMinimum();
         if (escrowOf[dealId] != address(0)) revert EscrowAlreadyExists();
@@ -196,6 +221,30 @@ contract EscrowFactory is AccessControl {
     }
 
     // ---------- Admin ----------
+
+    /// @notice Stops new escrows, funding recognition and normal settlement egress.
+    /// @dev A dedicated operational role may stop quickly; only governance may resume.
+    function pauseSettlement() external onlyRole(PAUSER_ROLE) {
+        if (settlementPaused) revert SettlementIsPaused();
+        settlementPaused = true;
+        emit SettlementPaused(msg.sender);
+    }
+
+    function unpauseSettlement() external onlyRole(ADMIN_ROLE) {
+        if (!settlementPaused) revert SettlementIsNotPaused();
+        settlementPaused = false;
+        emit SettlementUnpaused(msg.sender);
+    }
+
+    /// @notice Fail-safe buyer refund while the normal settlement path is paused.
+    /// @dev Recovery is deliberately separate from governance, relay and arbitrator roles.
+    function emergencyRefund(bytes32 dealId) external onlyRole(RECOVERY_ROLE) {
+        if (!settlementPaused) revert SettlementIsNotPaused();
+        address escrow = escrowOf[dealId];
+        if (escrow == address(0)) revert UnknownEscrow();
+        EscrowImplementation(escrow).factoryEmergencyRefund();
+        emit EmergencyRefundRequested(dealId, escrow, msg.sender);
+    }
 
     function setRelay(address newRelay) external onlyRole(ADMIN_ROLE) {
         if (newRelay == address(0)) revert ZeroAddress();

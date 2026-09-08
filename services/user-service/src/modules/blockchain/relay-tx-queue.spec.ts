@@ -4,6 +4,10 @@ import {
   MoneyMovementGate,
 } from "./money-movement.gate";
 import { SettlementCircuitBreakerService } from "../safety/settlement-circuit-breaker.service";
+import { PolygonRelayNonceService } from "./polygon-relay-nonce.service";
+import { BlockchainConfig } from "./blockchain.config";
+import { PolygonRelayTxStatus } from "./entities/polygon-lifecycle.entity";
+import { RelayTransactionPendingError } from "./relay-tx-queue";
 
 /** Resolves after `ms`, recording start/end so we can assert non-overlap. */
 function deferred(ms: number, onStart: () => void, onEnd: () => void) {
@@ -132,5 +136,104 @@ describe("RelayTxQueue", () => {
 
     await expect(failing).resolves.toBe("caught");
     await expect(next).resolves.toBe("ok");
+  });
+
+  it("durably reserves a nonce before broadcast and records confirmation", async () => {
+    const durable = {
+      reserve: jest.fn().mockResolvedValue({
+        id: "reservation-1",
+        nonce: "17",
+        status: PolygonRelayTxStatus.RESERVED,
+        currentTxHash: null,
+      }),
+      recordBroadcast: jest.fn().mockResolvedValue(undefined),
+      recordConfirmed: jest.fn().mockResolvedValue(undefined),
+      recordFailure: jest.fn().mockResolvedValue(undefined),
+    };
+    const durableQueue = new RelayTxQueue(
+      moneyMovementGate as unknown as MoneyMovementGate,
+      circuitBreaker as unknown as SettlementCircuitBreakerService,
+      durable as unknown as PolygonRelayNonceService,
+      { polygonRelayTxTimeoutMs: 10_000 } as BlockchainConfig,
+    );
+    const receipt = { hash: "0x" + "2".repeat(64), status: 1, blockNumber: 42 };
+    const response = {
+      hash: "0x" + "1".repeat(64),
+      wait: jest.fn().mockResolvedValue(receipt),
+    };
+    const run = jest.fn().mockResolvedValue(response);
+
+    await expect(durableQueue.submit("escrow.notifyFunded 0xabc", run)).resolves.toBe(
+      receipt.hash,
+    );
+    expect(run).toHaveBeenCalledWith({ nonce: 17 });
+    expect(durable.recordBroadcast).toHaveBeenCalledWith("reservation-1", response);
+    expect(durable.recordConfirmed).toHaveBeenCalledWith("reservation-1", receipt);
+    expect(durable.recordFailure).not.toHaveBeenCalled();
+  });
+
+  it("returns the durable result for an already-confirmed idempotent operation", async () => {
+    const hash = "0x" + "3".repeat(64);
+    const durable = {
+      reserve: jest.fn().mockResolvedValue({
+        id: "reservation-2",
+        nonce: "18",
+        status: PolygonRelayTxStatus.CONFIRMED,
+        currentTxHash: hash,
+      }),
+    };
+    const durableQueue = new RelayTxQueue(
+      moneyMovementGate as unknown as MoneyMovementGate,
+      circuitBreaker as unknown as SettlementCircuitBreakerService,
+      durable as unknown as PolygonRelayNonceService,
+    );
+    const run = jest.fn();
+    await expect(durableQueue.submit("escrow.notifyFunded 0xdef", run)).resolves.toBe(hash);
+    expect(run).not.toHaveBeenCalled();
+  });
+
+  it("does not rebroadcast an operation that already has a pending hash", async () => {
+    const hash = "0x" + "4".repeat(64);
+    const durable = {
+      reserve: jest.fn().mockResolvedValue({
+        id: "reservation-3",
+        nonce: "19",
+        status: PolygonRelayTxStatus.BROADCAST,
+        currentTxHash: hash,
+      }),
+    };
+    const durableQueue = new RelayTxQueue(
+      moneyMovementGate as unknown as MoneyMovementGate,
+      circuitBreaker as unknown as SettlementCircuitBreakerService,
+      durable as unknown as PolygonRelayNonceService,
+    );
+    const run = jest.fn();
+    await expect(durableQueue.submit("factory.createEscrow deal", run)).rejects.toEqual(
+      new RelayTransactionPendingError(hash),
+    );
+    expect(run).not.toHaveBeenCalled();
+  });
+
+  it("records pre-broadcast failures without consuming another nonce", async () => {
+    const durable = {
+      reserve: jest.fn().mockResolvedValue({
+        id: "reservation-4",
+        nonce: "20",
+        status: PolygonRelayTxStatus.RESERVED,
+        currentTxHash: null,
+      }),
+      recordFailure: jest.fn().mockResolvedValue(undefined),
+    };
+    const durableQueue = new RelayTxQueue(
+      moneyMovementGate as unknown as MoneyMovementGate,
+      circuitBreaker as unknown as SettlementCircuitBreakerService,
+      durable as unknown as PolygonRelayNonceService,
+    );
+    await expect(
+      durableQueue.submit("erc20.transfer logical-payment", async () => {
+        throw new Error("signer unavailable");
+      }),
+    ).rejects.toThrow("signer unavailable");
+    expect(durable.recordFailure).toHaveBeenCalledWith("reservation-4", "Error");
   });
 });

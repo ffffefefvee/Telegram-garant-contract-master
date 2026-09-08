@@ -64,6 +64,77 @@ describe("validateEnvironment", () => {
     ).toThrow(/DB_MIGRATIONS_RUN/);
   });
 
+  it("accepts money egress only with Web3Signer, durable Polygon indexing and independent RPCs", () => {
+    const environment = productionEnvironment({
+      MONEY_EGRESS_ENABLED: "true",
+      DB_MIGRATIONS_RUN: "true",
+      RECONCILIATION_ENABLED: "true",
+      RELAY_SIGNER: "web3signer",
+      BLOCKCHAIN_CHAIN_ID: "80002",
+      ESCROW_FACTORY_ADDRESS: "0x0000000000000000000000000000000000000001",
+      PLATFORM_TREASURY_ADDRESS: "0x0000000000000000000000000000000000000002",
+      ARBITRATOR_REGISTRY_ADDRESS: "0x0000000000000000000000000000000000000003",
+      USDT_CONTRACT_ADDRESS: "0x0000000000000000000000000000000000000004",
+      WEB3SIGNER_ADDRESS: "0x0000000000000000000000000000000000000005",
+      WEB3SIGNER_RPC_URL: "http://web3signer.internal:8545",
+      POLYGON_INDEXER_ENABLED: "true",
+      POLYGON_RECONCILIATION_REQUIRED: "true",
+      BLOCKCHAIN_RPC_URL: "https://rpc-a.example.com",
+      BLOCKCHAIN_RPC_URLS: "https://rpc-b.example.net",
+      POLYGON_FINALITY_CONFIRMATIONS: "128",
+      POLYGON_RELAYER_MINIMUM_BALANCE_WEI: "100000000000000000",
+    });
+    expect(validateEnvironment(environment)).toBe(environment);
+  });
+
+  it.each([
+    ["local signer", { RELAY_SIGNER: "local" }, "RELAY_SIGNER"],
+    ["disabled indexer", { POLYGON_INDEXER_ENABLED: "false" }, "POLYGON_INDEXER_ENABLED"],
+    [
+      "missing independent reconciliation",
+      { POLYGON_RECONCILIATION_REQUIRED: "false" },
+      "POLYGON_RECONCILIATION_REQUIRED",
+    ],
+    [
+      "one RPC operator",
+      {
+        BLOCKCHAIN_RPC_URL: "https://rpc-a.example.com",
+        BLOCKCHAIN_RPC_URLS: "https://rpc-a.example.com/secondary",
+      },
+      "independent HTTPS Polygon RPC hosts",
+    ],
+    ["shallow finality", { POLYGON_FINALITY_CONFIRMATIONS: "16" }, "POLYGON_FINALITY_CONFIRMATIONS"],
+    ["no relayer floor", { POLYGON_RELAYER_MINIMUM_BALANCE_WEI: "0" }, "POLYGON_RELAYER_MINIMUM_BALANCE_WEI"],
+    ["zero token address", { USDT_CONTRACT_ADDRESS: "0x0000000000000000000000000000000000000000" }, "USDT_CONTRACT_ADDRESS"],
+    ["wrong chain", { BLOCKCHAIN_CHAIN_ID: "1" }, "BLOCKCHAIN_CHAIN_ID"],
+    ["credentialed signer URL", { WEB3SIGNER_RPC_URL: "http://user:pass@signer.internal" }, "WEB3SIGNER_RPC_URL"],
+  ])("rejects Polygon egress with %s", (_name, override, expected) => {
+    expect(() =>
+      validateEnvironment(
+        productionEnvironment({
+          MONEY_EGRESS_ENABLED: "true",
+          DB_MIGRATIONS_RUN: "true",
+          RECONCILIATION_ENABLED: "true",
+          RELAY_SIGNER: "web3signer",
+          BLOCKCHAIN_CHAIN_ID: "80002",
+          ESCROW_FACTORY_ADDRESS: "0x0000000000000000000000000000000000000001",
+          PLATFORM_TREASURY_ADDRESS: "0x0000000000000000000000000000000000000002",
+          ARBITRATOR_REGISTRY_ADDRESS: "0x0000000000000000000000000000000000000003",
+          USDT_CONTRACT_ADDRESS: "0x0000000000000000000000000000000000000004",
+          WEB3SIGNER_ADDRESS: "0x0000000000000000000000000000000000000005",
+          WEB3SIGNER_RPC_URL: "http://web3signer.internal:8545",
+          POLYGON_INDEXER_ENABLED: "true",
+          POLYGON_RECONCILIATION_REQUIRED: "true",
+          BLOCKCHAIN_RPC_URL: "https://rpc-a.example.com",
+          BLOCKCHAIN_RPC_URLS: "https://rpc-b.example.net",
+          POLYGON_FINALITY_CONFIRMATIONS: "128",
+          POLYGON_RELAYER_MINIMUM_BALANCE_WEI: "100000000000000000",
+          ...override,
+        }),
+      ),
+    ).toThrow(expected);
+  });
+
   it("accepts TON Connect only with an explicit proof host and supported network", () => {
     const environment = productionEnvironment({
       TON_CONNECT_ENABLED: "true",

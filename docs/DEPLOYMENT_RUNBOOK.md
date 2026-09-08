@@ -17,13 +17,16 @@
 
 - `.env` в `contracts/`: `DEPLOYER_PRIVATE_KEY` (или ключ в hardhat-конфиге через env), `BLOCKCHAIN_RPC_URL` (для Amoy опционально — есть публичный), `POLYGONSCAN_API_KEY` (для verify).
 - На деплоер-адресе достаточно POL/MATIC на газ (полный деплой ~0.05–0.1, redeploy ~0.03).
-- `RELAY_ADDRESS` и `ADMIN_ADDRESS` определены. **Mainnet: admin — отдельный от relay ключ**, в идеале multisig (см. SECURITY.md). Если admin ≠ deployer, скрипты печатают grantRole-команды для ручной подписи.
+- `RELAY_ADDRESS`, `ADMIN_ADDRESS`, `PAUSER_ADDRESS` и `RECOVERY_ADDRESS`
+  определены и попарно различны. Mainnet admin — governance/multisig; pauser —
+  быстрый аварийный ключ; recovery — отдельный контролируемый оператор. Если
+  admin ≠ deployer, скрипты печатают grantRole-команды для ручной подписи.
 
 ## 2. Первый деплой полного стека
 
 ```bash
 cd contracts
-RELAY_ADDRESS=0x... ADMIN_ADDRESS=0x... npm run deploy:amoy   # или --network polygon
+RELAY_ADDRESS=0x... ADMIN_ADDRESS=0x... PAUSER_ADDRESS=0x... RECOVERY_ADDRESS=0x... npm run deploy:amoy
 ```
 
 Скрипт деплоит (Mock)USDT → Treasury → Registry → Implementation → Factory,
@@ -39,7 +42,7 @@ amoy/polygon — это источник правды).
 
 ```bash
 cd contracts
-npx hardhat run scripts/redeploy-impl.ts --network amoy   # потом polygon
+PAUSER_ADDRESS=0x... RECOVERY_ADDRESS=0x... npx hardhat run scripts/redeploy-impl.ts --network amoy
 ```
 
 Скрипт сам: читает конфиг (relay, тарифы, штрафы) **on-chain со старой фабрики**

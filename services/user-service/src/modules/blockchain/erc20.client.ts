@@ -54,11 +54,11 @@ export class Erc20Client {
     }
     // Serialized via RelayTxQueue: the relay signer is shared, so concurrent
     // broadcasts would collide on the same nonce.
-    return this.txQueue.submit(`erc20.transfer ${amount}→${to}`, async () => {
-      const tx = await this.write().transfer(to, amount);
-      const receipt = await tx.wait();
-      this.logger.log(`USDT transfer ${amount} → ${to}, tx=${receipt.hash}`);
-      return receipt.hash as string;
-    });
+    const hash = await this.txQueue.submit(
+      `erc20.transfer ${amount}→${to}`,
+      async (overrides) => this.write().transfer(to, amount, overrides ?? {}),
+    );
+    this.logger.log(`USDT transfer ${amount} → ${to}, tx=${hash}`);
+    return hash;
   }
 }

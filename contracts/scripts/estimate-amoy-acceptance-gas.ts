@@ -36,6 +36,7 @@ async function main() {
     await governance.getAddress(),
   ]);
   const implementation = await deploy("EscrowImplementation");
+  const recovery = ethers.Wallet.createRandom().address;
   const factory = await deploy("EscrowFactory", [
     await implementation.getAddress(),
     await token.getAddress(),
@@ -43,6 +44,8 @@ async function main() {
     await registry.getAddress(),
     RELAY_ADDRESS,
     await governance.getAddress(),
+    deployer.address,
+    recovery,
     MIN_DEAL,
     TARIFF,
     FINE,

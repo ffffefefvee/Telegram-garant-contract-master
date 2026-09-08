@@ -26,6 +26,10 @@ import { TonJettonEscrowPreparation } from "./modules/deal/entities/ton-jetton-e
 import { TonJettonEscrowWatch } from "./modules/deal/entities/ton-jetton-escrow-watch.entity";
 import { TonJettonLedgerReconciliation } from "./modules/deal/entities/ton-jetton-ledger-reconciliation.entity";
 import {
+  SettlementConfirmationRecord,
+  SettlementQuote,
+} from "./modules/deal/entities/settlement-quote.entity";
+import {
   TonJettonActionIntent,
   TonJettonActionIntentConsumption,
 } from "./modules/deal/entities/ton-jetton-action-intent.entity";
@@ -88,6 +92,13 @@ import {
   SettlementCircuitBreakerAudit,
 } from "./modules/safety/entities/settlement-circuit-breaker.entity";
 import { SafetyModule } from "./modules/safety/safety.module";
+import {
+  PolygonChainEvent,
+  PolygonLifecycleCursor,
+  PolygonRelayNonceState,
+  PolygonRelayTransaction,
+  PolygonReconciliationRecord,
+} from "./modules/blockchain/entities/polygon-lifecycle.entity";
 
 @Module({
   imports: [
@@ -144,6 +155,8 @@ import { SafetyModule } from "./modules/safety/safety.module";
               TonJettonEscrowPreparation,
               TonJettonEscrowWatch,
               TonJettonLedgerReconciliation,
+              SettlementQuote,
+              SettlementConfirmationRecord,
               TonJettonActionIntent,
               TonJettonActionIntentConsumption,
               TonJettonChainEvent,
@@ -153,6 +166,11 @@ import { SafetyModule } from "./modules/safety/safety.module";
               TonJettonIngestionCursorCheckpoint,
               SettlementCircuitBreaker,
               SettlementCircuitBreakerAudit,
+              PolygonLifecycleCursor,
+              PolygonChainEvent,
+              PolygonRelayNonceState,
+              PolygonRelayTransaction,
+              PolygonReconciliationRecord,
               Payment,
               CommissionRate,
               CurrencyRate,
@@ -215,6 +233,8 @@ import { SafetyModule } from "./modules/safety/safety.module";
             TonJettonEscrowPreparation,
             TonJettonEscrowWatch,
             TonJettonLedgerReconciliation,
+            SettlementQuote,
+            SettlementConfirmationRecord,
             TonJettonActionIntent,
             TonJettonActionIntentConsumption,
             TonJettonChainEvent,
@@ -224,6 +244,11 @@ import { SafetyModule } from "./modules/safety/safety.module";
             TonJettonIngestionCursorCheckpoint,
             SettlementCircuitBreaker,
             SettlementCircuitBreakerAudit,
+            PolygonLifecycleCursor,
+            PolygonChainEvent,
+            PolygonRelayNonceState,
+            PolygonRelayTransaction,
+            PolygonReconciliationRecord,
             Payment,
             CommissionRate,
             CurrencyRate,
