@@ -1,25 +1,36 @@
 import { TonNetwork } from "../user/entities/ton-wallet-binding.entity";
 import {
   TonJettonChainEvent,
+  TonJettonChainEventKind,
   TonJettonChainEventOutcome,
+  TonJettonApplicationReview,
+  TonJettonApplicationReviewAction,
+  TonJettonCursorCheckpointKind,
   TonJettonEventApplication,
   TonJettonEventApplicationStatus,
   TonJettonIngestionCursor,
+  TonJettonIngestionCursorCheckpoint,
 } from "./entities/ton-jetton-chain-event.entity";
 import {
   TonJettonDurableIngestionService,
   TonJettonEvidenceConflictError,
   TonJettonFinalizedEventInput,
+  tonJettonEvidenceHash,
 } from "./ton-jetton-durable-ingestion.service";
 
 const ACCOUNT = `0:${"1".repeat(64)}`;
 const TX_HASH = "2".repeat(64);
 const MESSAGE_HASH = "3".repeat(64);
+const PREPARATION_ID = "11111111-1111-4111-8111-111111111111";
+const ACTION_INTENT_ID = "22222222-2222-4222-8222-222222222222";
 
 function input(
   overrides: Partial<TonJettonFinalizedEventInput> = {},
 ): TonJettonFinalizedEventInput {
   return {
+    preparationId: PREPARATION_ID,
+    actionIntentId: ACTION_INTENT_ID,
+    eventKind: TonJettonChainEventKind.FUNDING_CONFIRMED,
     network: TonNetwork.TESTNET,
     accountAddress: ACCOUNT,
     transactionLt: "100",
@@ -112,11 +123,18 @@ function appendHarness(existing: TonJettonChainEvent | null = null) {
     ),
     save: jest.fn(async (value) => value),
   };
+  const checkpointRepo = {
+    create: jest.fn((value) =>
+      Object.assign(new TonJettonIngestionCursorCheckpoint(), value),
+    ),
+    save: jest.fn(async (value) => value),
+  };
   const manager = {
     getRepository: jest.fn((entity) => {
       if (entity === TonJettonIngestionCursor) return cursorRepo;
       if (entity === TonJettonChainEvent) return eventRepo;
       if (entity === TonJettonEventApplication) return applicationRepo;
+      if (entity === TonJettonIngestionCursorCheckpoint) return checkpointRepo;
       throw new Error("unexpected repository");
     }),
   };
@@ -133,12 +151,15 @@ function appendHarness(existing: TonJettonChainEvent | null = null) {
     cursorQuery,
     eventRepo,
     applicationRepo,
+    checkpointRepo,
   };
 }
 
 function persistedEvent(): TonJettonChainEvent {
   return Object.assign(new TonJettonChainEvent(), input(), {
     id: "event-1",
+    actionIntentId: ACTION_INTENT_ID,
+    evidenceHash: tonJettonEvidenceHash(input().evidence),
     createdAt: new Date("2026-08-18T00:00:00Z"),
   });
 }
@@ -161,6 +182,13 @@ describe("TonJettonDurableIngestionService evidence", () => {
     expect(h.cursor.lastFinalizedLt).toBe("100");
     expect(h.cursor.lastFinalizedTxHash).toBe(TX_HASH);
     expect(h.cursorRepo.save).toHaveBeenCalledWith(h.cursor);
+    expect(h.checkpointRepo.save).toHaveBeenCalledWith(
+      expect.objectContaining({
+        kind: TonJettonCursorCheckpointKind.ADVANCE,
+        previousLt: null,
+        nextLt: "100",
+      }),
+    );
     expect(h.cursorQuery.setLock).toHaveBeenCalledWith("pessimistic_write");
     expect(h.queryRunner.commitTransaction).toHaveBeenCalledTimes(1);
   });
@@ -190,6 +218,7 @@ describe("TonJettonDurableIngestionService evidence", () => {
     expect(h.eventRepo.save).not.toHaveBeenCalled();
     expect(h.applicationRepo.save).not.toHaveBeenCalled();
     expect(h.cursorRepo.save).not.toHaveBeenCalled();
+    expect(h.checkpointRepo.save).not.toHaveBeenCalled();
   });
 
   it("rejects conflicting evidence under the same durable identity", async () => {
@@ -216,6 +245,7 @@ describe("TonJettonDurableIngestionService evidence", () => {
     expect(h.cursor.lastFinalizedTxHash).toBe("a".repeat(64));
     expect(h.cursor.lastFinalizedMcSeqno).toBe(60);
     expect(h.cursor.lastScannedAt).toBeInstanceOf(Date);
+    expect(h.checkpointRepo.save).not.toHaveBeenCalled();
   });
 
   it.each([
@@ -237,6 +267,220 @@ describe("TonJettonDurableIngestionService evidence", () => {
       expect(h.queryRunner.connect).not.toHaveBeenCalled();
     },
   );
+
+  it("applies bounded multi-page backfill and reports replay convergence", async () => {
+    const h = appendHarness();
+    const first = persistedEvent();
+    const second = Object.assign(persistedEvent(), {
+      id: "event-2",
+      transactionLt: "101",
+      transactionHash: "4".repeat(64),
+    });
+    jest
+      .spyOn(h.service, "appendFinalizedEvent")
+      .mockResolvedValueOnce({ status: "appended", event: first })
+      .mockResolvedValueOnce({ status: "replayed", event: second });
+
+    await expect(
+      h.service.appendBoundedBackfill([
+        [input()],
+        [input({ transactionLt: "101", transactionHash: "4".repeat(64) })],
+      ]),
+    ).resolves.toEqual({ pages: 2, appended: 1, replayed: 1 });
+  });
+
+  it("rejects an unbounded backfill before ingesting any event", async () => {
+    const h = appendHarness();
+    const append = jest.spyOn(h.service, "appendFinalizedEvent");
+
+    await expect(
+      h.service.appendBoundedBackfill(
+        Array.from({ length: 33 }, () => [input()]),
+      ),
+    ).rejects.toThrow("INVALID_JETTON_BACKFILL_PAGE_COUNT");
+    expect(append).not.toHaveBeenCalled();
+  });
+});
+
+function cursorRecoveryHarness() {
+  const cursor = Object.assign(new TonJettonIngestionCursor(), {
+    id: "cursor-1",
+    network: TonNetwork.TESTNET,
+    accountAddress: ACCOUNT,
+    lastFinalizedLt: "200",
+    lastFinalizedTxHash: "a".repeat(64),
+    lastFinalizedMcSeqno: 60,
+    lastScannedAt: new Date(),
+  });
+  const cursorQuery = queryReturning(() => cursor);
+  const cursorRepo = {
+    createQueryBuilder: jest.fn(() => cursorQuery),
+    save: jest.fn(async (value) => value),
+  };
+  const checkpointRepo = {
+    create: jest.fn((value) =>
+      Object.assign(new TonJettonIngestionCursorCheckpoint(), value),
+    ),
+    save: jest.fn(async (value) => value),
+  };
+  const manager = {
+    getRepository: jest.fn((entity) => {
+      if (entity === TonJettonIngestionCursor) return cursorRepo;
+      if (entity === TonJettonIngestionCursorCheckpoint) return checkpointRepo;
+      throw new Error("unexpected repository");
+    }),
+  };
+  const queryRunner = runner(manager);
+  const dataSource = {
+    options: { type: "postgres" },
+    createQueryRunner: jest.fn(() => queryRunner),
+  };
+  return {
+    service: new TonJettonDurableIngestionService(dataSource as never),
+    cursor,
+    cursorQuery,
+    cursorRepo,
+    checkpointRepo,
+    queryRunner,
+  };
+}
+
+describe("TonJettonDurableIngestionService cursor recovery", () => {
+  it("atomically records an immutable checkpoint before rewinding", async () => {
+    const h = cursorRecoveryHarness();
+
+    await h.service.rewindCursor({
+      network: TonNetwork.TESTNET,
+      accountAddress: ACCOUNT,
+      toLt: "150",
+      toTransactionHash: "b".repeat(64),
+      toMasterchainSeqno: 55,
+      reasonCode: "CURSOR_SOURCE_RECOVERY",
+      actorId: "operator.phase3",
+    });
+
+    expect(h.cursorQuery.setLock).toHaveBeenCalledWith("pessimistic_write");
+    expect(h.checkpointRepo.save).toHaveBeenCalledWith(
+      expect.objectContaining({
+        kind: TonJettonCursorCheckpointKind.RECOVERY,
+        previousLt: "200",
+        nextLt: "150",
+        actorId: "operator.phase3",
+      }),
+    );
+    expect(h.cursor.lastFinalizedLt).toBe("150");
+    expect(h.queryRunner.commitTransaction).toHaveBeenCalledTimes(1);
+  });
+
+  it("rejects a recovery target that does not move backward", async () => {
+    const h = cursorRecoveryHarness();
+
+    await expect(
+      h.service.rewindCursor({
+        network: TonNetwork.TESTNET,
+        accountAddress: ACCOUNT,
+        toLt: "200",
+        toTransactionHash: "b".repeat(64),
+        toMasterchainSeqno: 55,
+        reasonCode: "CURSOR_SOURCE_RECOVERY",
+        actorId: "operator.phase3",
+      }),
+    ).rejects.toThrow("JETTON_CURSOR_RECOVERY_MUST_REWIND");
+    expect(h.checkpointRepo.save).not.toHaveBeenCalled();
+    expect(h.cursorRepo.save).not.toHaveBeenCalled();
+    expect(h.queryRunner.rollbackTransaction).toHaveBeenCalledTimes(1);
+  });
+});
+
+function manualReviewHarness() {
+  const application = Object.assign(new TonJettonEventApplication(), {
+    eventId: "33333333-3333-4333-8333-333333333333",
+    status: TonJettonEventApplicationStatus.MANUAL_REVIEW,
+    attempts: 3,
+    lastError: "source disagreement",
+    appliedAt: null,
+    manualReviewAt: new Date(),
+  });
+  const applicationQuery = queryReturning(() => application);
+  const applicationRepo = {
+    createQueryBuilder: jest.fn(() => applicationQuery),
+    save: jest.fn(async (value) => value),
+  };
+  const reviewRepo = {
+    create: jest.fn((value) =>
+      Object.assign(new TonJettonApplicationReview(), value),
+    ),
+    save: jest.fn(async (value) => value),
+  };
+  const manager = {
+    getRepository: jest.fn((entity) => {
+      if (entity === TonJettonEventApplication) return applicationRepo;
+      if (entity === TonJettonApplicationReview) return reviewRepo;
+      throw new Error("unexpected repository");
+    }),
+  };
+  const queryRunner = runner(manager);
+  const dataSource = {
+    options: { type: "postgres" },
+    createQueryRunner: jest.fn(() => queryRunner),
+  };
+  return {
+    service: new TonJettonDurableIngestionService(dataSource as never),
+    application,
+    applicationQuery,
+    applicationRepo,
+    reviewRepo,
+    queryRunner,
+  };
+}
+
+describe("TonJettonDurableIngestionService manual review", () => {
+  it("requeues only after appending immutable operator evidence", async () => {
+    const h = manualReviewHarness();
+
+    await h.service.requeueManualReview({
+      eventId: h.application.eventId,
+      reasonCode: "INDEPENDENT_SOURCES_RESTORED",
+      actorId: "operator.phase3",
+    });
+
+    expect(h.applicationQuery.setLock).toHaveBeenCalledWith(
+      "pessimistic_write",
+    );
+    expect(h.reviewRepo.save).toHaveBeenCalledWith(
+      expect.objectContaining({
+        action: TonJettonApplicationReviewAction.REQUEUE,
+        previousAttempts: 3,
+        previousError: "source disagreement",
+      }),
+    );
+    expect(h.application).toEqual(
+      expect.objectContaining({
+        status: TonJettonEventApplicationStatus.PENDING,
+        attempts: 0,
+        lastError: null,
+        manualReviewAt: null,
+      }),
+    );
+    expect(h.reviewRepo.save.mock.invocationCallOrder[0]).toBeLessThan(
+      h.applicationRepo.save.mock.invocationCallOrder[0],
+    );
+  });
+
+  it("does not create review evidence for an event that is still automatic", async () => {
+    const h = manualReviewHarness();
+    h.application.status = TonJettonEventApplicationStatus.PENDING;
+
+    await expect(
+      h.service.requeueManualReview({
+        eventId: h.application.eventId,
+        reasonCode: "INDEPENDENT_SOURCES_RESTORED",
+        actorId: "operator.phase3",
+      }),
+    ).rejects.toThrow("JETTON_APPLICATION_NOT_IN_MANUAL_REVIEW");
+    expect(h.reviewRepo.save).not.toHaveBeenCalled();
+    expect(h.queryRunner.rollbackTransaction).toHaveBeenCalledTimes(1);
+  });
 });
 
 interface ApplicationHarness {
@@ -377,6 +621,22 @@ describe("TonJettonDurableIngestionService application", () => {
     await expect(h.service.applyNext(fail)).resolves.toEqual({
       status: "idle",
     });
+  });
+
+  it("stops immediately when proof sources disagree", async () => {
+    const h = applicationHarness(3);
+    const disagreement = Object.assign(new Error("source disagreement"), {
+      code: "JETTON_SOURCE_DISAGREEMENT",
+    });
+
+    await expect(
+      h.service.applyNext(() => Promise.reject(disagreement)),
+    ).resolves.toEqual({
+      status: "manual_review",
+      eventId: "event-1",
+      attempts: 1,
+    });
+    expect(h.application.manualReviewAt).toBeInstanceOf(Date);
   });
 
   it("does not replay an already-applied event", async () => {

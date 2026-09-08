@@ -221,7 +221,7 @@ export class CreateArbitrationTables1710000000000 implements MigrationInterface 
           {
             name: 'metadata',
             type: 'jsonb',
-            default: '{}',
+            default: "'{}'::jsonb",
           },
           {
             name: 'chat_id',
@@ -457,7 +457,7 @@ export class CreateArbitrationTables1710000000000 implements MigrationInterface 
           {
             name: 'metadata',
             type: 'jsonb',
-            default: '{}',
+            default: "'{}'::jsonb",
           },
         ],
       }),
@@ -574,7 +574,7 @@ export class CreateArbitrationTables1710000000000 implements MigrationInterface 
           {
             name: 'metadata',
             type: 'jsonb',
-            default: '{}',
+            default: "'{}'::jsonb",
           },
         ],
       }),
@@ -618,7 +618,7 @@ export class CreateArbitrationTables1710000000000 implements MigrationInterface 
           {
             name: 'metadata',
             type: 'jsonb',
-            default: '{}',
+            default: "'{}'::jsonb",
           },
         ],
       }),
@@ -714,7 +714,7 @@ export class CreateArbitrationTables1710000000000 implements MigrationInterface 
           {
             name: 'metadata',
             type: 'jsonb',
-            default: '{}',
+            default: "'{}'::jsonb",
           },
         ],
       }),
@@ -815,7 +815,7 @@ export class CreateArbitrationTables1710000000000 implements MigrationInterface 
           {
             name: 'metadata',
             type: 'jsonb',
-            default: '{}',
+            default: "'{}'::jsonb",
           },
         ],
       }),
@@ -999,7 +999,7 @@ export class CreateArbitrationTables1710000000000 implements MigrationInterface 
           {
             name: 'metadata',
             type: 'jsonb',
-            default: '{}',
+            default: "'{}'::jsonb",
           },
         ],
       }),

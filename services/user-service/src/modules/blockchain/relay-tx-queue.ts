@@ -1,5 +1,7 @@
-import { Injectable, Logger } from '@nestjs/common';
-import { MoneyMovementGate } from './money-movement.gate';
+import { Injectable, Logger } from "@nestjs/common";
+import { MoneyMovementGate } from "./money-movement.gate";
+import { SettlementCircuitBreakerService } from "../safety/settlement-circuit-breaker.service";
+import { SettlementCircuitScope } from "../safety/entities/settlement-circuit-breaker.entity";
 
 /**
  * Serializes every transaction signed by the shared relay hot-wallet.
@@ -32,7 +34,10 @@ export class RelayTxQueue {
    */
   private tail: Promise<void> = Promise.resolve();
 
-  constructor(private readonly moneyMovementGate: MoneyMovementGate) {}
+  constructor(
+    private readonly moneyMovementGate: MoneyMovementGate,
+    private readonly circuitBreaker: SettlementCircuitBreakerService,
+  ) {}
 
   /**
    * Enqueue a relay transaction. `run` must perform the full broadcast +
@@ -50,11 +55,14 @@ export class RelayTxQueue {
     });
 
     return previous
-      .then(() => {
+      .then(async () => {
         // This check is deliberately inside the queued task, immediately
         // before the signer is used. It protects work that was queued before
         // a future dynamic safety stop is activated as well as new work.
         this.moneyMovementGate.assertRelayOperationAllowed(label);
+        await this.circuitBreaker.assertEgressAllowed(
+          SettlementCircuitScope.POLYGON,
+        );
         return this.execute(label, run);
       })
       .finally(() => release());
@@ -65,7 +73,9 @@ export class RelayTxQueue {
     this.logger.debug(`relay tx start: ${label}`);
     try {
       const result = await run();
-      this.logger.debug(`relay tx done: ${label} (${Date.now() - startedAt}ms)`);
+      this.logger.debug(
+        `relay tx done: ${label} (${Date.now() - startedAt}ms)`,
+      );
       return result;
     } catch (err) {
       this.logger.warn(`relay tx failed: ${label}: ${(err as Error).message}`);

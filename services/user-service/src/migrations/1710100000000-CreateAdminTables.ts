@@ -90,7 +90,7 @@ export class CreateAdminTables1710100000000 implements MigrationInterface {
           {
             name: 'details',
             type: 'jsonb',
-            default: '{}',
+            default: "'{}'::jsonb",
           },
           {
             name: 'created_at',

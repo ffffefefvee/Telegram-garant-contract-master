@@ -74,6 +74,17 @@ jobs:
           JWT_SECRET: test-jwt-secret-for-ci-only
           TELEGRAM_BOT_TOKEN: 0:test_token_ci
           AUTH_DEV_MODE: true
+      - name: Phase 3 Jetton PostgreSQL durability gate
+        run: npm run test:phase3:postgres
+        env:
+          NODE_ENV: test
+          RUN_PHASE3_POSTGRES: true
+          DB_HOST: localhost
+          DB_PORT: 5432
+          DB_USERNAME: garant_user
+          DB_PASSWORD: garant_pass
+          DB_NAME: garant_db_test
+          DB_USE_SQLITE: false
       - name: Replay and corrupt immutable TON mainnet and testnet proof corpora
         run: npm run fixture:ton:gate
 

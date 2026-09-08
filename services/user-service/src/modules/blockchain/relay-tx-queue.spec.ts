@@ -1,8 +1,9 @@
-import { RelayTxQueue } from './relay-tx-queue';
+import { RelayTxQueue } from "./relay-tx-queue";
 import {
   MoneyMovementDisabledError,
   MoneyMovementGate,
-} from './money-movement.gate';
+} from "./money-movement.gate";
+import { SettlementCircuitBreakerService } from "../safety/settlement-circuit-breaker.service";
 
 /** Resolves after `ms`, recording start/end so we can assert non-overlap. */
 function deferred(ms: number, onStart: () => void, onEnd: () => void) {
@@ -16,18 +17,25 @@ function deferred(ms: number, onStart: () => void, onEnd: () => void) {
     });
 }
 
-describe('RelayTxQueue', () => {
+describe("RelayTxQueue", () => {
   let queue: RelayTxQueue;
   let moneyMovementGate: { assertRelayOperationAllowed: jest.Mock };
+  let circuitBreaker: { assertEgressAllowed: jest.Mock };
 
   beforeEach(() => {
     moneyMovementGate = {
       assertRelayOperationAllowed: jest.fn(),
     };
-    queue = new RelayTxQueue(moneyMovementGate as unknown as MoneyMovementGate);
+    circuitBreaker = {
+      assertEgressAllowed: jest.fn().mockResolvedValue(undefined),
+    };
+    queue = new RelayTxQueue(
+      moneyMovementGate as unknown as MoneyMovementGate,
+      circuitBreaker as unknown as SettlementCircuitBreakerService,
+    );
   });
 
-  it('runs tasks one at a time (no overlap) even when submitted concurrently', async () => {
+  it("runs tasks one at a time (no overlap) even when submitted concurrently", async () => {
     let active = 0;
     let maxActive = 0;
     const make = (ms: number) =>
@@ -43,16 +51,16 @@ describe('RelayTxQueue', () => {
       );
 
     await Promise.all([
-      queue.submit('a', make(30)),
-      queue.submit('b', make(5)),
-      queue.submit('c', make(15)),
+      queue.submit("a", make(30)),
+      queue.submit("b", make(5)),
+      queue.submit("c", make(15)),
     ]);
 
     // If the queue serializes correctly, only one task is ever in-flight.
     expect(maxActive).toBe(1);
   });
 
-  it('preserves submission order (FIFO)', async () => {
+  it("preserves submission order (FIFO)", async () => {
     const order: string[] = [];
     const make = (label: string, ms: number) => () =>
       new Promise<void>((resolve) => {
@@ -64,47 +72,65 @@ describe('RelayTxQueue', () => {
 
     // Submit a slow task first; a fast one queued after must still run later.
     await Promise.all([
-      queue.submit('first', make('first', 20)),
-      queue.submit('second', make('second', 1)),
+      queue.submit("first", make("first", 20)),
+      queue.submit("second", make("second", 1)),
     ]);
 
-    expect(order).toEqual(['first', 'second']);
+    expect(order).toEqual(["first", "second"]);
   });
 
-  it('returns the task result to the caller', async () => {
-    await expect(queue.submit('x', async () => 42)).resolves.toBe(42);
-    expect(moneyMovementGate.assertRelayOperationAllowed).toHaveBeenCalledWith('x');
+  it("returns the task result to the caller", async () => {
+    await expect(queue.submit("x", async () => 42)).resolves.toBe(42);
+    expect(moneyMovementGate.assertRelayOperationAllowed).toHaveBeenCalledWith(
+      "x",
+    );
+    expect(circuitBreaker.assertEgressAllowed).toHaveBeenCalledTimes(1);
   });
 
-  it('never invokes a queued task while the money-egress safety stop is active', async () => {
+  it("never invokes a queued task while the money-egress safety stop is active", async () => {
     moneyMovementGate.assertRelayOperationAllowed.mockImplementation(() => {
-      throw new MoneyMovementDisabledError('erc20.transfer');
+      throw new MoneyMovementDisabledError("erc20.transfer");
     });
-    const run = jest.fn(async () => 'tx-hash');
+    const run = jest.fn(async () => "tx-hash");
 
-    await expect(queue.submit('erc20.transfer 1→0xabc', run)).rejects.toMatchObject({
-      code: 'MONEY_EGRESS_DISABLED',
+    await expect(
+      queue.submit("erc20.transfer 1→0xabc", run),
+    ).rejects.toMatchObject({
+      code: "MONEY_EGRESS_DISABLED",
     });
+    expect(run).not.toHaveBeenCalled();
+    expect(circuitBreaker.assertEgressAllowed).not.toHaveBeenCalled();
+  });
+
+  it("never invokes a Polygon relay task while its durable circuit is tripped", async () => {
+    circuitBreaker.assertEgressAllowed.mockRejectedValue(
+      new Error("POLYGON_BREAKER_TRIPPED"),
+    );
+    const run = jest.fn(async () => "tx-hash");
+
+    await expect(queue.submit("erc20.transfer", run)).rejects.toThrow(
+      "POLYGON_BREAKER_TRIPPED",
+    );
     expect(run).not.toHaveBeenCalled();
   });
 
-  it('propagates a task failure to its caller', async () => {
+  it("propagates a task failure to its caller", async () => {
     await expect(
-      queue.submit('boom', async () => {
-        throw new Error('tx reverted');
+      queue.submit("boom", async () => {
+        throw new Error("tx reverted");
       }),
-    ).rejects.toThrow('tx reverted');
+    ).rejects.toThrow("tx reverted");
   });
 
-  it('keeps the chain alive: a failing task does not block subsequent ones', async () => {
+  it("keeps the chain alive: a failing task does not block subsequent ones", async () => {
     const failing = queue
-      .submit('fail', async () => {
-        throw new Error('nonce too low');
+      .submit("fail", async () => {
+        throw new Error("nonce too low");
       })
-      .catch(() => 'caught');
-    const next = queue.submit('ok', async () => 'ok');
+      .catch(() => "caught");
+    const next = queue.submit("ok", async () => "ok");
 
-    await expect(failing).resolves.toBe('caught');
-    await expect(next).resolves.toBe('ok');
+    await expect(failing).resolves.toBe("caught");
+    await expect(next).resolves.toBe("ok");
   });
 });
