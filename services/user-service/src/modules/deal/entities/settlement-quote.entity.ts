@@ -35,16 +35,29 @@ export class SettlementQuote {
   @Column({ type: "varchar", length: 64, name: "terms_hash" })
   termsHash: string;
 
-  @Column({ type: "varchar", length: 24, name: "fee_model" })
+  @Column({
+    type: "enum",
+    enum: FeeModel,
+    enumName: "fee_model_enum",
+    name: "fee_model",
+  })
   feeModel: FeeModel;
 
-  @Column({ type: "varchar", length: 16 })
+  @Column({
+    type: "enum",
+    enum: SettlementNetwork,
+    enumName: "settlement_network_enum",
+  })
   network: SettlementNetwork;
 
   @Column({ type: "varchar", length: 64, name: "chain_id" })
   chainId: string;
 
-  @Column({ type: "varchar", length: 32 })
+  @Column({
+    type: "enum",
+    enum: SettlementAsset,
+    enumName: "settlement_asset_enum",
+  })
   asset: SettlementAsset;
 
   @Column({
@@ -120,13 +133,21 @@ export class SettlementConfirmationRecord {
   @Column({ type: "varchar", length: 64, name: "quote_hash" })
   quoteHash: string;
 
-  @Column({ type: "varchar", length: 16 })
+  @Column({
+    type: "enum",
+    enum: SettlementNetwork,
+    enumName: "settlement_network_enum",
+  })
   network: SettlementNetwork;
 
   @Column({ type: "varchar", length: 64, name: "chain_id" })
   chainId: string;
 
-  @Column({ type: "varchar", length: 32 })
+  @Column({
+    type: "enum",
+    enum: SettlementAsset,
+    enumName: "settlement_asset_enum",
+  })
   asset: SettlementAsset;
 
   @CreateDateColumn({ type: "timestamp with time zone", name: "confirmed_at" })

@@ -467,7 +467,8 @@ async function resetDatabase(dataSource: DataSource): Promise<void> {
   await dataSource.query(`
     TRUNCATE TABLE users, deals, "money_ledger_entries",
       "settlement_circuit_breaker_audit",
-      "ton_jetton_ledger_reconciliations"
+      "ton_jetton_ledger_reconciliations",
+      "ton_jetton_ingestion_cursor_checkpoints"
     RESTART IDENTITY CASCADE
   `);
   await dataSource.query(`
