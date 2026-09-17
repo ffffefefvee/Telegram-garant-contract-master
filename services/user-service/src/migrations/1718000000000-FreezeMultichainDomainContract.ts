@@ -11,6 +11,11 @@ export class FreezeMultichainDomainContract1718000000000 implements MigrationInt
     if (queryRunner.connection.options.type !== "postgres") return;
 
     await queryRunner.query(`
+      ALTER TABLE "deals"
+        ALTER COLUMN "escrow_address" TYPE varchar(128)
+    `);
+
+    await queryRunner.query(`
       CREATE TABLE IF NOT EXISTS "settlement_quotes" (
         "id" uuid PRIMARY KEY DEFAULT gen_random_uuid(),
         "deal_id" uuid NOT NULL,
@@ -18,12 +23,10 @@ export class FreezeMultichainDomainContract1718000000000 implements MigrationInt
         "version" integer NOT NULL CHECK ("version" > 0),
         "terms_version" integer NOT NULL CHECK ("terms_version" > 0),
         "terms_hash" varchar(64) NOT NULL CHECK ("terms_hash" ~ '^[0-9a-f]{64}$'),
-        "fee_model" varchar(24) NOT NULL CHECK (
-          "fee_model" IN ('split_50_50', 'buyer_pays', 'seller_pays')
-        ),
-        "network" varchar(16) NOT NULL CHECK ("network" IN ('ton', 'polygon')),
+        "fee_model" fee_model_enum NOT NULL,
+        "network" settlement_network_enum NOT NULL,
         "chain_id" varchar(64) NOT NULL CHECK (length(btrim("chain_id")) > 0),
-        "asset" varchar(32) NOT NULL CHECK (
+        "asset" settlement_asset_enum NOT NULL CHECK (
           ("network" = 'ton' AND "asset" IN ('ton_usdt', 'ton_native'))
           OR ("network" = 'polygon' AND "asset" = 'polygon_usdt')
         ),
@@ -80,9 +83,9 @@ export class FreezeMultichainDomainContract1718000000000 implements MigrationInt
         "terms_hash" varchar(64) NOT NULL CHECK ("terms_hash" ~ '^[0-9a-f]{64}$'),
         "quote_version" integer NOT NULL CHECK ("quote_version" > 0),
         "quote_hash" varchar(64) NOT NULL CHECK ("quote_hash" ~ '^[0-9a-f]{64}$'),
-        "network" varchar(16) NOT NULL CHECK ("network" IN ('ton', 'polygon')),
+        "network" settlement_network_enum NOT NULL,
         "chain_id" varchar(64) NOT NULL,
-        "asset" varchar(32) NOT NULL,
+        "asset" settlement_asset_enum NOT NULL,
         "confirmed_at" timestamptz NOT NULL DEFAULT now(),
         CONSTRAINT "FK_settlement_confirmation_deal"
           FOREIGN KEY ("deal_id") REFERENCES "deals"("id") ON DELETE RESTRICT,

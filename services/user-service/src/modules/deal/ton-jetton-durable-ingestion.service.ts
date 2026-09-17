@@ -397,19 +397,35 @@ export class TonJettonDurableIngestionService {
       const applicationRepo = runner.manager.getRepository(
         TonJettonEventApplication,
       );
-      let query = applicationRepo
-        .createQueryBuilder("application")
-        .innerJoinAndSelect("application.event", "event")
-        .where("application.status = :status", {
-          status: TonJettonEventApplicationStatus.PENDING,
-        })
-        .orderBy("application.updatedAt", "ASC")
-        .addOrderBy("application.eventId", "ASC")
-        .take(1);
+      let application: TonJettonEventApplication | null;
       if (this.dataSource.options.type === "postgres") {
-        query = query.setLock("pessimistic_write").setOnLocked("skip_locked");
+        const rows = (await runner.query(
+          `SELECT "eventId"
+             FROM "ton_jetton_event_applications"
+            WHERE status = $1
+            ORDER BY "updatedAt" ASC, "eventId" ASC
+            FOR UPDATE SKIP LOCKED
+            LIMIT 1`,
+          [TonJettonEventApplicationStatus.PENDING],
+        )) as Array<{ eventId: string }>;
+        application = rows[0]
+          ? await applicationRepo.findOne({
+              where: { eventId: rows[0].eventId },
+              relations: { event: true },
+            })
+          : null;
+      } else {
+        application = await applicationRepo
+          .createQueryBuilder("application")
+          .innerJoinAndSelect("application.event", "event")
+          .where("application.status = :status", {
+            status: TonJettonEventApplicationStatus.PENDING,
+          })
+          .orderBy("application.updatedAt", "ASC")
+          .addOrderBy("application.eventId", "ASC")
+          .take(1)
+          .getOne();
       }
-      const application = await query.getOne();
       if (!application) {
         await runner.commitTransaction();
         return { status: "idle" };

@@ -71,6 +71,7 @@ function queryReturning<T>(get: () => T | null) {
 function runner(manager: { getRepository: jest.Mock }) {
   return {
     manager,
+    query: jest.fn(),
     isTransactionActive: true,
     connect: jest.fn().mockResolvedValue(undefined),
     startTransaction: jest.fn().mockResolvedValue(undefined),
@@ -520,11 +521,22 @@ function applicationHarness(maxFailures = 3): ApplicationHarness {
           : application,
       );
       const save = jest.fn(async (value) => value);
-      const repository = { createQueryBuilder: jest.fn(() => query), save };
+      const repository = {
+        createQueryBuilder: jest.fn(() => query),
+        findOne: jest.fn(async () => application),
+        save,
+      };
       const manager = {
         getRepository: jest.fn(() => repository),
       };
       const result = runner(manager);
+      if (isPrimary) {
+        result.query.mockImplementation(async () =>
+          application.status === TonJettonEventApplicationStatus.PENDING
+            ? [{ eventId: application.eventId }]
+            : [],
+        );
+      }
       runners.push(result);
       if (isPrimary) {
         primaryQueries.push(query);
@@ -561,10 +573,10 @@ describe("TonJettonDurableIngestionService application", () => {
 
     expect(result).toEqual({ status: "applied", eventId: "event-1" });
     expect(order).toEqual(["business", "done"]);
-    expect(h.primaryQueries[0].setLock).toHaveBeenCalledWith(
-      "pessimistic_write",
+    expect(h.runners[0].query).toHaveBeenCalledWith(
+      expect.stringContaining("FOR UPDATE SKIP LOCKED"),
+      [TonJettonEventApplicationStatus.PENDING],
     );
-    expect(h.primaryQueries[0].setOnLocked).toHaveBeenCalledWith("skip_locked");
     expect(h.application.status).toBe(TonJettonEventApplicationStatus.APPLIED);
     expect(h.application.appliedAt).toBeInstanceOf(Date);
   });

@@ -193,7 +193,7 @@ export class Deal {
   @Column({ type: 'varchar', length: 255, nullable: true, name: 'refund_reason' })
   refundReason: string | null;
 
-  @Column({ type: 'varchar', length: 64, nullable: true, name: 'escrow_address' })
+  @Column({ type: 'varchar', length: 128, nullable: true, name: 'escrow_address' })
   escrowAddress: string | null;
 
   /** Immutable settlement selection once the deal receives funding. */
