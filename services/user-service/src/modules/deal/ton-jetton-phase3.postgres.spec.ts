@@ -117,13 +117,16 @@ describePostgres("Phase 3 Jetton PostgreSQL exit gate", () => {
         status: "replayed",
       },
     );
-    const second = await preparationService.prepare({
+    const secondInput = {
       ...firstInput,
+      quoteVersion: 2,
       quoteId: randomUUID(),
       quoteHash: HASH("1"),
       configHash: HASH("2"),
       escrowAddress: ADDRESS("8"),
-    });
+    };
+    await bindSettlementQuote(dataSource, seeded, secondInput);
+    const second = await preparationService.prepare(secondInput);
 
     expect(first.preparation.version).toBe(1);
     expect(second.preparation.version).toBe(2);
@@ -464,7 +467,8 @@ async function resetDatabase(dataSource: DataSource): Promise<void> {
   await dataSource.query(`
     TRUNCATE TABLE users, deals, "money_ledger_entries",
       "settlement_circuit_breaker_audit",
-      "ton_jetton_ledger_reconciliations"
+      "ton_jetton_ledger_reconciliations",
+      "ton_jetton_ingestion_cursor_checkpoints"
     RESTART IDENTITY CASCADE
   `);
   await dataSource.query(`
@@ -506,7 +510,9 @@ async function seedDeal(dataSource: DataSource): Promise<SeededDeal> {
       SELLER,
     ],
   );
-  return { dealId, buyerId, sellerId };
+  const seeded = { dealId, buyerId, sellerId };
+  await bindSettlementQuote(dataSource, seeded, preparationInput(dealId));
+  return seeded;
 }
 
 function preparationInput(
@@ -528,7 +534,7 @@ function preparationInput(
     termsVersion: 3,
     termsHash: HASH("8"),
     quoteVersion: 1,
-    quoteId: randomUUID(),
+    quoteId: dealId,
     quoteHash: HASH("5"),
     buyerAddress: BUYER,
     sellerAddress: SELLER,
@@ -549,6 +555,70 @@ function preparationInput(
     deliveryDeadline: "2100000200",
     confirmationDeadline: "2100000300",
   };
+}
+
+async function bindSettlementQuote(
+  dataSource: DataSource,
+  seeded: SeededDeal,
+  input: TonJettonPreparationInput,
+): Promise<void> {
+  await dataSource.query(
+    `INSERT INTO settlement_quotes (
+      id, deal_id, domain_version, version, terms_version, terms_hash, fee_model,
+      network, chain_id, asset, asset_contract, decimals,
+      amount_atomic, buyer_fee_atomic, seller_fee_atomic,
+      total_funding_atomic, seller_receives_atomic,
+      quoted_at, expires_at, hash
+    ) VALUES (
+      $1, $2, 1, $3, $4, $5, 'buyer_pays',
+      'ton', $6, 'ton_usdt', $7, 6,
+      $8, $9, '0', $10, $8,
+      '2030-01-01T00:00:00Z', '2040-01-01T00:00:00Z', $11
+    )`,
+    [
+      input.quoteId,
+      seeded.dealId,
+      input.quoteVersion,
+      input.termsVersion,
+      input.termsHash,
+      input.network,
+      input.masterAddress,
+      input.sellerPayoutAtomic,
+      (
+        BigInt(input.buyerTotalAtomic) - BigInt(input.sellerPayoutAtomic)
+      ).toString(),
+      input.buyerTotalAtomic,
+      input.quoteHash,
+    ],
+  );
+  await dataSource.query(
+    `INSERT INTO settlement_confirmations (
+      deal_id, quote_id, party, user_id, domain_version,
+      terms_version, terms_hash, quote_version, quote_hash,
+      network, chain_id, asset
+    ) VALUES
+      ($1, $2, 'buyer', $3, 1, $5, $6, $7, $8, 'ton', $9, 'ton_usdt'),
+      ($1, $2, 'seller', $4, 1, $5, $6, $7, $8, 'ton', $9, 'ton_usdt')`,
+    [
+      seeded.dealId,
+      input.quoteId,
+      seeded.buyerId,
+      seeded.sellerId,
+      input.termsVersion,
+      input.termsHash,
+      input.quoteVersion,
+      input.quoteHash,
+      input.network,
+    ],
+  );
+  await dataSource.query(
+    `UPDATE deals SET
+      settlement_quote_id = $2,
+      settlement_quote_version = $3,
+      settlement_quote_hash = $4
+    WHERE id = $1`,
+    [seeded.dealId, input.quoteId, input.quoteVersion, input.quoteHash],
+  );
 }
 
 function fundingEvent(

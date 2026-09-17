@@ -193,7 +193,7 @@ export class Deal {
   @Column({ type: 'varchar', length: 255, nullable: true, name: 'refund_reason' })
   refundReason: string | null;
 
-  @Column({ type: 'varchar', length: 64, nullable: true, name: 'escrow_address' })
+  @Column({ type: 'varchar', length: 128, nullable: true, name: 'escrow_address' })
   escrowAddress: string | null;
 
   /** Immutable settlement selection once the deal receives funding. */
@@ -240,6 +240,21 @@ export class Deal {
 
   @Column({ type: 'uuid', nullable: true, name: 'quote_id' })
   quoteId: string | null;
+
+  /** Phase 4 authoritative quote pointer; quoteId above remains legacy-only. */
+  @Column({ type: 'uuid', nullable: true, name: 'settlement_quote_id' })
+  settlementQuoteId: string | null;
+
+  @Column({ type: 'integer', nullable: true, name: 'settlement_quote_version' })
+  settlementQuoteVersion: number | null;
+
+  @Column({
+    type: 'varchar',
+    length: 64,
+    nullable: true,
+    name: 'settlement_quote_hash',
+  })
+  settlementQuoteHash: string | null;
 
   @Column({ type: 'integer', default: 1, name: 'terms_version' })
   termsVersion: number;

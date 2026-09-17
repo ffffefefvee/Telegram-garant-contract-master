@@ -322,6 +322,13 @@ function assertDealBinding(deal: Deal, input: TonJettonPreparationInput): void {
     throw new ConflictException("JETTON_DEAL_TERMS_MISMATCH");
   }
   if (
+    deal.settlementQuoteId !== input.quoteId ||
+    deal.settlementQuoteVersion !== input.quoteVersion ||
+    deal.settlementQuoteHash !== input.quoteHash
+  ) {
+    throw new ConflictException("JETTON_DEAL_QUOTE_MISMATCH");
+  }
+  if (
     (deal.buyerWalletAddress &&
       deal.buyerWalletAddress !== input.buyerAddress) ||
     (deal.sellerWalletAddress &&

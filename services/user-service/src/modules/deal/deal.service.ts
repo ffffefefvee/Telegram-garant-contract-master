@@ -6,7 +6,9 @@ import {
   ConflictException,
   ForbiddenException,
   BadRequestException,
+  ServiceUnavailableException,
   Inject,
+  Optional,
   forwardRef,
 } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
@@ -46,6 +48,7 @@ import { ReputationService } from "../review/reputation.service";
 import { KycLimitsService } from "../user/kyc-limits.service";
 import { DisputeService } from "../arbitration/dispute.service";
 import { TonNativeLifecycleAction } from "./ton-native-lifecycle";
+import { SettlementAgreementService } from "./settlement-agreement.service";
 
 /** D6: minimum deal amount in RUB. */
 export const DEAL_MIN_AMOUNT_RUB = 300;
@@ -164,6 +167,8 @@ export class DealService {
     private configService: ConfigService,
     @Inject(forwardRef(() => DisputeService))
     private disputeService: DisputeService,
+    @Optional()
+    private readonly settlementAgreement?: SettlementAgreementService,
   ) {
     this.stateMachine = new DealStateMachine({
       commissionRate: 0.05, // 5% комиссия
@@ -751,6 +756,24 @@ export class DealService {
 
     if (deal.status !== DealStatus.PENDING_PAYMENT) {
       throw new ConflictException("Deal is not pending payment");
+    }
+
+    if (
+      deal.settlementNetwork &&
+      deal.settlementMode === SettlementMode.NATIVE
+    ) {
+      if (!this.settlementAgreement) {
+        throw new ServiceUnavailableException(
+          "Settlement agreement gate is unavailable",
+        );
+      }
+      // Recognition may occur after quote expiry; both confirmations themselves
+      // must predate expiry. Funding-request construction enforces live expiry.
+      await this.settlementAgreement.assertFundingAuthorized(
+        id,
+        new Date(),
+        false,
+      );
     }
 
     const updated = await this.stateMachine.transition(
