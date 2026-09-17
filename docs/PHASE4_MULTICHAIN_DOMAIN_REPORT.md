@@ -2,7 +2,7 @@
 
 Date: 2026-09-01
 
-Status: local candidate; hosted evidence pending
+Status: local gates complete; hosted evidence pending
 
 ## Protected invariant
 
@@ -32,12 +32,11 @@ Both parties must confirm the same persisted terms and quote before funding.
 
 - Backend build: passed.
 - Full backend unit suite: 102 suites / 1,035 tests passed.
-- PostgreSQL-only suites: 17 tests skipped locally by their explicit environment
-  gates (11 Phase 3 and 6 Phase 4); they require the hosted PostgreSQL service.
+- Clean-schema PostgreSQL Phase 3 regression gate: 11/11 tests passed.
+- Clean-schema PostgreSQL Phase 4 exit gate: 6/6 tests passed.
 - Focused common-domain/agreement/preparation suites: passed.
 - Shared adapter conformance runs against both TON and Polygon.
-- Strict changed-file lint: passed before the full suite; a final lint pass is
-  required after documentation review.
+- Full service lint and build: passed.
 
 ## Threat-model change
 
@@ -53,6 +52,6 @@ verification and reconciliation results remain non-finalizing.
 
 ## Gate status
 
-Local candidate evidence is green. Phase 4 is not complete until its clean-schema
-PostgreSQL suite and the complete hosted CI matrix pass after Phase 3 has merged.
-No readiness or real-funds flag was enabled.
+Local evidence is green, including the clean-schema PostgreSQL gates. Phase 4 is
+not complete until the complete hosted CI matrix passes on the isolated release
+pull request. No readiness or real-funds flag was enabled.
