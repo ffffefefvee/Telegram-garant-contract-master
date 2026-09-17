@@ -2,7 +2,7 @@
 
 Date: 2026-09-01
 
-Status: local gates complete; hosted evidence pending
+Status: release candidate; hosted implementation evidence green
 
 ## Protected invariant
 
@@ -37,6 +37,9 @@ Both parties must confirm the same persisted terms and quote before funding.
 - Focused common-domain/agreement/preparation suites: passed.
 - Shared adapter conformance runs against both TON and Polygon.
 - Full service lint and build: passed.
+- Hosted CI implementation run
+  [`35286167321`](https://github.com/ffffefefvee/Telegram-garant-contract-master/actions/runs/35286167321):
+  all seven jobs passed at commit `a138d90289afc0a166c6489238c311e6f7b710c4`.
 
 ## Threat-model change
 
@@ -52,6 +55,7 @@ verification and reconciliation results remain non-finalizing.
 
 ## Gate status
 
-Local evidence is green, including the clean-schema PostgreSQL gates. Phase 4 is
-not complete until the complete hosted CI matrix passes on the isolated release
-pull request. No readiness or real-funds flag was enabled.
+Local evidence and the hosted implementation run are green, including the
+clean-schema PostgreSQL gates. The documentation-only evidence commit must also
+pass the complete hosted CI matrix before the isolated release pull request is
+merged. No readiness or real-funds flag was enabled.
