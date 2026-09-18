@@ -23,7 +23,15 @@ All `/admin` requests require two independently verified credentials:
 The assertion issuer, audience, maximum age and signing secret are independent
 configuration. Administrative and arbitrator consoles use disjoint HTTPS
 origin allowlists. `ADMIN_EMERGENCY_LOCKOUT=true` stops the entire admin origin.
-Production startup fails when these controls are missing or unsafe.
+Production startup fails when these controls are missing or unsafe. Sensitive
+arbitrator routes use a separate origin, signing secret, audience, purpose and
+emergency lockout, so the admin and arbitrator security domains cannot reuse an
+assertion or browser origin.
+
+Ordinary application JWTs contain a durable server-side session identifier.
+Middleware rejects legacy, revoked, expired and cross-user session bindings on
+every protected request. A user can revoke one owned session or all owned
+sessions immediately.
 
 File evidence follows this order:
 

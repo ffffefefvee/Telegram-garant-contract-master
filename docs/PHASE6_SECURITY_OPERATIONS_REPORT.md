@@ -12,6 +12,11 @@ Status: local implementation candidate; external services and operational exit g
   a 32+ character privileged signing secret, HTTPS issuer and a 60-900 second
   assertion lifetime.
 - An emergency administrative lockout switch.
+- A separate arbitrator origin, MFA assertion audience/signing key and
+  emergency lockout for evidence verification, decisions, enforcement,
+  appeals and arbitrator-profile actions.
+- JWTs bound to durable server-side sessions, with fail-closed middleware and
+  owner-scoped single-session or all-session revocation.
 - A strict dispute-file policy covering size, filename normalization, exact
   MIME allowlist, extension agreement and actual JPEG/PNG/PDF/MP4 signatures.
 - Quarantine-first evidence orchestration with mandatory malware scanning,
@@ -26,8 +31,8 @@ Status: local implementation candidate; external services and operational exit g
 
 ## Local evidence
 
-- Targeted security tests: 51/51 passed.
-- Full backend unit run: 107 suites / 1,089 tests passed; 25 PostgreSQL-gated
+- Targeted security tests: 61/61 passed.
+- Full backend unit run: 109 suites / 1,099 tests passed; 25 PostgreSQL-gated
   tests were intentionally skipped in this unit run.
 - Phase 6 clean PostgreSQL 15 migration/trigger gate: 2/2 passed.
 - Backend build and full non-mutating ESLint: passed.
@@ -47,8 +52,8 @@ Status: local implementation candidate; external services and operational exit g
 
 - Integrate and test the external MFA/privileged identity provider; demonstrate
   enrollment, revocation, lost-factor recovery and emergency lockout.
-- Add durable session-version revocation rather than relying only on short
-  assertion expiry.
+- Integrate privileged-identity session revocation and lost-factor recovery;
+  ordinary application sessions are now durably revocable.
 - Implement production object-storage and malware-scanner adapters, including
   independent scan-result authentication and deletion jobs after retention.
 - Export the append-only audit stream to an off-site WORM destination and prove
