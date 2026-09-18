@@ -1,3 +1,5 @@
+import { createPublicKey } from "crypto";
+
 /**
  * Fail fast on configurations that are acceptable for a local sandbox but
  * unsafe for a production process. This runs inside ConfigModule before the
@@ -59,21 +61,25 @@ export function validateEnvironment(
       "ADMIN_ALLOWED_ORIGINS and ARBITRATOR_ALLOWED_ORIGINS must use separate origins",
     );
   }
-  if (isUnsafePrivilegedSecret(environment.ADMIN_STEP_UP_JWT_SECRET)) {
+  if (!isValidRsaPublicKey(environment.ADMIN_STEP_UP_JWT_PUBLIC_KEY_BASE64)) {
     failures.push(
-      "ADMIN_STEP_UP_JWT_SECRET must be an independent 32+ character production secret",
-    );
-  }
-  if (isUnsafePrivilegedSecret(environment.ARBITRATOR_STEP_UP_JWT_SECRET)) {
-    failures.push(
-      "ARBITRATOR_STEP_UP_JWT_SECRET must be an independent 32+ character production secret",
+      "ADMIN_STEP_UP_JWT_PUBLIC_KEY_BASE64 must contain a valid base64-encoded RSA public key",
     );
   }
   if (
-    environment.ARBITRATOR_STEP_UP_JWT_SECRET ===
-    environment.ADMIN_STEP_UP_JWT_SECRET
+    !isValidRsaPublicKey(
+      environment.ARBITRATOR_STEP_UP_JWT_PUBLIC_KEY_BASE64,
+    )
   ) {
-    failures.push("Admin and arbitrator step-up signing secrets must be distinct");
+    failures.push(
+      "ARBITRATOR_STEP_UP_JWT_PUBLIC_KEY_BASE64 must contain a valid base64-encoded RSA public key",
+    );
+  }
+  if (
+    environment.ARBITRATOR_STEP_UP_JWT_PUBLIC_KEY_BASE64 ===
+    environment.ADMIN_STEP_UP_JWT_PUBLIC_KEY_BASE64
+  ) {
+    failures.push("Admin and arbitrator step-up public keys must be distinct");
   }
   if (!isHttpsBaseUrl(environment.ADMIN_STEP_UP_ISSUER?.trim() ?? "")) {
     failures.push("ADMIN_STEP_UP_ISSUER must be an explicit HTTPS URL");
@@ -281,8 +287,15 @@ function isUnsafeSecret(value: string | undefined): boolean {
   );
 }
 
-function isUnsafePrivilegedSecret(value: string | undefined): boolean {
-  return isUnsafeSecret(value) || (value?.trim().length ?? 0) < 32;
+function isValidRsaPublicKey(value: string | undefined): boolean {
+  if (!value?.trim()) return false;
+  try {
+    const pem = Buffer.from(value.trim(), "base64").toString("utf8");
+    const key = createPublicKey(pem);
+    return key.asymmetricKeyType === "rsa";
+  } catch {
+    return false;
+  }
 }
 
 function hasOnlyHttpsOrigins(value: string | undefined): boolean {

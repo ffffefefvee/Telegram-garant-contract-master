@@ -9,8 +9,9 @@ Status: local implementation candidate; external services and operational exit g
 - A global `/admin` boundary requiring a dedicated allowed origin and a fresh,
   independently signed MFA step-up assertion bound to the authenticated user.
 - Production configuration validation for separate admin/arbitrator origins,
-  a 32+ character privileged signing secret, HTTPS issuer and a 60-900 second
-  assertion lifetime.
+  distinct RSA public verification keys, HTTPS issuers and a 60-900 second
+  assertion lifetime. Only RS256 is accepted; the service has no IdP private
+  key capable of minting assertions.
 - An emergency administrative lockout switch.
 - A separate arbitrator origin, MFA assertion audience/signing key and
   emergency lockout for evidence verification, decisions, enforcement,
@@ -31,8 +32,8 @@ Status: local implementation candidate; external services and operational exit g
 
 ## Local evidence
 
-- Targeted security tests: 61/61 passed.
-- Full backend unit run: 109 suites / 1,099 tests passed; 25 PostgreSQL-gated
+- Targeted security tests: 62/62 passed.
+- Full backend unit run: 109 suites / 1,100 tests passed; 25 PostgreSQL-gated
   tests were intentionally skipped in this unit run.
 - Phase 6 clean PostgreSQL 15 migration/trigger gate: 2/2 passed.
 - Backend build and full non-mutating ESLint: passed.

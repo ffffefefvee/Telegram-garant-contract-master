@@ -5,16 +5,19 @@ import {
 } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
 import { JwtService } from "@nestjs/jwt";
+import { generateKeyPairSync } from "crypto";
 import type { ExecutionContext } from "@nestjs/common";
 import { PrivilegedAccessGuard } from "./privileged-access.guard";
 
-const SECRET = "phase6-test-secret-that-is-long-enough";
+const KEY_PAIR = generateKeyPairSync("rsa", { modulusLength: 2048 });
+const PUBLIC_KEY = KEY_PAIR.publicKey.export({ type: "spki", format: "pem" }).toString();
+const PRIVATE_KEY = KEY_PAIR.privateKey.export({ type: "pkcs8", format: "pem" }).toString();
 const ISSUER = "https://identity.example.test";
 
 function config(overrides: Record<string, string> = {}): ConfigService {
   const values: Record<string, string> = {
     ADMIN_ALLOWED_ORIGINS: "https://admin.example.test",
-    ADMIN_STEP_UP_JWT_SECRET: SECRET,
+    ADMIN_STEP_UP_JWT_PUBLIC_KEY_BASE64: Buffer.from(PUBLIC_KEY).toString("base64"),
     ADMIN_STEP_UP_ISSUER: ISSUER,
     ADMIN_STEP_UP_AUDIENCE: "telegram-garant-admin",
     ADMIN_STEP_UP_MAX_AGE_SECONDS: "300",
@@ -51,7 +54,8 @@ function assertion(jwt: JwtService, actorId = "admin-1", amr = ["pwd", "mfa"]): 
   return jwt.sign(
     { sub: actorId, purpose: "admin_step_up", amr, jti: "assertion-1" },
     {
-      secret: SECRET,
+      privateKey: PRIVATE_KEY,
+      algorithm: "RS256",
       issuer: ISSUER,
       audience: "telegram-garant-admin",
       expiresIn: 300,
@@ -82,7 +86,7 @@ describe("PrivilegedAccessGuard", () => {
 
   it("fails closed when privileged identity verification is not configured", () => {
     const guard = new PrivilegedAccessGuard(
-      config({ ADMIN_STEP_UP_JWT_SECRET: "" }),
+      config({ ADMIN_STEP_UP_JWT_PUBLIC_KEY_BASE64: "" }),
       jwt,
     );
     expect(() =>
@@ -100,6 +104,34 @@ describe("PrivilegedAccessGuard", () => {
     ).toThrow(UnauthorizedException);
     expect(() =>
       guard.canActivate(context({ ...allowed, assertion: assertion(jwt, "admin-1", ["pwd"]) })),
+    ).toThrow(UnauthorizedException);
+  });
+
+  it("rejects a symmetrically signed token even when its claims are valid", () => {
+    const guard = new PrivilegedAccessGuard(config(), jwt);
+    const forged = jwt.sign(
+      {
+        sub: "admin-1",
+        purpose: "admin_step_up",
+        amr: ["mfa"],
+        jti: "forged",
+      },
+      {
+        secret: "attacker-controlled-secret-with-enough-length",
+        issuer: ISSUER,
+        audience: "telegram-garant-admin",
+        expiresIn: 300,
+        algorithm: "HS256",
+      },
+    );
+    expect(() =>
+      guard.canActivate(
+        context({
+          actorId: "admin-1",
+          origin: "https://admin.example.test",
+          assertion: forged,
+        }),
+      ),
     ).toThrow(UnauthorizedException);
   });
 

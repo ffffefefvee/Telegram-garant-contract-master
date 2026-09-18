@@ -1,4 +1,15 @@
 import { validateEnvironment } from "./environment.validation";
+import { generateKeyPairSync } from "crypto";
+
+function publicKeyBase64(): string {
+  const { publicKey } = generateKeyPairSync("rsa", { modulusLength: 2048 });
+  return Buffer.from(
+    publicKey.export({ type: "spki", format: "pem" }).toString(),
+  ).toString("base64");
+}
+
+const ADMIN_PUBLIC_KEY = publicKeyBase64();
+const ARBITRATOR_PUBLIC_KEY = publicKeyBase64();
 
 function productionEnvironment(
   overrides: Record<string, string | undefined> = {},
@@ -16,12 +27,10 @@ function productionEnvironment(
     CORS_ORIGIN: "https://app.example.com,https://admin.example.com",
     ADMIN_ALLOWED_ORIGINS: "https://admin.example.com",
     ARBITRATOR_ALLOWED_ORIGINS: "https://arbitrator.example.com",
-    ADMIN_STEP_UP_JWT_SECRET:
-      "independent-phase6-step-up-secret-0123456789",
+    ADMIN_STEP_UP_JWT_PUBLIC_KEY_BASE64: ADMIN_PUBLIC_KEY,
     ADMIN_STEP_UP_ISSUER: "https://identity.example.com",
     ADMIN_STEP_UP_MAX_AGE_SECONDS: "300",
-    ARBITRATOR_STEP_UP_JWT_SECRET:
-      "independent-arbitrator-step-up-secret-012345",
+    ARBITRATOR_STEP_UP_JWT_PUBLIC_KEY_BASE64: ARBITRATOR_PUBLIC_KEY,
     ARBITRATOR_STEP_UP_ISSUER: "https://identity.example.com",
     ARBITRATOR_STEP_UP_MAX_AGE_SECONDS: "300",
     ...overrides,
@@ -59,9 +68,9 @@ describe("validateEnvironment", () => {
       "separate origins",
     ],
     [
-      "short step-up secret",
-      { ADMIN_STEP_UP_JWT_SECRET: "short" },
-      "ADMIN_STEP_UP_JWT_SECRET",
+      "invalid step-up public key",
+      { ADMIN_STEP_UP_JWT_PUBLIC_KEY_BASE64: Buffer.from("not a key").toString("base64") },
+      "ADMIN_STEP_UP_JWT_PUBLIC_KEY_BASE64",
     ],
     [
       "insecure step-up issuer",
@@ -69,10 +78,9 @@ describe("validateEnvironment", () => {
       "ADMIN_STEP_UP_ISSUER",
     ],
     [
-      "shared step-up secret",
+      "shared step-up public key",
       {
-        ARBITRATOR_STEP_UP_JWT_SECRET:
-          "independent-phase6-step-up-secret-0123456789",
+        ARBITRATOR_STEP_UP_JWT_PUBLIC_KEY_BASE64: ADMIN_PUBLIC_KEY,
       },
       "must be distinct",
     ],

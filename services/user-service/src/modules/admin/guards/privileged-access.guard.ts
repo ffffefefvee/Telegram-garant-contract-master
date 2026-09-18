@@ -56,9 +56,11 @@ export class PrivilegedAccessGuard implements CanActivate {
       throw new UnauthorizedException("Fresh administrator MFA assertion is required");
     }
 
-    const secret = this.config.get<string>("ADMIN_STEP_UP_JWT_SECRET", "").trim();
+    const publicKey = decodePublicKey(
+      this.config.get<string>("ADMIN_STEP_UP_JWT_PUBLIC_KEY_BASE64", ""),
+    );
     const issuer = this.config.get<string>("ADMIN_STEP_UP_ISSUER", "").trim();
-    if (!secret || !issuer) {
+    if (!publicKey || !issuer) {
       throw new ServiceUnavailableException(
         "Privileged identity verification is not configured",
       );
@@ -73,11 +75,12 @@ export class PrivilegedAccessGuard implements CanActivate {
     let claims: AdminStepUpClaims;
     try {
       claims = this.jwt.verify<AdminStepUpClaims>(assertion, {
-        secret,
+        publicKey,
         issuer,
         audience,
         maxAge: maxAgeSeconds,
         clockTolerance: 10,
+        algorithms: ["RS256"],
       });
     } catch {
       throw new UnauthorizedException("Administrator MFA assertion is invalid or stale");
@@ -108,6 +111,16 @@ export class PrivilegedAccessGuard implements CanActivate {
     if (!origin || !allowed.has(origin)) {
       throw new ForbiddenException("Administrative request origin is not allowed");
     }
+  }
+}
+
+function decodePublicKey(value: string): string | null {
+  if (!value.trim()) return null;
+  try {
+    const decoded = Buffer.from(value.trim(), "base64").toString("utf8");
+    return decoded.includes("-----BEGIN PUBLIC KEY-----") ? decoded : null;
+  } catch {
+    return null;
   }
 }
 

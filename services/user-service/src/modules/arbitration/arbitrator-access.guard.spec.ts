@@ -1,14 +1,17 @@
 import { ForbiddenException, UnauthorizedException } from "@nestjs/common";
 import { JwtService } from "@nestjs/jwt";
+import { generateKeyPairSync } from "crypto";
 import { ArbitratorAccessGuard } from "./arbitrator-access.guard";
 
-const SECRET = "arbitrator-step-up-secret-for-tests-12345";
+const KEY_PAIR = generateKeyPairSync("rsa", { modulusLength: 2048 });
+const PUBLIC_KEY = KEY_PAIR.publicKey.export({ type: "spki", format: "pem" }).toString();
+const PRIVATE_KEY = KEY_PAIR.privateKey.export({ type: "pkcs8", format: "pem" }).toString();
 const ISSUER = "https://identity.example.test";
 
 function config(overrides: Record<string, string> = {}) {
   const values: Record<string, string> = {
     ARBITRATOR_ALLOWED_ORIGINS: "https://arbitrator.example.test",
-    ARBITRATOR_STEP_UP_JWT_SECRET: SECRET,
+    ARBITRATOR_STEP_UP_JWT_PUBLIC_KEY_BASE64: Buffer.from(PUBLIC_KEY).toString("base64"),
     ARBITRATOR_STEP_UP_ISSUER: ISSUER,
     ARBITRATOR_STEP_UP_AUDIENCE: "telegram-garant-arbitrator",
     ARBITRATOR_STEP_UP_MAX_AGE_SECONDS: "300",
@@ -50,7 +53,8 @@ function assertion(jwt: JwtService, actorId = "arbitrator-1") {
       jti: "assertion-1",
     },
     {
-      secret: SECRET,
+      privateKey: PRIVATE_KEY,
+      algorithm: "RS256",
       issuer: ISSUER,
       audience: "telegram-garant-arbitrator",
       expiresIn: 300,

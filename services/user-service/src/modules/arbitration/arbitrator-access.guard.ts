@@ -71,13 +71,13 @@ export class ArbitratorAccessGuard implements CanActivate {
       throw new UnauthorizedException("Fresh arbitrator MFA assertion is required");
     }
 
-    const secret = this.config
-      .get<string>("ARBITRATOR_STEP_UP_JWT_SECRET", "")
-      .trim();
+    const publicKey = decodePublicKey(
+      this.config.get<string>("ARBITRATOR_STEP_UP_JWT_PUBLIC_KEY_BASE64", ""),
+    );
     const issuer = this.config
       .get<string>("ARBITRATOR_STEP_UP_ISSUER", "")
       .trim();
-    if (!secret || !issuer) {
+    if (!publicKey || !issuer) {
       throw new ServiceUnavailableException(
         "Arbitrator identity verification is not configured",
       );
@@ -91,11 +91,12 @@ export class ArbitratorAccessGuard implements CanActivate {
     let claims: ArbitratorStepUpClaims;
     try {
       claims = this.jwt.verify<ArbitratorStepUpClaims>(assertion, {
-        secret,
+        publicKey,
         issuer,
         audience,
         maxAge,
         clockTolerance: 10,
+        algorithms: ["RS256"],
       });
     } catch {
       throw new UnauthorizedException("Arbitrator MFA assertion is invalid or stale");
@@ -110,6 +111,16 @@ export class ArbitratorAccessGuard implements CanActivate {
       throw new UnauthorizedException("Arbitrator MFA assertion is not bound to this actor");
     }
     return true;
+  }
+}
+
+function decodePublicKey(value: string): string | null {
+  if (!value.trim()) return null;
+  try {
+    const decoded = Buffer.from(value.trim(), "base64").toString("utf8");
+    return decoded.includes("-----BEGIN PUBLIC KEY-----") ? decoded : null;
+  } catch {
+    return null;
   }
 }
 

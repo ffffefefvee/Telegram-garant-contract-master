@@ -20,11 +20,13 @@ All `/admin` requests require two independently verified credentials:
    user, whose purpose is `admin_step_up`, and whose authentication-method list
    contains `mfa`.
 
-The assertion issuer, audience, maximum age and signing secret are independent
-configuration. Administrative and arbitrator consoles use disjoint HTTPS
-origin allowlists. `ADMIN_EMERGENCY_LOCKOUT=true` stops the entire admin origin.
+The assertion issuer, audience, maximum age and RSA public verification key are
+independent configuration. The service never receives the identity provider's
+private signing key and accepts only RS256. Administrative and arbitrator
+consoles use disjoint HTTPS origin allowlists. `ADMIN_EMERGENCY_LOCKOUT=true`
+stops the entire admin origin.
 Production startup fails when these controls are missing or unsafe. Sensitive
-arbitrator routes use a separate origin, signing secret, audience, purpose and
+arbitrator routes use a separate origin, public key, audience, purpose and
 emergency lockout, so the admin and arbitrator security domains cannot reuse an
 assertion or browser origin.
 
