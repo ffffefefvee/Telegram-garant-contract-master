@@ -81,4 +81,24 @@ describePostgres("Phase 6 evidence manifest PostgreSQL gate", () => {
       ),
     ).rejects.toThrow("evidence deletion tombstone is immutable");
   });
+
+  it("enforces append-only audit records in PostgreSQL", async () => {
+    const id = randomUUID();
+    await dataSource.query(
+      `INSERT INTO audit_log (
+        id, "aggregateType", "aggregateId", action, details
+      ) VALUES ($1,'phase6_probe',$2,'PHASE6_AUDIT_PROBE','{}'::jsonb)`,
+      [id, id],
+    );
+
+    await expect(
+      dataSource.query(
+        "UPDATE audit_log SET action = 'REWRITTEN' WHERE id = $1",
+        [id],
+      ),
+    ).rejects.toThrow("audit log is append-only");
+    await expect(
+      dataSource.query("DELETE FROM audit_log WHERE id = $1", [id]),
+    ).rejects.toThrow("audit log is append-only");
+  });
 });

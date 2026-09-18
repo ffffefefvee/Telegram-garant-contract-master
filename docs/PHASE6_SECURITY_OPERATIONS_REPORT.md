@@ -26,6 +26,8 @@ Status: local implementation candidate; external services and operational exit g
 - Short-lived authorized download URL generation.
 - PostgreSQL evidence manifests with immutable security fields, a single
   irreversible deletion tombstone and a 365-day retention commitment.
+- PostgreSQL rejects UPDATE and DELETE against the unified audit log, enforcing
+  its append-only contract below the application layer.
 - Ordinary file-evidence deletion is denied; legacy text evidence behavior is
   unchanged.
 - Storage and scanner defaults fail closed until production adapters exist.
@@ -35,7 +37,7 @@ Status: local implementation candidate; external services and operational exit g
 - Targeted security tests: 62/62 passed.
 - Full backend unit run: 109 suites / 1,100 tests passed; 25 PostgreSQL-gated
   tests were intentionally skipped in this unit run.
-- Phase 6 clean PostgreSQL 15 migration/trigger gate: 2/2 passed.
+- Phase 6 clean PostgreSQL 15 migration/trigger gate: 3/3 passed.
 - Backend build and full non-mutating ESLint: passed.
 - Production dependency audit: zero vulnerabilities.
 - `MONEY_EGRESS_ENABLED` was not enabled.
