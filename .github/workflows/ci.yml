@@ -107,6 +107,17 @@ jobs:
           DB_PASSWORD: garant_pass
           DB_NAME: garant_db_test
           DB_USE_SQLITE: false
+      - name: Phase 6 evidence-manifest PostgreSQL gate
+        run: npm run test:phase6:postgres
+        env:
+          NODE_ENV: test
+          RUN_PHASE6_POSTGRES: true
+          DB_HOST: localhost
+          DB_PORT: 5432
+          DB_USERNAME: garant_user
+          DB_PASSWORD: garant_pass
+          DB_NAME: garant_db_test
+          DB_USE_SQLITE: false
       - name: Replay and corrupt immutable TON mainnet and testnet proof corpora
         run: npm run fixture:ton:gate
 
