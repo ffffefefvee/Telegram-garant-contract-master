@@ -17,6 +17,7 @@
     "test:phase3:postgres": "jest --runInBand --forceExit modules/deal/ton-jetton-phase3.postgres.spec.ts",
     "test:phase4:postgres": "jest --runInBand --forceExit modules/deal/multichain-phase4.postgres.spec.ts",
     "test:phase5:postgres": "jest --runInBand --forceExit modules/blockchain/polygon-phase5.postgres.spec.ts",
+    "test:phase6:postgres": "jest --runInBand --forceExit modules/arbitration/evidence-phase6.postgres.spec.ts",
     "test:watch": "jest --watch",
     "test:cov": "jest --coverage",
     "test:debug": "node --inspect-brk -r tsconfig-paths/register -r ts-node/register node_modules/.bin/jest --runInBand",

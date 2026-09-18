@@ -67,6 +67,7 @@ import {
   ArbitrationSettings,
   ArbitratorProfile,
 } from "./modules/arbitration/entities";
+import { EvidenceFileManifest } from "./modules/arbitration/entities/evidence-file-manifest.entity";
 import { MonitoringModule } from "./modules/monitoring/monitoring.module";
 import { OpsModule } from "./modules/ops/ops.module";
 import { OutboxEvent } from "./modules/ops/entities/outbox-event.entity";
@@ -188,6 +189,7 @@ import {
               DealTerms,
               ArbitrationSettings,
               ArbitratorProfile,
+              EvidenceFileManifest,
               SystemAlert,
               HealthCheck,
               SystemMetrics,
@@ -266,6 +268,7 @@ import {
             DealTerms,
             ArbitrationSettings,
             ArbitratorProfile,
+            EvidenceFileManifest,
             SystemAlert,
             HealthCheck,
             SystemMetrics,

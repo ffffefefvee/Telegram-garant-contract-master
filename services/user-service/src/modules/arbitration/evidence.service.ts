@@ -208,6 +208,12 @@ export class EvidenceService {
   async deleteEvidence(evidenceId: string, userId: string): Promise<void> {
     const evidence = await this.getEvidence(evidenceId, userId);
 
+    if (evidence.isFile) {
+      throw new ForbiddenException(
+        "Managed file evidence is retained under the immutable evidence policy",
+      );
+    }
+
     if (!evidence.canBeDeleted) {
       throw new ForbiddenException("Evidence cannot be deleted");
     }
