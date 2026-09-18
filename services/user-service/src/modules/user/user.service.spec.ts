@@ -258,6 +258,34 @@ describe('UserService', () => {
     });
   });
 
+  describe('revokeSessionById', () => {
+    it('scopes revocation to the authenticated session owner', async () => {
+      const session = {
+        id: 'session-1',
+        userId: 'user-1',
+        revoke: jest.fn(),
+      };
+      mockSessionRepository.findOne.mockResolvedValue(session);
+      mockSessionRepository.save.mockResolvedValue(session);
+
+      await service.revokeSessionById('session-1', 'user-1', 'logout');
+
+      expect(mockSessionRepository.findOne).toHaveBeenCalledWith({
+        where: { id: 'session-1', userId: 'user-1' },
+      });
+      expect(session.revoke).toHaveBeenCalledWith('logout');
+      expect(mockSessionRepository.save).toHaveBeenCalledWith(session);
+    });
+
+    it('does not reveal or revoke another user session', async () => {
+      mockSessionRepository.findOne.mockResolvedValue(null);
+
+      await service.revokeSessionById('session-2', 'user-1', 'logout');
+
+      expect(mockSessionRepository.save).not.toHaveBeenCalled();
+    });
+  });
+
   describe('getUserLanguage', () => {
     it('should return user language preference', async () => {
       const mockPreference = {

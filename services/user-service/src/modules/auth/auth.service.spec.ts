@@ -54,6 +54,9 @@ describe('AuthService', () => {
         upsertedUsers.push(u);
         return u;
       }),
+      createSession: jest.fn(async ({ userId }) => ({
+        id: `session-${userId}`,
+      })) as any,
     };
 
     moduleRef = await Test.createTestingModule({
@@ -111,6 +114,7 @@ describe('AuthService', () => {
       const payload = service.verifyToken(session.accessToken);
       expect(payload.sub).toBe('user-100');
       expect(payload.tg).toBe(100);
+      expect(payload.sid).toBe('session-user-100');
     });
 
     it('rejects garbage tokens', () => {

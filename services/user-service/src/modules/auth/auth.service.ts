@@ -8,6 +8,8 @@ import { ConfigService } from '@nestjs/config';
 import { JwtService } from '@nestjs/jwt';
 import { UserService } from '../user/user.service';
 import { User } from '../user/entities/user.entity';
+import { SessionType } from '../user/entities/user-session.entity';
+import { randomUUID } from 'crypto';
 import {
   validateInitData,
   TelegramInitDataError,
@@ -30,6 +32,8 @@ export interface JwtPayload {
   sub: string;
   /** Telegram numeric ID, denormalised so middleware avoids a DB hit. */
   tg: number;
+  /** Durable server-side session identifier used for immediate revocation. */
+  sid: string;
   /** Issued-at, seconds. */
   iat: number;
   /** Expires, seconds. */
@@ -117,10 +121,17 @@ export class AuthService {
    * Build and sign the JWT. Exposed separately so other auth flows (e.g. an
    * admin-impersonation flow added later) can reuse it.
    */
-  issueToken(user: User): AuthSession {
+  async issueToken(user: User): Promise<AuthSession> {
+    const session = await this.users.createSession({
+      userId: user.id,
+      type: SessionType.TELEGRAM,
+      token: randomUUID(),
+      expiresIn: this.tokenTtlSeconds * 1000,
+    });
     const payload: Omit<JwtPayload, 'iat' | 'exp'> = {
       sub: user.id,
       tg: user.telegramId ?? 0,
+      sid: session.id,
     };
     const secret = this.requireSecret();
     const accessToken = this.jwt.sign(payload, {
