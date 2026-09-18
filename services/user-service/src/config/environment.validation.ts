@@ -64,14 +64,38 @@ export function validateEnvironment(
       "ADMIN_STEP_UP_JWT_SECRET must be an independent 32+ character production secret",
     );
   }
+  if (isUnsafePrivilegedSecret(environment.ARBITRATOR_STEP_UP_JWT_SECRET)) {
+    failures.push(
+      "ARBITRATOR_STEP_UP_JWT_SECRET must be an independent 32+ character production secret",
+    );
+  }
+  if (
+    environment.ARBITRATOR_STEP_UP_JWT_SECRET ===
+    environment.ADMIN_STEP_UP_JWT_SECRET
+  ) {
+    failures.push("Admin and arbitrator step-up signing secrets must be distinct");
+  }
   if (!isHttpsBaseUrl(environment.ADMIN_STEP_UP_ISSUER?.trim() ?? "")) {
     failures.push("ADMIN_STEP_UP_ISSUER must be an explicit HTTPS URL");
+  }
+  if (!isHttpsBaseUrl(environment.ARBITRATOR_STEP_UP_ISSUER?.trim() ?? "")) {
+    failures.push("ARBITRATOR_STEP_UP_ISSUER must be an explicit HTTPS URL");
   }
   if (
     environment.ADMIN_STEP_UP_MAX_AGE_SECONDS !== undefined &&
     !isIntegerInRange(environment.ADMIN_STEP_UP_MAX_AGE_SECONDS, 60, 900)
   ) {
     failures.push("ADMIN_STEP_UP_MAX_AGE_SECONDS must be 60-900");
+  }
+  if (
+    environment.ARBITRATOR_STEP_UP_MAX_AGE_SECONDS !== undefined &&
+    !isIntegerInRange(
+      environment.ARBITRATOR_STEP_UP_MAX_AGE_SECONDS,
+      60,
+      900,
+    )
+  ) {
+    failures.push("ARBITRATOR_STEP_UP_MAX_AGE_SECONDS must be 60-900");
   }
   if (environment.TELEGRAM_TEST_INJECT_ENABLED === "true") {
     failures.push("TELEGRAM_TEST_INJECT_ENABLED must be false in production");

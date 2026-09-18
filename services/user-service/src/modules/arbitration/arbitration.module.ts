@@ -1,4 +1,6 @@
 import { Module, forwardRef } from "@nestjs/common";
+import { APP_GUARD } from "@nestjs/core";
+import { JwtModule } from "@nestjs/jwt";
 import { TypeOrmModule } from "@nestjs/typeorm";
 
 // Entities
@@ -46,6 +48,7 @@ import { OpsModule } from "../ops/ops.module";
 import { Deal } from "../deal/entities/deal.entity";
 import { User } from "../user/entities/user.entity";
 import { RolesGuard } from "../admin/guards/roles.guard";
+import { ArbitratorAccessGuard } from "./arbitrator-access.guard";
 
 @Module({
   imports: [
@@ -70,6 +73,7 @@ import { RolesGuard } from "../admin/guards/roles.guard";
     ReviewModule,
     EscrowModule,
     OpsModule,
+    JwtModule.register({}),
   ],
   controllers: [
     ArbitrationController,
@@ -97,6 +101,8 @@ import { RolesGuard } from "../admin/guards/roles.guard";
       useExisting: DisabledEvidenceMalwareScanner,
     },
     RolesGuard,
+    ArbitratorAccessGuard,
+    { provide: APP_GUARD, useClass: ArbitratorAccessGuard },
   ],
   exports: [
     ArbitrationService,
