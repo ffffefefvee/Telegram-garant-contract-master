@@ -13,6 +13,7 @@ function provider(overrides: Record<string, unknown> = {}) {
     getNetwork: jest.fn().mockResolvedValue({ chainId: 80002n }),
     getBlockNumber: jest.fn().mockResolvedValue(1000),
     getBlock: jest.fn().mockResolvedValue({ hash: "0x" + "a".repeat(64) }),
+    getLogs: jest.fn().mockResolvedValue([]),
     getBalance: jest.fn().mockResolvedValue(200n),
     ...overrides,
   };
@@ -90,6 +91,31 @@ describe("PolygonFinalityService", () => {
     );
   });
 
+  it("requires independent RPCs to return identical finalized logs", async () => {
+    const first = polygonLog();
+    const matching = polygonLog();
+    const agreed = harness([
+      provider({ getLogs: jest.fn().mockResolvedValue([first]) }),
+      provider({ getLogs: jest.fn().mockResolvedValue([matching]) }),
+    ]);
+    await expect(
+      agreed.service.agreedLogs({ fromBlock: 10, toBlock: 10 }),
+    ).resolves.toEqual([first]);
+
+    const disagreement = harness([
+      provider({ getLogs: jest.fn().mockResolvedValue([first]) }),
+      provider({
+        getLogs: jest.fn().mockResolvedValue([polygonLog({ data: "0x01" })]),
+      }),
+    ]);
+    await expect(
+      disagreement.service.agreedLogs({ fromBlock: 10, toBlock: 10 }),
+    ).rejects.toBeInstanceOf(PolygonSourceDisagreementError);
+    expect(disagreement.breakers.tripChainIncident).toHaveBeenCalledWith(
+      expect.objectContaining({ reasonCode: "POLYGON_FINALIZED_LOGS" }),
+    );
+  });
+
   it("canonicalizes addresses and produces order-independent evidence hashes", () => {
     const observation = normalizeObservation({
       blockNumber: 10,
@@ -110,3 +136,18 @@ describe("PolygonFinalityService", () => {
     expect(evidenceHash({ b: 2, a: 1 })).toBe(evidenceHash({ a: 1, b: 2 }));
   });
 });
+
+function polygonLog(overrides: Partial<ethers.Log> = {}): ethers.Log {
+  return {
+    address: "0x0000000000000000000000000000000000000011",
+    blockHash: "0x" + "a".repeat(64),
+    blockNumber: 10,
+    data: "0x",
+    index: 0,
+    removed: false,
+    topics: ["0x" + "b".repeat(64)],
+    transactionHash: "0x" + "c".repeat(64),
+    transactionIndex: 0,
+    ...overrides,
+  } as unknown as ethers.Log;
+}

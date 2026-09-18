@@ -160,6 +160,48 @@ export class PolygonFinalityService {
     };
   }
 
+  /** Require every configured RPC operator to agree on a historical block hash. */
+  async agreedBlockHash(blockNumber: number): Promise<string> {
+    this.assertConfigured();
+    const blocks = await Promise.all(
+      this.providers.map((provider) => provider.getBlock(blockNumber)),
+    );
+    if (blocks.some((block) => !block?.hash)) {
+      return this.disagreement(
+        "MISSING_BLOCK_HASH",
+        blocks.map((block) => block?.hash ?? null),
+      );
+    }
+    const hashes = blocks.map((block) => block!.hash!.toLowerCase());
+    if (new Set(hashes).size !== 1) {
+      return this.disagreement("BLOCK_HASH", { blockNumber, hashes });
+    }
+    return hashes[0];
+  }
+
+  /**
+   * Read finalized logs from every independent source and require byte-for-byte
+   * canonical agreement before any event is persisted or applied.
+   */
+  async agreedLogs(filter: ethers.Filter): Promise<ethers.Log[]> {
+    this.assertConfigured();
+    const results = await Promise.all(
+      this.providers.map((provider) => provider.getLogs(filter)),
+    );
+    const canonical = results.map((logs) =>
+      canonicalJson(logs.map(normalizeLog).sort(compareCanonicalLogs)),
+    );
+    if (new Set(canonical).size !== 1) {
+      return this.disagreement(
+        "FINALIZED_LOGS",
+        canonical.map((value) => createHash("sha256").update(value).digest("hex")),
+      );
+    }
+    return [...results[0]].sort(
+      (left, right) => left.blockNumber - right.blockNumber || left.index - right.index,
+    );
+  }
+
   async relayerBalance(anchor: PolygonFinalizedAnchor): Promise<bigint> {
     const address = this.config.web3SignerAddress;
     if (!ethers.isAddress(address)) throw new Error("POLYGON_RELAYER_ADDRESS_UNAVAILABLE");
@@ -221,4 +263,34 @@ function canonicalJson(value: unknown): string {
     .sort(([left], [right]) => left.localeCompare(right))
     .map(([key, entry]) => `${JSON.stringify(key)}:${canonicalJson(entry)}`)
     .join(",")}}`;
+}
+
+interface CanonicalPolygonLog {
+  address: string;
+  blockHash: string | null;
+  blockNumber: number;
+  data: string;
+  index: number;
+  removed: boolean;
+  topics: string[];
+  transactionHash: string;
+  transactionIndex: number;
+}
+
+function normalizeLog(log: ethers.Log): CanonicalPolygonLog {
+  return {
+    address: log.address.toLowerCase(),
+    blockHash: log.blockHash?.toLowerCase() ?? null,
+    blockNumber: log.blockNumber,
+    data: log.data.toLowerCase(),
+    index: log.index,
+    removed: log.removed,
+    topics: [...log.topics].map((topic) => topic.toLowerCase()),
+    transactionHash: log.transactionHash.toLowerCase(),
+    transactionIndex: log.transactionIndex,
+  };
+}
+
+function compareCanonicalLogs(left: CanonicalPolygonLog, right: CanonicalPolygonLog): number {
+  return left.blockNumber - right.blockNumber || left.index - right.index;
 }

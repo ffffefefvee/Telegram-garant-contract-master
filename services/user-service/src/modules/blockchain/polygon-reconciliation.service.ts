@@ -156,9 +156,12 @@ export class PolygonReconciliationService {
 export function expectedLiabilities(
   status: number,
   totalFundingAtomic: string,
-  _observedBalance: string,
+  observedBalance: string,
 ): string {
-  if (status === 1) return "0";
+  // A transfer and notifyFunded are two separate transactions. While the
+  // escrow is still AWAITING_FUNDING, an exact non-zero balance is already a
+  // buyer liability and must not trip the breaker during durable recovery.
+  if (status === 1) return observedBalance === "0" ? "0" : totalFundingAtomic;
   if (status === 2 || status === 5) return totalFundingAtomic;
   if ([3, 4, 6, 7, 8].includes(status)) return "0";
   throw new Error("POLYGON_ESCROW_STATUS_INVALID");

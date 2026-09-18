@@ -139,6 +139,56 @@ describe("Phase 5 Polygon lifecycle hardening", () => {
     ).to.be.revertedWithCustomError(Factory, "InvalidTokenContract");
   });
 
+  it("rejects non-contract and inconsistently wired immutable dependencies", async () => {
+    const {
+      deployer,
+      admin,
+      relay,
+      pauser,
+      recovery,
+      token,
+      treasury,
+      registry,
+      implementation,
+    } = await deployFixture();
+    const Factory = await ethers.getContractFactory("EscrowFactory");
+    const common = [
+      await token.getAddress(),
+      await treasury.getAddress(),
+      await registry.getAddress(),
+      relay.address,
+      admin.address,
+      pauser.address,
+      recovery.address,
+      1n,
+      { threshold: 1n, flatFee: 0n, percentFeeBps: 0n },
+      { fineBps: 0n, fineMin: 0n, fineMax: 0n },
+    ] as const;
+    await expect(
+      Factory.connect(deployer).deploy(deployer.address, ...common),
+    ).to.be.revertedWithCustomError(Factory, "InvalidDependencyContract");
+
+    const Token = await ethers.getContractFactory("MockERC20");
+    const otherToken = await Token.deploy("Other USD", "OUSD", 6);
+    const Treasury = await ethers.getContractFactory("PlatformTreasury");
+    const otherTreasury = await Treasury.deploy(await otherToken.getAddress(), admin.address);
+    await expect(
+      Factory.connect(deployer).deploy(
+        await implementation.getAddress(),
+        await token.getAddress(),
+        await otherTreasury.getAddress(),
+        await registry.getAddress(),
+        relay.address,
+        admin.address,
+        pauser.address,
+        recovery.address,
+        1n,
+        { threshold: 1n, flatFee: 0n, percentFeeBps: 0n },
+        { fineBps: 0n, fineMin: 0n, fineMax: 0n },
+      ),
+    ).to.be.revertedWithCustomError(Factory, "DependencyTokenMismatch");
+  });
+
   it("separates pause, recovery, relay and governance authority", async () => {
     const { admin, relay, pauser, recovery, factory } = await deployFixture();
     expect(await factory.hasRole(await factory.PAUSER_ROLE(), pauser.address)).to.equal(true);

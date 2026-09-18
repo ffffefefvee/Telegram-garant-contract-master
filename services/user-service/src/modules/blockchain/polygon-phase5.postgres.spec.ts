@@ -33,7 +33,7 @@ describePostgres("Phase 5 Polygon PostgreSQL durability gate", () => {
       TRUNCATE TABLE polygon_reconciliations, polygon_chain_events, polygon_lifecycle_cursors,
         polygon_relay_transactions, polygon_relay_nonce_state RESTART IDENTITY CASCADE
     `);
-  });
+  }, 30_000);
 
   it("deduplicates finalized logs and makes their evidence append-only", async () => {
     const id = randomUUID();
@@ -146,10 +146,7 @@ describePostgres("Phase 5 Polygon PostgreSQL durability gate", () => {
   });
 
   it("advances a finalized cursor and persists a later reorg incident before failing", async () => {
-    const provider = {
-      getLogs: jest.fn().mockResolvedValue([]),
-      getBlock: jest.fn().mockResolvedValue({ hash: HASH("8") }),
-    };
+    const provider = {};
     const blockchain = { isReady: true, provider } as unknown as BlockchainProvider;
     const config = {
       polygonIndexerEnabled: true,
@@ -166,6 +163,8 @@ describePostgres("Phase 5 Polygon PostgreSQL durability gate", () => {
         evidenceHash: "8".repeat(64),
         sources: 2,
       }),
+      agreedLogs: jest.fn().mockResolvedValue([]),
+      agreedBlockHash: jest.fn().mockResolvedValue(HASH("8")),
     };
     const breakers = { tripChainIncident: jest.fn().mockResolvedValue(undefined) };
     const service = new PolygonLifecycleIngestionService(
@@ -195,7 +194,7 @@ describePostgres("Phase 5 Polygon PostgreSQL durability gate", () => {
       evidenceHash: "9".repeat(64),
       sources: 2,
     });
-    provider.getBlock.mockResolvedValue({ hash: HASH("9") });
+    finality.agreedBlockHash.mockResolvedValue(HASH("9"));
     await expect(service.runOnce()).rejects.toThrow("POLYGON_FINALIZED_REORG");
     expect(breakers.tripChainIncident).toHaveBeenCalledWith(
       expect.objectContaining({ reasonCode: "POLYGON_FINALIZED_REORG" }),

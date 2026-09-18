@@ -251,7 +251,11 @@ export class PolygonRelayNonceService {
       .set({ status: PolygonRelayTxStatus.REPLACING, failureCode: null })
       .where("id = :id", { id: record.id })
       .andWhere("status = :expectedStatus", { expectedStatus: record.status })
-      .andWhere("updated_at = :expectedUpdatedAt", { expectedUpdatedAt: record.updatedAt })
+      .andWhere("updated_at < :claimCutoff", {
+        claimCutoff: new Date(
+          Date.now() - this.config.polygonRelayStuckSeconds * 1000,
+        ),
+      })
       .execute();
     if ((claimed.affected ?? 0) !== 1) return false;
     const fees = await this.blockchain.provider.getFeeData();

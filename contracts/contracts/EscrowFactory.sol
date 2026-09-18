@@ -83,6 +83,9 @@ contract EscrowFactory is AccessControl {
     error SettlementIsNotPaused();
     error InvalidTokenContract();
     error InvalidTokenDecimals();
+    error InvalidDependencyContract();
+    error DependencyTokenMismatch();
+    error RoleSeparationRequired();
     error UnknownEscrow();
 
     /// @notice Верхняя граница процентной комиссии (10%): защита от опечатки/злоупотребления админом.
@@ -113,13 +116,29 @@ contract EscrowFactory is AccessControl {
         ) revert ZeroAddress();
 
         if (address(token_).code.length == 0) revert InvalidTokenContract();
+        if (
+            implementation_.code.length == 0 ||
+            address(treasury_).code.length == 0 ||
+            address(registry_).code.length == 0
+        ) revert InvalidDependencyContract();
         try IERC20Metadata(address(token_)).decimals() returns (uint8 tokenDecimals) {
             if (tokenDecimals != 6) revert InvalidTokenDecimals();
         } catch {
             revert InvalidTokenContract();
         }
+        if (
+            address(treasury_.token()) != address(token_) ||
+            address(registry_.token()) != address(token_) ||
+            address(registry_.treasury()) != address(treasury_)
+        ) revert DependencyTokenMismatch();
         if (tariff_.percentFeeBps > MAX_PERCENT_FEE_BPS) revert TariffTooHigh();
-        if (block.chainid != 31337 && block.chainid != 1337 && admin.code.length == 0) revert GovernanceRequired();
+        if (block.chainid != 31337 && block.chainid != 1337) {
+            if (admin.code.length == 0) revert GovernanceRequired();
+            if (
+                relay_ == admin || relay_ == pauser || relay_ == recovery ||
+                admin == pauser || admin == recovery || pauser == recovery
+            ) revert RoleSeparationRequired();
+        }
 
         implementation = implementation_;
         token = token_;

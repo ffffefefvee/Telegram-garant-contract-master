@@ -148,11 +148,10 @@ export class PolygonLifecycleIngestionService {
         if ((result.identifiers?.length ?? 0) > 0) report.inserted += 1;
         else report.duplicate += 1;
       }
-      const endBlock = await this.blockchain.provider.getBlock(toBlock);
-      if (!endBlock?.hash) throw new Error("POLYGON_CURSOR_BLOCK_UNAVAILABLE");
+      const endBlockHash = await this.finality.agreedBlockHash(toBlock);
       cursor.nextBlock = String(toBlock + 1);
       cursor.lastFinalizedBlock = String(toBlock);
-      cursor.lastFinalizedHash = endBlock.hash.toLowerCase();
+      cursor.lastFinalizedHash = endBlockHash;
       cursor.revision += 1;
       await manager.getRepository(PolygonLifecycleCursor).save(cursor);
       this.logger.log(
@@ -214,8 +213,10 @@ export class PolygonLifecycleIngestionService {
     cursor: PolygonLifecycleCursor,
   ): Promise<boolean> {
     if (cursor.lastFinalizedBlock === null || cursor.lastFinalizedHash === null) return true;
-    const block = await this.blockchain.provider.getBlock(Number(cursor.lastFinalizedBlock));
-    if (block?.hash?.toLowerCase() === cursor.lastFinalizedHash.toLowerCase()) return true;
+    const actualBlockHash = await this.finality.agreedBlockHash(
+      Number(cursor.lastFinalizedBlock),
+    );
+    if (actualBlockHash === cursor.lastFinalizedHash.toLowerCase()) return true;
 
     const detectedAt = new Date();
     await manager
@@ -231,7 +232,7 @@ export class PolygonLifecycleIngestionService {
       chainId: cursor.chainId,
       blockNumber: cursor.lastFinalizedBlock,
       expected: cursor.lastFinalizedHash,
-      actual: block?.hash ?? null,
+      actual: actualBlockHash,
     });
     await this.breakers.tripChainIncident(
       {
@@ -270,9 +271,7 @@ export class PolygonLifecycleIngestionService {
     for (let offset = 0; offset < addresses.length; offset += ADDRESS_CHUNK) {
       const chunk = addresses.slice(offset, offset + ADDRESS_CHUNK);
       if (chunk.length === 0) continue;
-      output.push(
-        ...(await this.blockchain.provider.getLogs({ address: chunk, fromBlock, toBlock })),
-      );
+      output.push(...(await this.finality.agreedLogs({ address: chunk, fromBlock, toBlock })));
     }
     return output.sort(
       (left, right) => left.blockNumber - right.blockNumber || left.index - right.index,
