@@ -2,7 +2,8 @@
 
 Date: 2026-09-18
 
-Status: local candidate; hosted and operational evidence pending
+Status: technical candidate; local and hosted implementation gates green;
+operational and independent-review evidence pending
 
 ## Implemented controls
 
@@ -45,11 +46,17 @@ Status: local candidate; hosted and operational evidence pending
   and low-s signatures. This used a Hardhat loopback chain and impersonated
   relay, not Amoy or Web3Signer.
 
+## Hosted evidence
+
+- The complete repository CI matrix passed on the sequential Phase 5 draft PR
+  at commit `1a6ac064a92eb5c8def05d94fb44c2cd36e0736e` in GitHub Actions run
+  [35323151830](https://github.com/ffffefefvee/Telegram-garant-contract-master/actions/runs/35323151830).
+- All seven jobs passed: contracts security/coverage/tests, user-service,
+  mini-app, TON compatibility, TON authoritative Acton assurance, independent
+  TON build-hash evidence and gitleaks.
+
 ## Remaining exit evidence
 
-- Green contract tests, coverage policy, Slither and the complete repository CI
-  matrix, including the clean-schema Phase 5 PostgreSQL gate, on the sequential
-  Phase 5 PR.
 - A fresh deterministic Amoy deployment using distinct privileged identities.
 - Web3Signer acceptance for create/fund/release plus interrupted-transfer
   recovery, with transaction, nonce, fee and balance evidence.
