@@ -112,6 +112,69 @@ export function validateEnvironment(
       "RECONCILIATION_ENABLED must be true before money egress can be enabled",
     );
   }
+  if (environment.MONEY_EGRESS_ENABLED === "true") {
+    if (!["137", "80002"].includes(environment.BLOCKCHAIN_CHAIN_ID ?? "")) {
+      failures.push(
+        "BLOCKCHAIN_CHAIN_ID must be Polygon mainnet (137) or Amoy (80002) before money egress can be enabled",
+      );
+    }
+    for (const key of [
+      "ESCROW_FACTORY_ADDRESS",
+      "PLATFORM_TREASURY_ADDRESS",
+      "ARBITRATOR_REGISTRY_ADDRESS",
+      "USDT_CONTRACT_ADDRESS",
+      "WEB3SIGNER_ADDRESS",
+    ]) {
+      if (!isNonzeroEvmAddress(environment[key])) {
+        failures.push(`${key} must be an explicit nonzero EVM address before money egress can be enabled`);
+      }
+    }
+    if (environment.RELAY_SIGNER !== "web3signer") {
+      failures.push(
+        "RELAY_SIGNER must be web3signer before production money egress can be enabled",
+      );
+    }
+    if (!isHttpBaseUrl(environment.WEB3SIGNER_RPC_URL)) {
+      failures.push(
+        "WEB3SIGNER_RPC_URL must be an explicit HTTP(S) endpoint without embedded credentials",
+      );
+    }
+    if (environment.POLYGON_INDEXER_ENABLED !== "true") {
+      failures.push(
+        "POLYGON_INDEXER_ENABLED must be true before production money egress can be enabled",
+      );
+    }
+    if (environment.POLYGON_RECONCILIATION_REQUIRED !== "true") {
+      failures.push(
+        "POLYGON_RECONCILIATION_REQUIRED must be true before production money egress can be enabled",
+      );
+    }
+    if (!hasIndependentPolygonRpcSources(environment)) {
+      failures.push(
+        "BLOCKCHAIN_RPC_URL and BLOCKCHAIN_RPC_URLS must provide at least two independent HTTPS Polygon RPC hosts",
+      );
+    }
+    if (
+      !isIntegerInRange(
+        environment.POLYGON_FINALITY_CONFIRMATIONS ?? "",
+        64,
+        10_000,
+      )
+    ) {
+      failures.push(
+        "POLYGON_FINALITY_CONFIRMATIONS must be 64-10000 before production money egress can be enabled",
+      );
+    }
+    if (
+      !/^[1-9]\d*$/.test(
+        environment.POLYGON_RELAYER_MINIMUM_BALANCE_WEI ?? "",
+      )
+    ) {
+      failures.push(
+        "POLYGON_RELAYER_MINIMUM_BALANCE_WEI must be a positive integer before production money egress can be enabled",
+      );
+    }
+  }
   if (
     environment.TON_NATIVE_MANUAL_REVIEW_CHECK_INTERVAL_MS !== undefined &&
     !isIntegerInRange(
@@ -195,4 +258,43 @@ function isIntegerInRange(value: string, minimum: number, maximum: number) {
   if (!/^\d+$/.test(value)) return false;
   const parsed = Number(value);
   return Number.isSafeInteger(parsed) && parsed >= minimum && parsed <= maximum;
+}
+
+function isHttpBaseUrl(value: string | undefined): boolean {
+  if (!value) return false;
+  try {
+    const url = new URL(value.trim());
+    return (
+      (url.protocol === "http:" || url.protocol === "https:") &&
+      Boolean(url.hostname) &&
+      !url.username &&
+      !url.password
+    );
+  } catch {
+    return false;
+  }
+}
+
+function hasIndependentPolygonRpcSources(
+  environment: Record<string, string | undefined>,
+): boolean {
+  const values = [
+    environment.BLOCKCHAIN_RPC_URL ?? "",
+    ...(environment.BLOCKCHAIN_RPC_URLS ?? "").split(","),
+  ];
+  const hosts = new Set<string>();
+  for (const value of values) {
+    const trimmed = value.trim();
+    if (!trimmed || !isHttpsBaseUrl(trimmed)) continue;
+    hosts.add(new URL(trimmed).hostname.toLowerCase());
+  }
+  return hosts.size >= 2;
+}
+
+function isNonzeroEvmAddress(value: string | undefined): boolean {
+  return Boolean(
+    value &&
+      /^0x[0-9a-fA-F]{40}$/.test(value) &&
+      !/^0x0{40}$/i.test(value),
+  );
 }

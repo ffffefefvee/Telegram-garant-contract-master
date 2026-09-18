@@ -105,7 +105,7 @@ describePostgres("Phase 3 Jetton PostgreSQL exit gate", () => {
 
   beforeEach(async () => {
     await resetDatabase(dataSource);
-  });
+  }, 30_000);
 
   it("versions immutable preparations and keeps exactly one active watch", async () => {
     const seeded = await seedDeal(dataSource);

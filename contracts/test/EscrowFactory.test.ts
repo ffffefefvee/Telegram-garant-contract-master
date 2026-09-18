@@ -69,6 +69,8 @@ describe("EscrowFactory + EscrowImplementation", () => {
       await registry.getAddress(),
       relay.address,
       admin.address,
+      admin.address,
+      admin.address,
       MIN_DEAL,
       { threshold: THRESHOLD, flatFee: FIFTY_RUB_FEE, percentFeeBps: PERCENT_BPS },
       { fineBps: FINE_BPS, fineMin: FINE_MIN, fineMax: FINE_MAX },

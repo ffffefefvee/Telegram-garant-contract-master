@@ -33,7 +33,11 @@ async function main() {
   const isLocal = networkName === "hardhat" || networkName === "localhost";
   const relay = process.env.RELAY_ADDRESS || deployer.address;
   const admin = process.env.ADMIN_ADDRESS || (isLocal ? deployer.address : undefined);
+  const pauser = process.env.PAUSER_ADDRESS || (isLocal ? deployer.address : undefined);
+  const recovery = process.env.RECOVERY_ADDRESS || (isLocal ? deployer.address : undefined);
   if (!admin) throw new Error("ADMIN_ADDRESS is required for non-local deployments");
+  if (!pauser) throw new Error("PAUSER_ADDRESS is required for non-local deployments");
+  if (!recovery) throw new Error("RECOVERY_ADDRESS is required for non-local deployments");
   if (!isLocal) {
     if (admin.toLowerCase() === deployer.address.toLowerCase()) {
       throw new Error("Production admin must differ from the deployer EOA");
@@ -41,9 +45,15 @@ async function main() {
     if ((await ethers.provider.getCode(admin)) === "0x") {
       throw new Error("Production ADMIN_ADDRESS must be a deployed governance contract");
     }
+    const privileged = [admin, relay, pauser, recovery].map((value) => value.toLowerCase());
+    if (new Set(privileged).size !== privileged.length) {
+      throw new Error("ADMIN_ADDRESS, RELAY_ADDRESS, PAUSER_ADDRESS and RECOVERY_ADDRESS must be distinct");
+    }
   }
   console.log(`  relay = ${relay}`);
   console.log(`  admin = ${admin}`);
+  console.log(`  pauser = ${pauser}`);
+  console.log(`  recovery = ${recovery}`);
 
   // 1. Token (USDT or MockERC20 for local/test)
   let tokenAddress = USDT_ADDRESSES[networkName];
@@ -98,6 +108,8 @@ async function main() {
     registryAddress,
     relay,
     admin,
+    pauser,
+    recovery,
     MIN_DEAL,
     TARIFF,
     FINE,
@@ -133,6 +145,8 @@ async function main() {
     deployer: deployer.address,
     relay,
     admin,
+    pauser,
+    recovery,
     timestamp: new Date().toISOString(),
     contracts: {
       token: tokenAddress,

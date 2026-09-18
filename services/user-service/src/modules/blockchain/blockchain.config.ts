@@ -14,11 +14,20 @@ export class BlockchainConfig {
 
   readonly enabled: boolean;
   readonly rpcUrl: string;
+  readonly rpcUrls: string[];
   readonly privateKey: string;
   readonly signerType: "local" | "web3signer" | null;
   readonly web3SignerRpcUrl: string;
   readonly web3SignerAddress: string;
   readonly chainId: number | null;
+  readonly polygonIndexerEnabled: boolean;
+  readonly polygonFinalityConfirmations: number;
+  readonly polygonStartBlock: number;
+  readonly polygonLogBatchSize: number;
+  readonly polygonRelayerMinimumBalanceWei: bigint;
+  readonly polygonRelayTxTimeoutMs: number;
+  readonly polygonRelayStuckSeconds: number;
+  readonly polygonRelayMaxAttempts: number;
 
   readonly factoryAddress: string;
   readonly treasuryAddress: string;
@@ -27,6 +36,10 @@ export class BlockchainConfig {
 
   constructor(config: ConfigService) {
     this.rpcUrl = config.get<string>("BLOCKCHAIN_RPC_URL", "");
+    this.rpcUrls = this.readRpcUrls(
+      this.rpcUrl,
+      config.get<string>("BLOCKCHAIN_RPC_URLS", ""),
+    );
     this.privateKey = config.get<string>("BLOCKCHAIN_PRIVATE_KEY", "");
     const signerType = config.get<string>("RELAY_SIGNER", "local");
     this.signerType =
@@ -46,15 +59,60 @@ export class BlockchainConfig {
       Number.isSafeInteger(parsedChainId) && parsedChainId > 0
         ? parsedChainId
         : null;
+    this.polygonIndexerEnabled =
+      config.get<string | boolean>("POLYGON_INDEXER_ENABLED", false) === true ||
+      config.get<string | boolean>("POLYGON_INDEXER_ENABLED", false) === "true";
+    this.polygonFinalityConfirmations = this.readInteger(
+      config.get<string>("POLYGON_FINALITY_CONFIRMATIONS", "128"),
+      1,
+      10_000,
+      128,
+    );
+    this.polygonStartBlock = this.readInteger(
+      config.get<string>("POLYGON_START_BLOCK", "0"),
+      0,
+      Number.MAX_SAFE_INTEGER,
+      0,
+    );
+    this.polygonLogBatchSize = this.readInteger(
+      config.get<string>("POLYGON_LOG_BATCH_SIZE", "1000"),
+      1,
+      10_000,
+      1000,
+    );
+    const minimumBalance = config.get<string>(
+      "POLYGON_RELAYER_MINIMUM_BALANCE_WEI",
+      "0",
+    );
+    this.polygonRelayerMinimumBalanceWei = /^\d+$/.test(minimumBalance)
+      ? BigInt(minimumBalance)
+      : 0n;
+    this.polygonRelayTxTimeoutMs = this.readInteger(
+      config.get<string>("POLYGON_RELAY_TX_TIMEOUT_MS", "120000"),
+      10_000,
+      900_000,
+      120_000,
+    );
+    this.polygonRelayStuckSeconds = this.readInteger(
+      config.get<string>("POLYGON_RELAY_STUCK_SECONDS", "180"),
+      30,
+      86_400,
+      180,
+    );
+    this.polygonRelayMaxAttempts = this.readInteger(
+      config.get<string>("POLYGON_RELAY_MAX_ATTEMPTS", "5"),
+      1,
+      20,
+      5,
+    );
 
     this.enabled = Boolean(
       this.rpcUrl &&
       this.hasSignerConfiguration() &&
       this.chainId !== null &&
-      this.factoryAddress &&
-      this.treasuryAddress &&
-      this.registryAddress &&
-      this.tokenAddress,
+      [this.factoryAddress, this.treasuryAddress, this.registryAddress, this.tokenAddress].every(
+        (address) => ethers.isAddress(address) && address !== ethers.ZeroAddress,
+      ),
     );
 
     if (!this.enabled) {
@@ -85,5 +143,25 @@ export class BlockchainConfig {
     } catch {
       return false;
     }
+  }
+
+  private readRpcUrls(primary: string, configured: string): string[] {
+    const values = [primary, ...configured.split(",")]
+      .map((value) => value.trim())
+      .filter((value) => this.isHttpUrl(value));
+    return [...new Set(values)];
+  }
+
+  private readInteger(
+    value: string,
+    minimum: number,
+    maximum: number,
+    fallback: number,
+  ): number {
+    if (!/^\d+$/.test(value)) return fallback;
+    const parsed = Number(value);
+    return Number.isSafeInteger(parsed) && parsed >= minimum && parsed <= maximum
+      ? parsed
+      : fallback;
   }
 }

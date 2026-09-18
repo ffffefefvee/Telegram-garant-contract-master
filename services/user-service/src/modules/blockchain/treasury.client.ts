@@ -60,11 +60,11 @@ export class TreasuryClient {
    */
   async reconcile(): Promise<string | null> {
     if (!this.provider.isReady) return null;
-    return this.txQueue.submit('treasury.reconcile', async () => {
-      const tx = await this.write().reconcile();
-      const receipt = await tx.wait();
-      this.logger.log(`Treasury reconciled, tx=${receipt.hash}`);
-      return receipt.hash as string;
-    });
+    const hash = await this.txQueue.submit(
+      `treasury.reconcile ${Date.now()}`,
+      async (overrides) => this.write().reconcile(overrides ?? {}),
+    );
+    this.logger.log(`Treasury reconciled, tx=${hash}`);
+    return hash;
   }
 }

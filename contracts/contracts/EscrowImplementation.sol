@@ -12,6 +12,7 @@ import {ArbitratorRegistry} from "./ArbitratorRegistry.sol";
 /// @dev Минимальный интерфейс фабрики (полный import создал бы циклическую зависимость).
 interface IEscrowFactoryRelay {
     function relay() external view returns (address);
+    function settlementPaused() external view returns (bool);
 }
 
 /// @title EscrowImplementation
@@ -91,6 +92,7 @@ contract EscrowImplementation is Initializable, ReentrancyGuard {
         uint256 fineFromReserve,
         uint256 feeToTreasury
     );
+    event EmergencyRefunded(address indexed buyer, uint256 amount);
 
     error NotBuyer();
     error NotSeller();
@@ -106,6 +108,8 @@ contract EscrowImplementation is Initializable, ReentrancyGuard {
     error FundingDeadlineNotPassed();
     error NothingToRescue();
     error InvalidNewDeadline();
+    error SettlementIsPaused();
+    error NotFactory();
 
     modifier onlyBuyer() {
         if (msg.sender != buyer) revert NotBuyer();
@@ -129,6 +133,11 @@ contract EscrowImplementation is Initializable, ReentrancyGuard {
 
     modifier inStatus(Status expected) {
         if (status != expected) revert WrongStatus();
+        _;
+    }
+
+    modifier whenSettlementActive() {
+        if (IEscrowFactoryRelay(factory).settlementPaused()) revert SettlementIsPaused();
         _;
     }
 
@@ -183,7 +192,7 @@ contract EscrowImplementation is Initializable, ReentrancyGuard {
 
     /// @notice Relay вызывает после получения USDT на адрес контракта.
     /// @dev Сверяем on-chain balance ≥ amount + buyerFee. Если ниже — revert.
-    function notifyFunded() external onlyRelay inStatus(Status.AWAITING_FUNDING) {
+    function notifyFunded() external onlyRelay inStatus(Status.AWAITING_FUNDING) whenSettlementActive {
         if (block.timestamp > fundingDeadline) revert FundingDeadlinePassed();
         uint256 expected = amount + buyerFee;
         uint256 got = token.balanceOf(address(this));
@@ -203,6 +212,7 @@ contract EscrowImplementation is Initializable, ReentrancyGuard {
         external
         onlyRelay
         inStatus(Status.AWAITING_FUNDING)
+        whenSettlementActive
     {
         if (newDeadline <= fundingDeadline || newDeadline <= block.timestamp) {
             revert InvalidNewDeadline();
@@ -254,7 +264,7 @@ contract EscrowImplementation is Initializable, ReentrancyGuard {
     }
 
     /// @notice Покупатель подтверждает получение → продавцу payout, в treasury комиссия.
-    function release() external onlyBuyer inStatus(Status.FUNDED) nonReentrant {
+    function release() external onlyBuyer inStatus(Status.FUNDED) whenSettlementActive nonReentrant {
         uint256 sellerPayout = amount - sellerFee;
         uint256 totalFee = buyerFee + sellerFee;
         status = Status.RELEASED;
@@ -269,7 +279,7 @@ contract EscrowImplementation is Initializable, ReentrancyGuard {
     }
 
     /// @notice Продавец сам отказывается → полный возврат покупателю (без комиссии).
-    function refund() external onlySeller inStatus(Status.FUNDED) nonReentrant {
+    function refund() external onlySeller inStatus(Status.FUNDED) whenSettlementActive nonReentrant {
         uint256 refundAmount = amount + buyerFee;
         status = Status.REFUNDED;
         token.safeTransfer(buyer, refundAmount);
@@ -284,6 +294,7 @@ contract EscrowImplementation is Initializable, ReentrancyGuard {
 
     /// @notice Relay назначает арбитра (после off-chain CoI/load-balancing проверок).
     function assignArbitrator(address arbitrator) external onlyRelay inStatus(Status.DISPUTED) {
+        if (IEscrowFactoryRelay(factory).settlementPaused()) revert SettlementIsPaused();
         if (assignedArbitrator != address(0)) revert AlreadyAssigned();
         if (!registry.isEligible(arbitrator)) revert ArbitratorNotEligible();
         assignedArbitrator = arbitrator;
@@ -307,6 +318,7 @@ contract EscrowImplementation is Initializable, ReentrancyGuard {
     function resolve(uint16 buyerSharePct, uint16 sellerSharePct)
         external
         inStatus(Status.DISPUTED)
+        whenSettlementActive
         nonReentrant
     {
         if (msg.sender != assignedArbitrator) revert NotAssignedArbitrator();
@@ -348,6 +360,23 @@ contract EscrowImplementation is Initializable, ReentrancyGuard {
             s.fineFromReserve,
             s.feeToTreasury
         );
+    }
+
+    /// @notice Dedicated paused-state recovery path; returns every escrowed token to the buyer.
+    /// @dev Callable only through the immutable factory after its RECOVERY_ROLE check.
+    function factoryEmergencyRefund() external nonReentrant {
+        if (msg.sender != factory) revert NotFactory();
+        if (!IEscrowFactoryRelay(factory).settlementPaused()) revert SettlementIsPaused();
+        Status s = status;
+        if (s != Status.FUNDED && s != Status.DISPUTED) revert WrongStatus();
+
+        if (s == Status.DISPUTED && assignedArbitrator != address(0)) {
+            registry.endDispute(assignedArbitrator);
+        }
+        status = Status.REFUNDED;
+        uint256 refundAmount = token.balanceOf(address(this));
+        token.safeTransfer(buyer, refundAmount);
+        emit EmergencyRefunded(buyer, refundAmount);
     }
 
     /// @notice Чистый расчёт распределения средств спора. Инвариант:
