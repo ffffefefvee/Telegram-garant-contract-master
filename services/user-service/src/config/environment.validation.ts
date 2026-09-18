@@ -39,6 +39,40 @@ export function validateEnvironment(
       "CORS_ORIGIN must contain one or more explicit https:// origins in production",
     );
   }
+  if (!hasOnlyHttpsOrigins(environment.ADMIN_ALLOWED_ORIGINS)) {
+    failures.push(
+      "ADMIN_ALLOWED_ORIGINS must contain one or more explicit https:// origins in production",
+    );
+  }
+  if (!hasOnlyHttpsOrigins(environment.ARBITRATOR_ALLOWED_ORIGINS)) {
+    failures.push(
+      "ARBITRATOR_ALLOWED_ORIGINS must contain one or more explicit https:// origins in production",
+    );
+  }
+  if (
+    originsOverlap(
+      environment.ADMIN_ALLOWED_ORIGINS,
+      environment.ARBITRATOR_ALLOWED_ORIGINS,
+    )
+  ) {
+    failures.push(
+      "ADMIN_ALLOWED_ORIGINS and ARBITRATOR_ALLOWED_ORIGINS must use separate origins",
+    );
+  }
+  if (isUnsafePrivilegedSecret(environment.ADMIN_STEP_UP_JWT_SECRET)) {
+    failures.push(
+      "ADMIN_STEP_UP_JWT_SECRET must be an independent 32+ character production secret",
+    );
+  }
+  if (!isHttpsBaseUrl(environment.ADMIN_STEP_UP_ISSUER?.trim() ?? "")) {
+    failures.push("ADMIN_STEP_UP_ISSUER must be an explicit HTTPS URL");
+  }
+  if (
+    environment.ADMIN_STEP_UP_MAX_AGE_SECONDS !== undefined &&
+    !isIntegerInRange(environment.ADMIN_STEP_UP_MAX_AGE_SECONDS, 60, 900)
+  ) {
+    failures.push("ADMIN_STEP_UP_MAX_AGE_SECONDS must be 60-900");
+  }
   if (environment.TELEGRAM_TEST_INJECT_ENABLED === "true") {
     failures.push("TELEGRAM_TEST_INJECT_ENABLED must be false in production");
   }
@@ -223,6 +257,10 @@ function isUnsafeSecret(value: string | undefined): boolean {
   );
 }
 
+function isUnsafePrivilegedSecret(value: string | undefined): boolean {
+  return isUnsafeSecret(value) || (value?.trim().length ?? 0) < 32;
+}
+
 function hasOnlyHttpsOrigins(value: string | undefined): boolean {
   if (!value || value.trim() === "" || value.trim() === "*") {
     return false;
@@ -232,6 +270,20 @@ function hasOnlyHttpsOrigins(value: string | undefined): boolean {
     .split(",")
     .map((origin) => origin.trim())
     .every((origin) => /^https:\/\/[^/\s]+(?:\/.*)?$/i.test(origin));
+}
+
+function originsOverlap(
+  first: string | undefined,
+  second: string | undefined,
+): boolean {
+  if (!first || !second) return false;
+  const firstSet = new Set(
+    first.split(",").map((origin) => origin.trim().toLowerCase()),
+  );
+  return second
+    .split(",")
+    .map((origin) => origin.trim().toLowerCase())
+    .some((origin) => firstSet.has(origin));
 }
 
 function isHttpsBaseUrl(value: string): boolean {

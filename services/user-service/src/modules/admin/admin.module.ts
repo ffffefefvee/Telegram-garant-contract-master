@@ -1,4 +1,6 @@
 import { Module, forwardRef } from "@nestjs/common";
+import { APP_GUARD } from "@nestjs/core";
+import { JwtModule } from "@nestjs/jwt";
 import { TypeOrmModule } from "@nestjs/typeorm";
 import { AdminProfile } from "./entities/admin-profile.entity";
 import { AdminLog } from "./entities/admin-log.entity";
@@ -25,6 +27,7 @@ import { ArbitrationModule } from "../arbitration/arbitration.module";
 import { OpsModule } from "../ops/ops.module";
 import { BlockchainModule } from "../blockchain/blockchain.module";
 import { RolesGuard } from "./guards/roles.guard";
+import { PrivilegedAccessGuard } from "./guards/privileged-access.guard";
 
 @Module({
   imports: [
@@ -43,6 +46,7 @@ import { RolesGuard } from "./guards/roles.guard";
     OpsModule,
     BlockchainModule,
     MonitoringModule,
+    JwtModule.register({}),
   ],
   controllers: [
     AdminController,
@@ -55,7 +59,13 @@ import { RolesGuard } from "./guards/roles.guard";
     AdminTreasuryController,
     AdminAuditController,
   ],
-  providers: [AdminService, AdminDashboardService, RolesGuard],
+  providers: [
+    AdminService,
+    AdminDashboardService,
+    RolesGuard,
+    PrivilegedAccessGuard,
+    { provide: APP_GUARD, useClass: PrivilegedAccessGuard },
+  ],
   exports: [AdminService, AdminDashboardService, RolesGuard],
 })
 export class AdminModule {}

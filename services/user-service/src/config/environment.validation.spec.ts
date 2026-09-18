@@ -14,6 +14,12 @@ function productionEnvironment(
     DB_SYNCHRONIZE: "false",
     TELEGRAM_TEST_INJECT_ENABLED: "false",
     CORS_ORIGIN: "https://app.example.com,https://admin.example.com",
+    ADMIN_ALLOWED_ORIGINS: "https://admin.example.com",
+    ARBITRATOR_ALLOWED_ORIGINS: "https://arbitrator.example.com",
+    ADMIN_STEP_UP_JWT_SECRET:
+      "independent-phase6-step-up-secret-0123456789",
+    ADMIN_STEP_UP_ISSUER: "https://identity.example.com",
+    ADMIN_STEP_UP_MAX_AGE_SECONDS: "300",
     ...overrides,
   };
 }
@@ -43,6 +49,21 @@ describe("validateEnvironment", () => {
     ["schema synchronization", { DB_SYNCHRONIZE: "true" }, "DB_SYNCHRONIZE"],
     ["wildcard CORS", { CORS_ORIGIN: "*" }, "CORS_ORIGIN"],
     ["HTTP CORS", { CORS_ORIGIN: "http://app.example.com" }, "CORS_ORIGIN"],
+    [
+      "shared privileged origin",
+      { ARBITRATOR_ALLOWED_ORIGINS: "https://admin.example.com" },
+      "separate origins",
+    ],
+    [
+      "short step-up secret",
+      { ADMIN_STEP_UP_JWT_SECRET: "short" },
+      "ADMIN_STEP_UP_JWT_SECRET",
+    ],
+    [
+      "insecure step-up issuer",
+      { ADMIN_STEP_UP_ISSUER: "http://identity.example.com" },
+      "ADMIN_STEP_UP_ISSUER",
+    ],
     [
       "test injection",
       { TELEGRAM_TEST_INJECT_ENABLED: "true" },
