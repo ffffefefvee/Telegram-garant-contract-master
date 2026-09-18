@@ -1,6 +1,6 @@
 # Phase 5 Polygon lifecycle report
 
-Date: 2026-09-01
+Date: 2026-09-18
 
 Status: local candidate; hosted and operational evidence pending
 
@@ -11,6 +11,8 @@ Status: local candidate; hosted and operational evidence pending
 - Chain-wide stop for new exposure and normal settlement egress.
 - Paused-state buyer recovery with exact full-balance conservation.
 - Two-source finalized block and escrow-state agreement.
+- Byte-for-byte independent-RPC agreement for finalized logs and cursor block
+  hashes before persistence.
 - Durable bounded event indexing/backfill with append-only evidence.
 - Finalized-reorg detection connected to the Polygon circuit breaker.
 - Append-only quote/identity/balance reconciliation and relayer POL floor.
@@ -23,27 +25,31 @@ Status: local candidate; hosted and operational evidence pending
 ## Local evidence
 
 - Solidity compile and Solhint: passed.
-- Contract suite: 122/122 tests passed (8 new Phase 5 adversarial cases).
+- Contract suite: 123/123 tests passed (9 Phase 5 hardening cases).
 - Local Amoy gas rehearsal: passed; 9,219,814 total gas and 13,829,721 with the
   50% deployment margin.
-- Backend build and strict changed-file ESLint: passed.
-- Full backend suite: 104 suites / 1,064 tests passed.
-- Three PostgreSQL-only suites are explicitly skipped locally: 23 tests total
-  (Phase 3: 11, Phase 4: 6, Phase 5: 6).
-- The Phase 5 hosted PostgreSQL gate covers immutable/deduplicated event
+- Backend build and full non-mutating ESLint: passed.
+- Production dependency audits for contracts and user-service: zero
+  vulnerabilities.
+- Full backend suite: 104 runnable suites / 1,071 tests passed; the 23
+  PostgreSQL-gated tests were intentionally skipped in this unit run.
+- Clean-schema PostgreSQL 15 regression gates: Phase 3 11/11, Phase 4 6/6,
+  and Phase 5 6/6 passed.
+- The Phase 5 PostgreSQL gate covers immutable/deduplicated event
   evidence, concurrent distinct nonces, concurrent idempotent retry,
   single-worker replacement, bounded breaker escalation and cursor/reorg
   handling.
-
-The local PostgreSQL gate could not run because the isolated PostgreSQL Docker
-image download repeatedly failed at the registry TLS handshake. It remains a
-blocking hosted CI step; this report does not substitute unit evidence for it.
+- Local persistent-chain rehearsal passed: deterministic deployment, 48/48
+  deployment/code/role checks, create/fund/release, exact seller and treasury
+  balances, interrupted-transfer recovery without a second debit, replay no-op,
+  and low-s signatures. This used a Hardhat loopback chain and impersonated
+  relay, not Amoy or Web3Signer.
 
 ## Remaining exit evidence
 
-- Green clean-schema Phase 3, Phase 4 and Phase 5 PostgreSQL gates in hosted CI.
 - Green contract tests, coverage policy, Slither and the complete repository CI
-  matrix on the sequential Phase 5 PR.
+  matrix, including the clean-schema Phase 5 PostgreSQL gate, on the sequential
+  Phase 5 PR.
 - A fresh deterministic Amoy deployment using distinct privileged identities.
 - Web3Signer acceptance for create/fund/release plus interrupted-transfer
   recovery, with transaction, nonce, fee and balance evidence.

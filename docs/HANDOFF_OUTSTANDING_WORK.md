@@ -17,6 +17,36 @@ collapsed into one claim:
 No phase below authorizes real funds. `MONEY_EGRESS_ENABLED` must remain false
 until the applicable release gates are independently closed.
 
+## Current update — 2026-09-18
+
+This section supersedes the older snapshot/publication details below while
+preserving them as historical context.
+
+- Phase 4 was isolated, fully verified and merged through PR #34 at main commit
+  `75e480089990f0b34e91007d8d5882efa9d01d88`.
+- The current sequential Phase 5 branch is
+  `codex/phase5-polygon-lifecycle`, based on that merged main. It contains no
+  duplicate Phase 4 implementation history.
+- The older combined PR #33 is superseded by this clean branch and must remain
+  unmerged.
+- Local gates now pass: 123 Solidity tests; user-service build and lint; 104
+  runnable backend suites / 1,071 tests; production dependency audits with zero
+  vulnerabilities; and clean PostgreSQL 15 gates for Phase 3 (11/11), Phase 4
+  (6/6), and Phase 5 (6/6).
+- The local persistent-chain rehearsal passed deterministic deployment and
+  verification (48/48 checks), create/fund/release, exact payout conservation,
+  and interrupted-transfer recovery. It used Hardhat and an impersonated relay,
+  so it is not Amoy/Web3Signer evidence.
+- Manual review added immutable dependency-wiring checks, non-local role
+  separation, independent-RPC log/cursor agreement, correct interrupted-funding
+  liabilities, stable PostgreSQL hook timeouts, and stale replacement claims.
+- This host has no Amoy deployer key, Web3Signer endpoint/account, deployment
+  manifest, or configured independent RPC operators. Live Amoy and Web3Signer
+  gates therefore remain external blockers and were not simulated as completed.
+- `MONEY_EGRESS_ENABLED` remains false for every real network. It was set only
+  in the process environment of the loopback acceptance script, which refuses
+  non-loopback dry-run endpoints.
+
 ## Snapshot being preserved
 
 - Repository: `ffffefefvee/Telegram-garant-contract-master`.
