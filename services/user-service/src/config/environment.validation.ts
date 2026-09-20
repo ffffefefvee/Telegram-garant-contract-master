@@ -1,3 +1,5 @@
+import { createPublicKey } from "crypto";
+
 /**
  * Fail fast on configurations that are acceptable for a local sandbox but
  * unsafe for a production process. This runs inside ConfigModule before the
@@ -38,6 +40,68 @@ export function validateEnvironment(
     failures.push(
       "CORS_ORIGIN must contain one or more explicit https:// origins in production",
     );
+  }
+  if (!hasOnlyHttpsOrigins(environment.ADMIN_ALLOWED_ORIGINS)) {
+    failures.push(
+      "ADMIN_ALLOWED_ORIGINS must contain one or more explicit https:// origins in production",
+    );
+  }
+  if (!hasOnlyHttpsOrigins(environment.ARBITRATOR_ALLOWED_ORIGINS)) {
+    failures.push(
+      "ARBITRATOR_ALLOWED_ORIGINS must contain one or more explicit https:// origins in production",
+    );
+  }
+  if (
+    originsOverlap(
+      environment.ADMIN_ALLOWED_ORIGINS,
+      environment.ARBITRATOR_ALLOWED_ORIGINS,
+    )
+  ) {
+    failures.push(
+      "ADMIN_ALLOWED_ORIGINS and ARBITRATOR_ALLOWED_ORIGINS must use separate origins",
+    );
+  }
+  if (!isValidRsaPublicKey(environment.ADMIN_STEP_UP_JWT_PUBLIC_KEY_BASE64)) {
+    failures.push(
+      "ADMIN_STEP_UP_JWT_PUBLIC_KEY_BASE64 must contain a valid base64-encoded RSA public key",
+    );
+  }
+  if (
+    !isValidRsaPublicKey(
+      environment.ARBITRATOR_STEP_UP_JWT_PUBLIC_KEY_BASE64,
+    )
+  ) {
+    failures.push(
+      "ARBITRATOR_STEP_UP_JWT_PUBLIC_KEY_BASE64 must contain a valid base64-encoded RSA public key",
+    );
+  }
+  if (
+    environment.ARBITRATOR_STEP_UP_JWT_PUBLIC_KEY_BASE64 ===
+    environment.ADMIN_STEP_UP_JWT_PUBLIC_KEY_BASE64
+  ) {
+    failures.push("Admin and arbitrator step-up public keys must be distinct");
+  }
+  if (!isHttpsBaseUrl(environment.ADMIN_STEP_UP_ISSUER?.trim() ?? "")) {
+    failures.push("ADMIN_STEP_UP_ISSUER must be an explicit HTTPS URL");
+  }
+  if (!isHttpsBaseUrl(environment.ARBITRATOR_STEP_UP_ISSUER?.trim() ?? "")) {
+    failures.push("ARBITRATOR_STEP_UP_ISSUER must be an explicit HTTPS URL");
+  }
+  if (
+    environment.ADMIN_STEP_UP_MAX_AGE_SECONDS !== undefined &&
+    !isIntegerInRange(environment.ADMIN_STEP_UP_MAX_AGE_SECONDS, 60, 900)
+  ) {
+    failures.push("ADMIN_STEP_UP_MAX_AGE_SECONDS must be 60-900");
+  }
+  if (
+    environment.ARBITRATOR_STEP_UP_MAX_AGE_SECONDS !== undefined &&
+    !isIntegerInRange(
+      environment.ARBITRATOR_STEP_UP_MAX_AGE_SECONDS,
+      60,
+      900,
+    )
+  ) {
+    failures.push("ARBITRATOR_STEP_UP_MAX_AGE_SECONDS must be 60-900");
   }
   if (environment.TELEGRAM_TEST_INJECT_ENABLED === "true") {
     failures.push("TELEGRAM_TEST_INJECT_ENABLED must be false in production");
@@ -223,6 +287,17 @@ function isUnsafeSecret(value: string | undefined): boolean {
   );
 }
 
+function isValidRsaPublicKey(value: string | undefined): boolean {
+  if (!value?.trim()) return false;
+  try {
+    const pem = Buffer.from(value.trim(), "base64").toString("utf8");
+    const key = createPublicKey(pem);
+    return key.asymmetricKeyType === "rsa";
+  } catch {
+    return false;
+  }
+}
+
 function hasOnlyHttpsOrigins(value: string | undefined): boolean {
   if (!value || value.trim() === "" || value.trim() === "*") {
     return false;
@@ -232,6 +307,20 @@ function hasOnlyHttpsOrigins(value: string | undefined): boolean {
     .split(",")
     .map((origin) => origin.trim())
     .every((origin) => /^https:\/\/[^/\s]+(?:\/.*)?$/i.test(origin));
+}
+
+function originsOverlap(
+  first: string | undefined,
+  second: string | undefined,
+): boolean {
+  if (!first || !second) return false;
+  const firstSet = new Set(
+    first.split(",").map((origin) => origin.trim().toLowerCase()),
+  );
+  return second
+    .split(",")
+    .map((origin) => origin.trim().toLowerCase())
+    .some((origin) => firstSet.has(origin));
 }
 
 function isHttpsBaseUrl(value: string): boolean {

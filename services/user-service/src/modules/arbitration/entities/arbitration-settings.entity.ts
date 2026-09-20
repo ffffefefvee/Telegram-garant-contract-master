@@ -189,7 +189,7 @@ export class ArbitrationSettings {
       },
       {
         key: 'allowed_file_types',
-        value: '["image/jpeg","image/png","image/gif","video/mp4","application/pdf","text/plain"]',
+        value: '["image/jpeg","image/png","video/mp4","application/pdf"]',
         description: 'Разрешённые MIME типы файлов',
         valueType: 'json',
       },

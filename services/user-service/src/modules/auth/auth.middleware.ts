@@ -15,6 +15,7 @@ export interface UserPayload {
   telegramUsername: string | null;
   telegramLanguageCode: string | null;
   roles: UserType[];
+  sessionId: string;
 }
 
 declare global {
@@ -58,9 +59,17 @@ export class RequireAuthMiddleware implements NestMiddleware {
     }
 
     const payload = this.auth.verifyToken(token);
-    const user = await this.users.findById(payload.sub).catch(() => null);
-    if (!user) {
-      throw new UnauthorizedException('User not found');
+    if (!payload.sid) {
+      throw new UnauthorizedException('Token is not bound to a server session');
+    }
+
+    const [user, session] = await Promise.all([
+      this.users.findById(payload.sub).catch(() => null),
+      this.users.findSessionById(payload.sid).catch(() => null),
+    ]);
+    if (!user) throw new UnauthorizedException('User not found');
+    if (!session || session.userId !== user.id || !session.isValid) {
+      throw new UnauthorizedException('Session is revoked or expired');
     }
 
     req.user = {
@@ -69,6 +78,7 @@ export class RequireAuthMiddleware implements NestMiddleware {
       telegramUsername: user.telegramUsername,
       telegramLanguageCode: user.telegramLanguageCode,
       roles: user.roles,
+      sessionId: session.id,
     };
     next();
   }

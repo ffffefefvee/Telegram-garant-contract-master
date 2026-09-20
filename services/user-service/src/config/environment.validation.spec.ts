@@ -1,4 +1,15 @@
 import { validateEnvironment } from "./environment.validation";
+import { generateKeyPairSync } from "crypto";
+
+function publicKeyBase64(): string {
+  const { publicKey } = generateKeyPairSync("rsa", { modulusLength: 2048 });
+  return Buffer.from(
+    publicKey.export({ type: "spki", format: "pem" }).toString(),
+  ).toString("base64");
+}
+
+const ADMIN_PUBLIC_KEY = publicKeyBase64();
+const ARBITRATOR_PUBLIC_KEY = publicKeyBase64();
 
 function productionEnvironment(
   overrides: Record<string, string | undefined> = {},
@@ -14,6 +25,14 @@ function productionEnvironment(
     DB_SYNCHRONIZE: "false",
     TELEGRAM_TEST_INJECT_ENABLED: "false",
     CORS_ORIGIN: "https://app.example.com,https://admin.example.com",
+    ADMIN_ALLOWED_ORIGINS: "https://admin.example.com",
+    ARBITRATOR_ALLOWED_ORIGINS: "https://arbitrator.example.com",
+    ADMIN_STEP_UP_JWT_PUBLIC_KEY_BASE64: ADMIN_PUBLIC_KEY,
+    ADMIN_STEP_UP_ISSUER: "https://identity.example.com",
+    ADMIN_STEP_UP_MAX_AGE_SECONDS: "300",
+    ARBITRATOR_STEP_UP_JWT_PUBLIC_KEY_BASE64: ARBITRATOR_PUBLIC_KEY,
+    ARBITRATOR_STEP_UP_ISSUER: "https://identity.example.com",
+    ARBITRATOR_STEP_UP_MAX_AGE_SECONDS: "300",
     ...overrides,
   };
 }
@@ -43,6 +62,28 @@ describe("validateEnvironment", () => {
     ["schema synchronization", { DB_SYNCHRONIZE: "true" }, "DB_SYNCHRONIZE"],
     ["wildcard CORS", { CORS_ORIGIN: "*" }, "CORS_ORIGIN"],
     ["HTTP CORS", { CORS_ORIGIN: "http://app.example.com" }, "CORS_ORIGIN"],
+    [
+      "shared privileged origin",
+      { ARBITRATOR_ALLOWED_ORIGINS: "https://admin.example.com" },
+      "separate origins",
+    ],
+    [
+      "invalid step-up public key",
+      { ADMIN_STEP_UP_JWT_PUBLIC_KEY_BASE64: Buffer.from("not a key").toString("base64") },
+      "ADMIN_STEP_UP_JWT_PUBLIC_KEY_BASE64",
+    ],
+    [
+      "insecure step-up issuer",
+      { ADMIN_STEP_UP_ISSUER: "http://identity.example.com" },
+      "ADMIN_STEP_UP_ISSUER",
+    ],
+    [
+      "shared step-up public key",
+      {
+        ARBITRATOR_STEP_UP_JWT_PUBLIC_KEY_BASE64: ADMIN_PUBLIC_KEY,
+      },
+      "must be distinct",
+    ],
     [
       "test injection",
       { TELEGRAM_TEST_INJECT_ENABLED: "true" },

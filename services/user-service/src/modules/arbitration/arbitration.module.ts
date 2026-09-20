@@ -1,4 +1,6 @@
 import { Module, forwardRef } from "@nestjs/common";
+import { APP_GUARD } from "@nestjs/core";
+import { JwtModule } from "@nestjs/jwt";
 import { TypeOrmModule } from "@nestjs/typeorm";
 
 // Entities
@@ -12,6 +14,7 @@ import { Appeal } from "./entities/appeal.entity";
 import { DealTerms } from "./entities/deal-terms.entity";
 import { ArbitrationSettings } from "./entities/arbitration-settings.entity";
 import { ArbitratorProfile } from "./entities/arbitrator-profile.entity";
+import { EvidenceFileManifest } from "./entities/evidence-file-manifest.entity";
 
 // Services
 import { ArbitrationService } from "./arbitration.service";
@@ -22,6 +25,13 @@ import { ArbitrationSettingsService } from "./arbitration-settings.service";
 import { ArbitratorSelectionService } from "./arbitrator-selection.service";
 import { DisputeBlockchainService } from "./dispute-blockchain.service";
 import { TonNativeResolutionRequestService } from "./ton-native-resolution-request.service";
+import { EvidencePipelineService } from "./evidence-pipeline.service";
+import {
+  DisabledEvidenceMalwareScanner,
+  DisabledEvidenceObjectStorage,
+  EVIDENCE_MALWARE_SCANNER,
+  EVIDENCE_OBJECT_STORAGE,
+} from "./evidence-pipeline.ports";
 
 // Controllers
 import { ArbitrationController } from "./arbitration.controller";
@@ -38,6 +48,7 @@ import { OpsModule } from "../ops/ops.module";
 import { Deal } from "../deal/entities/deal.entity";
 import { User } from "../user/entities/user.entity";
 import { RolesGuard } from "../admin/guards/roles.guard";
+import { ArbitratorAccessGuard } from "./arbitrator-access.guard";
 
 @Module({
   imports: [
@@ -52,6 +63,7 @@ import { RolesGuard } from "../admin/guards/roles.guard";
       DealTerms,
       ArbitrationSettings,
       ArbitratorProfile,
+      EvidenceFileManifest,
       Deal,
       User,
     ]),
@@ -61,6 +73,7 @@ import { RolesGuard } from "../admin/guards/roles.guard";
     ReviewModule,
     EscrowModule,
     OpsModule,
+    JwtModule.register({}),
   ],
   controllers: [
     ArbitrationController,
@@ -76,7 +89,20 @@ import { RolesGuard } from "../admin/guards/roles.guard";
     ArbitratorSelectionService,
     DisputeBlockchainService,
     TonNativeResolutionRequestService,
+    EvidencePipelineService,
+    DisabledEvidenceObjectStorage,
+    DisabledEvidenceMalwareScanner,
+    {
+      provide: EVIDENCE_OBJECT_STORAGE,
+      useExisting: DisabledEvidenceObjectStorage,
+    },
+    {
+      provide: EVIDENCE_MALWARE_SCANNER,
+      useExisting: DisabledEvidenceMalwareScanner,
+    },
     RolesGuard,
+    ArbitratorAccessGuard,
+    { provide: APP_GUARD, useClass: ArbitratorAccessGuard },
   ],
   exports: [
     ArbitrationService,
@@ -87,6 +113,7 @@ import { RolesGuard } from "../admin/guards/roles.guard";
     ArbitratorSelectionService,
     DisputeBlockchainService,
     TonNativeResolutionRequestService,
+    EvidencePipelineService,
     TypeOrmModule,
   ],
 })

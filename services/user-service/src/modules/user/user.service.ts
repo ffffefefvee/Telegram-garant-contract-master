@@ -330,6 +330,10 @@ export class UserService {
     });
   }
 
+  async findSessionById(id: string): Promise<UserSession | null> {
+    return this.sessionRepository.findOne({ where: { id } });
+  }
+
   async validateSession(token: string): Promise<UserSession | null> {
     const session = await this.findSessionByToken(token);
 
@@ -354,6 +358,19 @@ export class UserService {
       session.revoke(reason);
       await this.sessionRepository.save(session);
     }
+  }
+
+  async revokeSessionById(
+    sessionId: string,
+    userId: string,
+    reason?: string,
+  ): Promise<void> {
+    const session = await this.sessionRepository.findOne({
+      where: { id: sessionId, userId },
+    });
+    if (!session) return;
+    session.revoke(reason);
+    await this.sessionRepository.save(session);
   }
 
   async revokeAllUserSessions(userId: string, reason?: string): Promise<void> {

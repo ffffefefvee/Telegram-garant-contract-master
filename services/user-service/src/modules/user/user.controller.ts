@@ -165,12 +165,25 @@ export class UserController {
     };
   }
 
-  @Delete(':id/sessions/:token')
+  @Delete(':id/sessions/:sessionId')
   @HttpCode(HttpStatus.NO_CONTENT)
   async revokeSession(
-    @Param('token') token: string,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('sessionId', ParseUUIDPipe) sessionId: string,
+    @CurrentUser() user: UserPayload,
   ): Promise<void> {
-    await this.userService.revokeSession(token);
+    this.assertSelf(id, user);
+    await this.userService.revokeSessionById(sessionId, id, 'User logout');
+  }
+
+  @Delete(':id/sessions')
+  @HttpCode(HttpStatus.NO_CONTENT)
+  async revokeAllSessions(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser() user: UserPayload,
+  ): Promise<void> {
+    this.assertSelf(id, user);
+    await this.userService.revokeAllUserSessions(id, 'User revoked all sessions');
   }
 
   @Post(':id/language')
