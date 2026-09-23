@@ -170,6 +170,9 @@ Validation at that exact source head:
 
 This is clean-*local*-checkout evidence, not complete hosted CI. Acton, Slither,
 and gitleaks were unavailable on this Windows host. GitHub CLI authentication
-currently reports an invalid token, so the candidate could not be pushed for
-hosted checks or attached to a Draft PR. No release gate is waived; the overall
-result remains **BLOCKED** and money egress remains disabled.
+currently reports an invalid token. A request to push the candidate to a new
+remote branch was denied before execution by the local approval policy because
+it would export the full source tree without explicit approval. The existing
+Draft PR branches were not changed, and no hosted checks ran for this candidate.
+No release gate is waived; the overall result remains **BLOCKED** and money
+egress remains disabled.
