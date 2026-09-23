@@ -125,3 +125,51 @@ not clean-checkout CI. The tested working tree has uncommitted and untracked
 changes on commit `5922292da8a318980105b18a449d98ed7614f77e`. A new,
 reviewable candidate head and green clean-checkout CI remain required before
 either release gate can be closed; the overall result remains **BLOCKED**.
+
+## Superseding clean-checkout validation — 2026-09-23
+
+The Phase 5 head remains `1aa52ac890afdb46d1d7ffd4d802222b642ae84b`.
+The local Phase 5/6 gate-closure candidate source head is
+`5f646b0d39c48b25b9f4909782dbf90bceff72ce`, based on the recorded Phase 6
+head. Its isolated, detached Git checkout had no tracked changes before or after
+validation. Toolchain: Windows, Node.js `v24.17.0`, npm `11.17.0`, portable
+PostgreSQL 15; this is not the hosted Node 20/Linux environment.
+
+Validation at that exact source head:
+
+- Backend `npm ci --offline`, non-mutating ESLint, `npm run build`, and
+  `npm test -- --passWithNoTests --forceExit --runInBand --silent`: PASS,
+  113 suites / 1,101 tests; 4 PostgreSQL suites / 30 tests intentionally skipped
+  in the unit invocation.
+- Backend `npm run test:postgres:local`: PASS, 4 suites / 30 tests in a fresh
+  isolated PostgreSQL database, removed immediately afterward. No staging data
+  was used. The temporary ignored local-stack credential copy was removed.
+- Backend `npm run fixture:ton:gate`: PASS, mainnet and testnet offline replay
+  and corruption matrices. An earlier Windows checkout failed because Git
+  converted byte-verified JSON fixtures to CRLF; commit `5f646b0` adds a
+  narrowly scoped LF rule, and the fresh checkout verified `w/lf` before the
+  successful rerun.
+- Mini-app offline lockfile install, ESLint, typecheck, and Vite production
+  build: PASS. The build required an unsandboxed local run because this host's
+  filesystem sandbox blocked Vite from traversing parent directories.
+- Solidity package offline lockfile install, Solhint, Hardhat compile, and
+  Hardhat tests: PASS, 28 Solidity files compiled and 123 tests passed.
+- TON package offline lockfile install, deterministic build, and Jest: PASS,
+  6 suites / 69 tests. Build hashes: Native
+  `1c4ce3fe43382378c3b472d64f8237a19c4e08c696149ebaf5bec501debe3da6`;
+  Jetton `cbe811eb5df11ae64a03f2960154816011df82789ffb5b8a9b0976c26ea6ac73`.
+- Compiled deployed-bytecode Keccak-256: EscrowFactory
+  `0x9f62f0909e6fa76f83b769bfd5ddeab4ad3b257fdd253731d087cb13d41238b4`;
+  EscrowImplementation `0xd3808b65959bf98474addd207dc3eab784a9ed95709cfac467287aae26f8e2e6`;
+  ArbitratorRegistry `0x57ff0908e59373a8db6e198bbade86a4460f0406cb10784615903e2a29781ea4`;
+  PlatformTreasury `0x8333f3cbfbbea494f3b6178e18441aa3f8d3fa531e2eaf907203072332e5e2cb`.
+- Live npm advisory queries: backend, Solidity, and TON audit gates PASS with
+  zero reported vulnerabilities. Mini-app's production high-severity audit
+  gate PASS; two moderate React Router advisories remain and require separate
+  triage rather than an unreviewed major-version upgrade.
+
+This is clean-*local*-checkout evidence, not complete hosted CI. Acton, Slither,
+and gitleaks were unavailable on this Windows host. GitHub CLI authentication
+currently reports an invalid token, so the candidate could not be pushed for
+hosted checks or attached to a Draft PR. No release gate is waived; the overall
+result remains **BLOCKED** and money egress remains disabled.
