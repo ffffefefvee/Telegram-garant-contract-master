@@ -176,3 +176,34 @@ it would export the full source tree without explicit approval. The existing
 Draft PR branches were not changed, and no hosted checks ran for this candidate.
 No release gate is waived; the overall result remains **BLOCKED** and money
 egress remains disabled.
+
+## Superseding hosted CI — 2026-09-23
+
+Draft PR [#37](https://github.com/ffffefefvee/Telegram-garant-contract-master/pull/37)
+targets `main` solely to execute the full hosted matrix for the branch stacked
+on the recorded Phase 6 head. It does not replace or unblock Draft PRs #35 or
+#36 and must not be merged. Source head
+`789fba2773438157a5a177f14faf9324d15d6873` passed hosted
+[CI run #92](https://github.com/ffffefefvee/Telegram-garant-contract-master/actions/runs/35918626125):
+**7/7 jobs successful**, including gitleaks, backend, mini-app, Solidity with
+Slither, TON compatibility, authoritative Acton assurance, and independent TON
+build-hash comparison. Backend results: 113 unit suites / 1,101 tests plus
+Phase 3/4/5/6 PostgreSQL gates of 11 + 6 + 6 + 7 = 30 tests. The real HTTPS
+mock-IdP integration test passed under hosted Node 20. TON mainnet/testnet
+offline replay and corruption gates also passed.
+
+Runs #90 and #91 are historical failures superseded by #92. Run #90 found a
+cross-platform npm lockfile conflict caused by an unused direct `chokidar` v3
+dependency and one gitleaks generic-key match in an old guard Jest fixture.
+The latter was verified as a test-only signing constant, absent from current
+source, not an IdP/production key; only its exact historical fingerprint was
+added to the pre-existing `.gitleaksignore`. A local run of the same gitleaks
+version reported no leaks. Run #91 passed installation and secret scanning but
+exposed the staging IdP test's Node 24-only trust API. The test now uses an
+explicitly trusted real HTTPS Undici transport compatible with hosted Node 20.
+
+This closes the **candidate hosted CI** sub-gate at the tested source head,
+not the Phase 5/6 release gates. External Amoy/signer/RPC, production IdP,
+scanner/storage/WORM, custody, independent review, and witnessed recovery
+drills remain `BLOCKED`. `MONEY_EGRESS_ENABLED=false` remains required for real
+networks; neither Draft PR is ready to merge and Phase 7 must not start.
