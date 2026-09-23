@@ -46,10 +46,10 @@ export class Appeal {
   @Column({ type: 'text' })
   reason: string;
 
-  @Column({ type: 'text', nullable: true })
+  @Column({ name: 'new_evidence', type: 'text', nullable: true })
   newEvidence: string | null;
 
-  @Column({ type: 'decimal', precision: 12, scale: 2, nullable: true })
+  @Column({ name: 'deposit_amount', type: 'decimal', precision: 12, scale: 2, nullable: true })
   depositAmount: number | null; // Залог апелляции
 
   @Column({ type: 'varchar', length: 50, default: 'pending' })
@@ -62,25 +62,25 @@ export class Appeal {
   @Column({ type: 'uuid', name: 'reviewer_id', nullable: true })
   reviewerId: string | null;
 
-  @Column({ type: 'timestamp', nullable: true })
+  @Column({ name: 'reviewer_assigned_at', type: 'timestamp', nullable: true })
   reviewerAssignedAt: Date | null;
 
-  @Column({ type: 'timestamp', nullable: true })
+  @Column({ name: 'reviewed_at', type: 'timestamp', nullable: true })
   reviewedAt: Date | null;
 
-  @Column({ type: 'text', nullable: true })
+  @Column({ name: 'review_decision', type: 'text', nullable: true })
   reviewDecision: string | null;
 
-  @Column({ type: 'boolean', default: false })
+  @Column({ name: 'is_deposit_refunded', type: 'boolean', default: false })
   isDepositRefunded: boolean;
 
-  @Column({ type: 'timestamp', nullable: true })
+  @Column({ name: 'deposit_refunded_at', type: 'timestamp', nullable: true })
   depositRefundedAt: Date | null;
 
-  @CreateDateColumn({ type: 'timestamp' })
+  @CreateDateColumn({ name: 'created_at', type: 'timestamp' })
   createdAt: Date;
 
-  @UpdateDateColumn({ type: 'timestamp' })
+  @UpdateDateColumn({ name: 'updated_at', type: 'timestamp' })
   updatedAt: Date;
 
   @Column({ type: 'jsonb', default: {} })

@@ -711,22 +711,6 @@ export class DisputeService {
     return dispute;
   }
 
-  async reassignArbitratorAdmin(
-    id: string,
-    arbitratorId: string,
-  ): Promise<Dispute> {
-    const dispute = await this.findByIdAdmin(id);
-    dispute.arbitratorId = arbitratorId;
-    return this.disputeRepository.save(dispute);
-  }
-
-  async forceCloseAdmin(id: string, reason: string): Promise<Dispute> {
-    const dispute = await this.findByIdAdmin(id);
-    dispute.resolution = reason;
-    dispute.closedAt = new Date();
-    return this.disputeRepository.save(dispute);
-  }
-
   async getAdminStats(): Promise<{
     openDisputes: number;
     totalDisputes: number;

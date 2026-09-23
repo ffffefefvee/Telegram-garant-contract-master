@@ -5,6 +5,7 @@ import { RolesGuard } from './guards/roles.guard';
 import { OutboxService } from '../ops/outbox.service';
 import { ReconciliationService } from '../ops/reconciliation.service';
 import { MonitoringService } from '../monitoring/monitoring.service';
+import { AuditWormService } from '../ops/audit-worm.service';
 
 @Controller('admin/ops')
 @UseGuards(RolesGuard)
@@ -13,6 +14,7 @@ export class AdminOpsController {
     private readonly outbox: OutboxService,
     private readonly reconciliation: ReconciliationService,
     private readonly monitoring: MonitoringService,
+    private readonly auditWorm: AuditWormService,
   ) {}
 
   @Get('outbox/dead')
@@ -44,5 +46,17 @@ export class AdminOpsController {
   @Roles(Role.ADMIN, Role.SUPER_ADMIN)
   async opsMetrics() {
     return this.monitoring.getPrometheusStyleMetrics();
+  }
+
+  @Post('audit-worm/export')
+  @Roles(Role.SUPER_ADMIN)
+  async exportAuditWormBatch() {
+    return this.auditWorm.exportNextBatch();
+  }
+
+  @Get('audit-worm/verify')
+  @Roles(Role.SUPER_ADMIN)
+  async verifyAuditWormDestination() {
+    return this.auditWorm.verifyDestination();
   }
 }

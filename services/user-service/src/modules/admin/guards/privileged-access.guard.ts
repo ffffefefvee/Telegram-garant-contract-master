@@ -7,20 +7,11 @@ import {
   UnauthorizedException,
 } from "@nestjs/common";
 import { ConfigService } from "@nestjs/config";
-import { JwtService } from "@nestjs/jwt";
+import { Reflector } from "@nestjs/core";
 import type { Request } from "express";
-
-interface AdminStepUpClaims {
-  sub: string;
-  purpose: "admin_step_up";
-  amr: string[];
-  jti: string;
-  iat: number;
-  exp: number;
-}
-
-const DEFAULT_AUDIENCE = "telegram-garant-admin";
-const DEFAULT_MAX_AGE_SECONDS = 300;
+import { PrivilegedIdentityService } from "../../auth/privileged-identity.service";
+import { ROLES_KEY } from "../decorators/roles.decorator";
+import { Role } from "../enums/role.enum";
 
 /**
  * Global guard for the `/admin` origin. Normal user JWTs are deliberately not
@@ -31,14 +22,15 @@ const DEFAULT_MAX_AGE_SECONDS = 300;
 export class PrivilegedAccessGuard implements CanActivate {
   constructor(
     private readonly config: ConfigService,
-    private readonly jwt: JwtService,
+    private readonly identity: PrivilegedIdentityService,
+    private readonly reflector: Reflector,
   ) {}
 
-  canActivate(context: ExecutionContext): boolean {
+  async canActivate(context: ExecutionContext): Promise<boolean> {
     if (context.getType() !== "http") return true;
 
     const request = context.switchToHttp().getRequest<Request>();
-    if (!isAdminRequest(request)) return true;
+    if (!isAdminRequest(request) && !this.isPrivilegedRoute(context)) return true;
 
     if (this.config.get<string>("ADMIN_EMERGENCY_LOCKOUT", "false") === "true") {
       throw new ForbiddenException("Administrative access is emergency-locked");
@@ -56,47 +48,24 @@ export class PrivilegedAccessGuard implements CanActivate {
       throw new UnauthorizedException("Fresh administrator MFA assertion is required");
     }
 
-    const publicKey = decodePublicKey(
-      this.config.get<string>("ADMIN_STEP_UP_JWT_PUBLIC_KEY_BASE64", ""),
-    );
-    const issuer = this.config.get<string>("ADMIN_STEP_UP_ISSUER", "").trim();
-    if (!publicKey || !issuer) {
-      throw new ServiceUnavailableException(
-        "Privileged identity verification is not configured",
-      );
-    }
-
-    const audience = this.config.get<string>(
-      "ADMIN_STEP_UP_AUDIENCE",
-      DEFAULT_AUDIENCE,
-    );
-    const maxAgeSeconds = configuredMaxAge(this.config);
-
-    let claims: AdminStepUpClaims;
-    try {
-      claims = this.jwt.verify<AdminStepUpClaims>(assertion, {
-        publicKey,
-        issuer,
-        audience,
-        maxAge: maxAgeSeconds,
-        clockTolerance: 10,
-        algorithms: ["RS256"],
-      });
-    } catch {
-      throw new UnauthorizedException("Administrator MFA assertion is invalid or stale");
-    }
-
-    if (
-      claims.sub !== actorId ||
-      claims.purpose !== "admin_step_up" ||
-      !Array.isArray(claims.amr) ||
-      !claims.amr.includes("mfa") ||
-      !claims.jti?.trim()
-    ) {
-      throw new UnauthorizedException("Administrator MFA assertion is not bound to this actor");
-    }
+    const verified = await this.identity.verify({
+      kind: "ADMIN",
+      assertion,
+      actorId,
+    });
+    (request as Request & { privilegedIdentity?: unknown }).privilegedIdentity = verified;
 
     return true;
+  }
+
+  private isPrivilegedRoute(context: ExecutionContext): boolean {
+    const roles = this.reflector.getAllAndOverride<Role[]>(ROLES_KEY, [
+      context.getHandler(),
+      context.getClass(),
+    ]);
+    return Boolean(
+      roles?.some((role) => role === Role.ADMIN || role === Role.SUPER_ADMIN),
+    );
   }
 
   private assertOrigin(request: Request): void {
@@ -114,16 +83,6 @@ export class PrivilegedAccessGuard implements CanActivate {
   }
 }
 
-function decodePublicKey(value: string): string | null {
-  if (!value.trim()) return null;
-  try {
-    const decoded = Buffer.from(value.trim(), "base64").toString("utf8");
-    return decoded.includes("-----BEGIN PUBLIC KEY-----") ? decoded : null;
-  } catch {
-    return null;
-  }
-}
-
 function isAdminRequest(request: Request): boolean {
   const path = (request.path || request.originalUrl || "").split("?")[0];
   return /^\/?(?:api\/)?admin(?:\/|$)/.test(path);
@@ -136,18 +95,4 @@ function parseOrigins(value: string): Set<string> {
       .map((origin) => origin.trim())
       .filter(Boolean),
   );
-}
-
-function configuredMaxAge(config: ConfigService): number {
-  const raw = config.get<string>(
-    "ADMIN_STEP_UP_MAX_AGE_SECONDS",
-    String(DEFAULT_MAX_AGE_SECONDS),
-  );
-  const parsed = Number(raw);
-  if (!Number.isSafeInteger(parsed) || parsed < 60 || parsed > 900) {
-    throw new ServiceUnavailableException(
-      "ADMIN_STEP_UP_MAX_AGE_SECONDS must be between 60 and 900",
-    );
-  }
-  return parsed;
 }

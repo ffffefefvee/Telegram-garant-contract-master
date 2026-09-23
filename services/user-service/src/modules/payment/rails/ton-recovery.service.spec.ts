@@ -1,206 +1,167 @@
-import { Test } from '@nestjs/testing';
-import { getRepositoryToken } from '@nestjs/typeorm';
-import { BadRequestException, NotFoundException } from '@nestjs/common';
-import { TonRecoveryService } from './ton-recovery.service';
-import { Payment } from '../entities/payment.entity';
-import { TonUnmatchedDeposit } from '../entities/ton-unmatched-deposit.entity';
-import { PaymentMethod, PaymentStatus } from '../enums/payment.enum';
-import { PaymentService } from '../payment.service';
+import { ConflictException, ForbiddenException } from "@nestjs/common";
+import { Payment } from "../entities/payment.entity";
+import { TonUnmatchedDeposit } from "../entities/ton-unmatched-deposit.entity";
+import {
+  TonUnmatchedRecoveryRequest,
+  TonUnmatchedRecoveryStatus,
+} from "../entities/ton-unmatched-recovery-request.entity";
+import { PaymentMethod, PaymentStatus } from "../enums/payment.enum";
+import { RecoveryActor, TonRecoveryService } from "./ton-recovery.service";
 
-function makeDeposit(
-  overrides: Partial<TonUnmatchedDeposit> = {},
-): TonUnmatchedDeposit {
+const requester: RecoveryActor = {
+  id: "11111111-1111-4111-8111-111111111111",
+  jti: "request-jti",
+  sid: "request-session",
+  scopes: ["garant:admin:recovery"],
+};
+const approver: RecoveryActor = {
+  id: "22222222-2222-4222-8222-222222222222",
+  jti: "approve-jti",
+  sid: "approve-session",
+  scopes: ["garant:admin:recovery"],
+};
+
+function deposit(overrides: Partial<TonUnmatchedDeposit> = {}): TonUnmatchedDeposit {
   return {
-    id: 'dep-1',
-    asset: 'USDT',
-    eventId: 'event-1',
+    id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa",
+    asset: "USDT",
+    eventId: "event-1",
     actionIndex: 0,
-    txTimestamp: 0,
-    senderAddress: '0:abc',
-    amountUnits: '102500000',
+    txTimestamp: 1,
+    senderAddress: "0:abc",
+    amountUnits: "102500000",
     comment: null,
-    status: 'unmatched',
+    status: "unmatched",
     paymentHintId: null,
     matchedPaymentId: null,
     resolvedBy: null,
     resolvedAt: null,
     resolutionNote: null,
+    createdAt: new Date("2026-01-01T00:00:00Z"),
+    updatedAt: new Date("2026-01-01T00:00:00Z"),
     ...overrides,
   } as TonUnmatchedDeposit;
 }
 
-function makePayment(overrides: Partial<Payment> = {}): Payment {
+function payment(overrides: Partial<Payment> = {}): Payment {
   return {
-    id: 'pay-1',
+    id: "bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb",
     paymentMethod: PaymentMethod.CRYPTO_TON,
     status: PaymentStatus.PENDING,
-    escrowAddress: '0x' + '1'.repeat(40),
-    metadata: { memo: 'TG-TEST1234' },
+    escrowAddress: `0x${"1".repeat(40)}`,
+    metadata: { memo: "TG-TEST1234" },
+    updatedAt: new Date("2026-01-01T00:00:00Z"),
     ...overrides,
-  } as unknown as Payment;
+  } as Payment;
 }
 
-describe('TonRecoveryService', () => {
+describe("TonRecoveryService two-person control", () => {
+  let depositRow: TonUnmatchedDeposit;
+  let paymentRow: Payment;
+  let requestRow: TonUnmatchedRecoveryRequest | null;
   let service: TonRecoveryService;
-  let unmatchedRepo: { findOne: jest.Mock; save: jest.Mock; count: jest.Mock; find: jest.Mock };
-  let paymentRepo: { findOne: jest.Mock; save: jest.Mock };
   let payments: { checkPaymentStatus: jest.Mock };
+  let audit: { writeRequired: jest.Mock };
 
-  async function setup() {
-    unmatchedRepo = {
-      findOne: jest.fn(),
+  beforeEach(() => {
+    depositRow = deposit();
+    paymentRow = payment();
+    requestRow = null;
+    const depositRepo = {
+      findOne: jest.fn(async ({ where }: any) => (where.id === depositRow.id ? depositRow : null)),
+      findOneByOrFail: jest.fn(async () => depositRow),
       save: jest.fn(async (row) => row),
-      count: jest.fn(async () => 0),
       find: jest.fn(async () => []),
+      count: jest.fn(async () => 1),
     };
-    paymentRepo = {
-      findOne: jest.fn(),
+    const paymentRepo = {
+      findOne: jest.fn(async ({ where }: any) => (where.id === paymentRow.id ? paymentRow : null)),
       save: jest.fn(async (row) => row),
     };
-    payments = {
-      checkPaymentStatus: jest.fn(async () => makePayment({ status: PaymentStatus.COMPLETED })),
+    const requestRepo = {
+      create: jest.fn((row) => row),
+      findOne: jest.fn(async ({ where }: any) => {
+        if (!requestRow) return null;
+        if (where.id && where.id !== requestRow.id) return null;
+        if (where.depositId && where.depositId !== requestRow.depositId) return null;
+        if (where.status && where.status !== requestRow.status) return null;
+        return requestRow;
+      }),
+      save: jest.fn(async (row) => {
+        requestRow = Object.assign(row, {
+          id: row.id ?? "cccccccc-cccc-4ccc-8ccc-cccccccccccc",
+          createdAt: row.createdAt ?? new Date(),
+        });
+        return requestRow;
+      }),
     };
-
-    const moduleRef = await Test.createTestingModule({
-      providers: [
-        TonRecoveryService,
-        {
-          provide: getRepositoryToken(TonUnmatchedDeposit),
-          useValue: unmatchedRepo,
-        },
-        { provide: getRepositoryToken(Payment), useValue: paymentRepo },
-        { provide: PaymentService, useValue: payments },
-      ],
-    }).compile();
-    service = moduleRef.get(TonRecoveryService);
-  }
-
-  describe('match', () => {
-    it('credits the deposit to the payment and runs settlement', async () => {
-      await setup();
-      unmatchedRepo.findOne.mockResolvedValue(makeDeposit());
-      paymentRepo.findOne.mockResolvedValue(makePayment());
-
-      const result = await service.match('dep-1', 'pay-1', 'admin-1', 'late memo');
-
-      // Payment received the credit before the deposit was resolved.
-      const savedPayment = paymentRepo.save.mock.calls[0][0] as Payment;
-      expect(savedPayment.metadata.manualCreditUnits).toBe('102500000');
-      expect(savedPayment.metadata.manualMatches).toHaveLength(1);
-
-      const savedDeposit = unmatchedRepo.save.mock.calls[0][0] as TonUnmatchedDeposit;
-      expect(savedDeposit.status).toBe('matched');
-      expect(savedDeposit.matchedPaymentId).toBe('pay-1');
-      expect(savedDeposit.resolvedBy).toBe('admin-1');
-
-      expect(payments.checkPaymentStatus).toHaveBeenCalledWith('pay-1');
-      expect(result.payment.status).toBe(PaymentStatus.COMPLETED);
-    });
-
-    it('accumulates credits across multiple matches', async () => {
-      await setup();
-      unmatchedRepo.findOne.mockResolvedValue(makeDeposit({ amountUnits: '50000000' }));
-      paymentRepo.findOne.mockResolvedValue(
-        makePayment({
-          metadata: { memo: 'TG-TEST1234', manualCreditUnits: '52500000' },
-        } as unknown as Partial<Payment>),
-      );
-
-      await service.match('dep-1', 'pay-1', 'admin-1');
-
-      const savedPayment = paymentRepo.save.mock.calls[0][0] as Payment;
-      expect(savedPayment.metadata.manualCreditUnits).toBe('102500000');
-    });
-
-    it('rejects an already-resolved deposit', async () => {
-      await setup();
-      unmatchedRepo.findOne.mockResolvedValue(makeDeposit({ status: 'matched' }));
-
-      await expect(service.match('dep-1', 'pay-1', 'admin-1')).rejects.toThrow(
-        BadRequestException,
-      );
-      expect(paymentRepo.save).not.toHaveBeenCalled();
-    });
-
-    it('rejects non-TON payments', async () => {
-      await setup();
-      unmatchedRepo.findOne.mockResolvedValue(makeDeposit());
-      paymentRepo.findOne.mockResolvedValue(
-        makePayment({ paymentMethod: PaymentMethod.CRYPTOMUS }),
-      );
-
-      await expect(service.match('dep-1', 'pay-1', 'admin-1')).rejects.toThrow(
-        BadRequestException,
-      );
-    });
-
-    it('matches a native TON deposit to a Toncoin payment', async () => {
-      await setup();
-      unmatchedRepo.findOne.mockResolvedValue(
-        makeDeposit({ asset: 'TON', amountUnits: '20500000000' }),
-      );
-      paymentRepo.findOne.mockResolvedValue(
-        makePayment({ paymentMethod: PaymentMethod.CRYPTO_TONCOIN }),
-      );
-
-      await service.match('dep-1', 'pay-1', 'admin-1');
-
-      const savedPayment = paymentRepo.save.mock.calls[0][0] as Payment;
-      expect(savedPayment.metadata.manualCreditUnits).toBe('20500000000');
-    });
-
-    it('rejects crediting across assets (TON deposit → USDT payment)', async () => {
-      await setup();
-      unmatchedRepo.findOne.mockResolvedValue(makeDeposit({ asset: 'TON' }));
-      paymentRepo.findOne.mockResolvedValue(makePayment()); // CRYPTO_TON
-
-      await expect(service.match('dep-1', 'pay-1', 'admin-1')).rejects.toThrow(
-        BadRequestException,
-      );
-      expect(paymentRepo.save).not.toHaveBeenCalled();
-    });
-
-    it('rejects payments that cannot accept funds', async () => {
-      await setup();
-      unmatchedRepo.findOne.mockResolvedValue(makeDeposit());
-      paymentRepo.findOne.mockResolvedValue(
-        makePayment({ status: PaymentStatus.EXPIRED }),
-      );
-
-      await expect(service.match('dep-1', 'pay-1', 'admin-1')).rejects.toThrow(
-        BadRequestException,
-      );
-    });
-
-    it('404s on a missing deposit', async () => {
-      await setup();
-      unmatchedRepo.findOne.mockResolvedValue(null);
-
-      await expect(service.match('nope', 'pay-1', 'admin-1')).rejects.toThrow(
-        NotFoundException,
-      );
-    });
+    const manager = {
+      getRepository: jest.fn((entity) => {
+        if (entity === TonUnmatchedDeposit) return depositRepo;
+        if (entity === Payment) return paymentRepo;
+        if (entity === TonUnmatchedRecoveryRequest) return requestRepo;
+        throw new Error("unexpected repository");
+      }),
+    };
+    const dataSource = {
+      transaction: jest.fn(async (work) => work(manager)),
+      getRepository: jest.fn((entity) => manager.getRepository(entity)),
+    };
+    payments = { checkPaymentStatus: jest.fn(async () => paymentRow) };
+    audit = { writeRequired: jest.fn(async () => ({})) };
+    service = new TonRecoveryService(depositRepo as any, dataSource as any, payments as any, audit as any);
   });
 
-  describe('ignore', () => {
-    it('marks the deposit ignored with a reason', async () => {
-      await setup();
-      unmatchedRepo.findOne.mockResolvedValue(makeDeposit());
+  it("records an immutable intent without crediting money", async () => {
+    const request = await service.requestMatch(depositRow.id, paymentRow.id, requester, "late memo");
 
-      const result = await service.ignore('dep-1', 'admin-1', 'refunded by hand');
+    expect(request.status).toBe(TonUnmatchedRecoveryStatus.PENDING);
+    expect(request.intentHash).toMatch(/^[0-9a-f]{64}$/);
+    expect(depositRow.status).toBe("unmatched");
+    expect(paymentRow.metadata.manualCreditUnits).toBeUndefined();
+    expect(audit.writeRequired).toHaveBeenCalledWith(expect.objectContaining({ action: "TON_RECOVERY_MATCH_REQUESTED" }));
+  });
 
-      expect(result.status).toBe('ignored');
-      expect(result.resolutionNote).toBe('refunded by hand');
-      expect(result.resolvedBy).toBe('admin-1');
-    });
+  it("rejects requester self-approval", async () => {
+    await service.requestMatch(depositRow.id, paymentRow.id, requester);
+    await expect(service.approve(depositRow.id, requestRow!.id, requester)).rejects.toThrow(ForbiddenException);
+    expect(depositRow.status).toBe("unmatched");
+  });
 
-    it('requires a reason', async () => {
-      await setup();
-      unmatchedRepo.findOne.mockResolvedValue(makeDeposit());
+  it("atomically credits after independent approval and invokes settlement", async () => {
+    await service.requestMatch(depositRow.id, paymentRow.id, requester);
+    const result = await service.approve(depositRow.id, requestRow!.id, approver);
 
-      await expect(service.ignore('dep-1', 'admin-1', '  ')).rejects.toThrow(
-        BadRequestException,
-      );
-    });
+    expect(result.request.status).toBe(TonUnmatchedRecoveryStatus.EXECUTED);
+    expect(result.request.requestedBy).toBe(requester.id);
+    expect(result.request.approvedBy).toBe(approver.id);
+    expect(depositRow.status).toBe("matched");
+    expect(paymentRow.metadata.manualCreditUnits).toBe("102500000");
+    expect(payments.checkPaymentStatus).toHaveBeenCalledTimes(2);
+    expect(payments.checkPaymentStatus).toHaveBeenCalledWith(paymentRow.id);
+    expect(audit.writeRequired).toHaveBeenLastCalledWith(expect.objectContaining({ action: "TON_RECOVERY_MATCH_EXECUTED" }));
+  });
+
+  it("fails closed when payment state changed after request", async () => {
+    await service.requestMatch(depositRow.id, paymentRow.id, requester);
+    paymentRow.updatedAt = new Date("2026-01-01T00:00:01Z");
+    await expect(service.approve(depositRow.id, requestRow!.id, approver)).rejects.toThrow(ConflictException);
+    expect(depositRow.status).toBe("unmatched");
+    expect(payments.checkPaymentStatus).toHaveBeenCalledTimes(1);
+  });
+
+  it("requires the dedicated recovery scope", async () => {
+    await expect(service.requestIgnore(depositRow.id, { ...requester, scopes: [] }, "refund"))
+      .rejects.toThrow(ForbiddenException);
+  });
+
+  it("supports audited cancellation without touching ledger state", async () => {
+    await service.requestIgnore(depositRow.id, requester, "manual refund planned");
+    const cancelled = await service.cancel(depositRow.id, requestRow!.id, requester, "refund abandoned");
+
+    expect(cancelled.status).toBe(TonUnmatchedRecoveryStatus.CANCELLED);
+    expect(cancelled.cancelledBy).toBe(requester.id);
+    expect(depositRow.status).toBe("unmatched");
+    expect(audit.writeRequired).toHaveBeenLastCalledWith(expect.objectContaining({ action: "TON_RECOVERY_REQUEST_CANCELLED" }));
   });
 });

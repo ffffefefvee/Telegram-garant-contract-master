@@ -18,15 +18,15 @@ export class AdminProfile {
   @Column({ type: 'varchar', length: 50, default: Role.ADMIN })
   role: Role;
 
-  @Column({ type: 'boolean', default: true })
+  @Column({ name: 'is_active', type: 'boolean', default: true })
   isActive: boolean;
 
   @Column({ type: 'text', nullable: true })
   permissions: string | null; // JSON список специфических разрешений
 
-  @CreateDateColumn({ type: 'timestamp' })
+  @CreateDateColumn({ name: 'created_at', type: 'timestamp' })
   createdAt: Date;
 
-  @UpdateDateColumn({ type: 'timestamp' })
+  @UpdateDateColumn({ name: 'updated_at', type: 'timestamp' })
   updatedAt: Date;
 }

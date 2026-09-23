@@ -8,6 +8,7 @@ import {
   Post,
   Req,
   UnauthorizedException,
+  UseGuards,
 } from "@nestjs/common";
 import { Request } from "express";
 import { DisputeService } from "./dispute.service";
@@ -21,6 +22,9 @@ import {
   RecordResolutionInput,
 } from "./dispute-blockchain.service";
 import { Dispute } from "./entities/dispute.entity";
+import { Roles } from "../admin/decorators/roles.decorator";
+import { Role } from "../admin/enums/role.enum";
+import { RolesGuard } from "../admin/guards/roles.guard";
 
 class RecordResolutionDto implements RecordResolutionInput {
   txHash: string;
@@ -68,6 +72,8 @@ export class DisputeBlockchainController {
    */
   @Post("disputes/:id/auto-assign")
   @HttpCode(HttpStatus.OK)
+  @UseGuards(RolesGuard)
+  @Roles(Role.SUPER_ADMIN)
   async autoAssign(
     @Req() req: Request,
     @Param("id", ParseUUIDPipe) disputeId: string,

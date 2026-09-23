@@ -4,6 +4,11 @@ import { ScheduleModule } from "@nestjs/schedule";
 import { TypeOrmModule } from "@nestjs/typeorm";
 import { OutboxEvent } from "./entities/outbox-event.entity";
 import { AuditLogEntry } from "./entities/audit-log.entity";
+import {
+  AuditExportCheckpoint,
+  AuditExportReceipt,
+} from "./entities/audit-export.entity";
+import { AuditWormService } from "./audit-worm.service";
 import { MoneyLedgerEntry } from "./entities/money-ledger-entry.entity";
 import { OutboxService } from "./outbox.service";
 import { AuditLogService } from "./audit-log.service";
@@ -38,6 +43,8 @@ import { PaymentModule } from "../payment/payment.module";
     TypeOrmModule.forFeature([
       OutboxEvent,
       AuditLogEntry,
+      AuditExportCheckpoint,
+      AuditExportReceipt,
       MoneyLedgerEntry,
       Payment,
       Deal,
@@ -49,6 +56,7 @@ import { PaymentModule } from "../payment/payment.module";
   providers: [
     OutboxService,
     AuditLogService,
+    AuditWormService,
     MoneyLedgerService,
     ReconciliationService,
     ReconciliationScheduler,
@@ -56,6 +64,7 @@ import { PaymentModule } from "../payment/payment.module";
   exports: [
     OutboxService,
     AuditLogService,
+    AuditWormService,
     MoneyLedgerService,
     ReconciliationService,
   ],

@@ -16,6 +16,11 @@ export class AuditLogEntry {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
+  // Nullable only for SQLite unit-test synchronization. The production
+  // migration installs a NOT NULL database sequence before export is enabled.
+  @Column({ type: "bigint", name: "export_sequence", unique: true, nullable: true })
+  exportSequence: string;
+
   @Column({ type: 'uuid', nullable: true })
   actorId: string | null;
 

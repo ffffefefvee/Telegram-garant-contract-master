@@ -342,28 +342,6 @@ describe('UserService', () => {
     });
   });
 
-  describe('updateBalance', () => {
-    it('should update user balance', async () => {
-      mockUserRepository.findOne.mockResolvedValue(mockUser);
-      mockUserRepository.save.mockResolvedValue({
-        ...mockUser,
-        balance: 100,
-      });
-
-      const result = await service.updateBalance('test-uuid-123', 100);
-
-      expect(result.balance).toBe(100);
-    });
-
-    it('should throw error on insufficient balance', async () => {
-      mockUserRepository.findOne.mockResolvedValue(mockUser);
-
-      await expect(service.updateBalance('test-uuid-123', -100)).rejects.toThrow(
-        'Insufficient balance',
-      );
-    });
-  });
-
   describe('getUserStats', () => {
     it('should return user statistics', async () => {
       const userWithDeals = {

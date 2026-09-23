@@ -19,7 +19,7 @@ import {
 } from '@nestjs/common';
 import { Request } from 'express';
 import { UserService, CreateUserDto, UpdateUserDto } from './user.service';
-import { User, UserStatus, UserType } from './entities/user.entity';
+import { User } from './entities/user.entity';
 import { SessionType } from './entities/user-session.entity';
 import { LanguageCode } from './entities/language-preference.entity';
 import { CurrentUser } from '../auth/current-user.decorator';
@@ -127,7 +127,7 @@ export class UserController {
     @Param('id', ParseUUIDPipe) id: string,
     @CurrentUser() user: UserPayload,
   ): Promise<User> {
-    this.assertSelfOrAdministrator(id, user);
+    this.assertSelf(id, user);
     return this.userService.findById(id);
   }
 
@@ -137,7 +137,7 @@ export class UserController {
     @Body() data: UpdateUserDto,
     @CurrentUser() user: UserPayload,
   ): Promise<User> {
-    this.assertSelfOrAdministrator(id, user);
+    this.assertSelf(id, user);
     return this.userService.update(id, data);
   }
 
@@ -217,53 +217,6 @@ export class UserController {
     return { languageCode };
   }
 
-  @Put(':id/status')
-  @UseGuards(RolesGuard)
-  @Roles(Role.ADMIN, Role.SUPER_ADMIN)
-  async updateStatus(
-    @Param('id', ParseUUIDPipe) id: string,
-    @Body() body: { status: UserStatus },
-  ): Promise<User> {
-    return this.userService.setStatus(id, body.status);
-  }
-
-  @Post(':id/ban')
-  @UseGuards(RolesGuard)
-  @Roles(Role.ADMIN, Role.SUPER_ADMIN)
-  async ban(
-    @Param('id', ParseUUIDPipe) id: string,
-    @Body() body: { reason?: string },
-  ): Promise<User> {
-    return this.userService.ban(id, body.reason);
-  }
-
-  @Post(':id/unban')
-  @UseGuards(RolesGuard)
-  @Roles(Role.ADMIN, Role.SUPER_ADMIN)
-  async unban(@Param('id', ParseUUIDPipe) id: string): Promise<User> {
-    return this.userService.unban(id);
-  }
-
-  @Post(':id/roles')
-  @UseGuards(RolesGuard)
-  @Roles(Role.ADMIN, Role.SUPER_ADMIN)
-  async addRole(
-    @Param('id', ParseUUIDPipe) id: string,
-    @Body() body: { role: UserType },
-  ): Promise<User> {
-    return this.userService.addRole(id, body.role);
-  }
-
-  @Delete(':id/roles/:role')
-  @UseGuards(RolesGuard)
-  @Roles(Role.ADMIN, Role.SUPER_ADMIN)
-  async removeRole(
-    @Param('id', ParseUUIDPipe) id: string,
-    @Param('role') role: UserType,
-  ): Promise<User> {
-    return this.userService.removeRole(id, role);
-  }
-
   @Get(':id/stats')
   async getStats(
     @Param('id', ParseUUIDPipe) id: string,
@@ -274,24 +227,14 @@ export class UserController {
     reputationScore: number;
     balance: number;
   }> {
-    this.assertSelfOrAdministrator(id, user);
+    this.assertSelf(id, user);
     return this.userService.getUserStats(id);
-  }
-
-  @Post(':id/balance')
-  @UseGuards(RolesGuard)
-  @Roles(Role.ADMIN, Role.SUPER_ADMIN)
-  async updateBalance(
-    @Param('id', ParseUUIDPipe) id: string,
-    @Body() body: { amount: number },
-  ): Promise<User> {
-    return this.userService.updateBalance(id, body.amount);
   }
 
   @Delete(':id')
   @HttpCode(HttpStatus.NO_CONTENT)
   @UseGuards(RolesGuard)
-  @Roles(Role.ADMIN, Role.SUPER_ADMIN)
+  @Roles(Role.SUPER_ADMIN)
   async softDelete(@Param('id', ParseUUIDPipe) id: string): Promise<void> {
     await this.userService.softDelete(id);
   }
@@ -302,14 +245,4 @@ export class UserController {
     }
   }
 
-  private assertSelfOrAdministrator(targetUserId: string, user: UserPayload): void {
-    if (targetUserId === user.id || this.hasAdministrativeRole(user)) {
-      return;
-    }
-    throw new ForbiddenException('Access denied');
-  }
-
-  private hasAdministrativeRole(user: UserPayload): boolean {
-    return user.roles.includes(UserType.ADMIN) || user.roles.includes(UserType.SUPER_ADMIN);
-  }
 }

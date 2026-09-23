@@ -51,22 +51,22 @@ export class DealMessage {
   @Column({ type: 'text' })
   content: string;
 
-  @Column({ type: 'boolean', default: false })
+  @Column({ name: 'is_edited', type: 'boolean', default: false })
   isEdited: boolean;
 
-  @Column({ type: 'timestamp', nullable: true })
+  @Column({ name: 'edited_at', type: 'timestamp', nullable: true })
   editedAt: Date | null;
 
-  @Column({ type: 'timestamp', nullable: true })
+  @Column({ name: 'read_at', type: 'timestamp', nullable: true })
   readAt: Date | null;
 
-  @Column({ type: 'boolean', default: false })
+  @Column({ name: 'is_deleted', type: 'boolean', default: false })
   isDeleted: boolean;
 
-  @Column({ type: 'timestamp', nullable: true })
+  @Column({ name: 'deleted_at', type: 'timestamp', nullable: true })
   deletedAt: Date | null;
 
-  @CreateDateColumn({ type: 'timestamp' })
+  @CreateDateColumn({ name: 'created_at', type: 'timestamp' })
   createdAt: Date;
 
   @Column({ type: 'jsonb', default: {} })

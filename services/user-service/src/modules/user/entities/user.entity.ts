@@ -32,27 +32,27 @@ export class User {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Column({ type: 'bigint', unique: true, nullable: true })
+  @Column({ type: 'bigint', name: 'telegram_id', unique: true, nullable: true })
   @Index()
   telegramId: number | null;
 
-  @Column({ type: 'varchar', length: 255, nullable: true })
+  @Column({ type: 'varchar', length: 255, name: 'telegram_username', nullable: true })
   telegramUsername: string | null;
 
-  @Column({ type: 'varchar', length: 255, nullable: true })
+  @Column({ type: 'varchar', length: 255, name: 'telegram_first_name', nullable: true })
   telegramFirstName: string | null;
 
-  @Column({ type: 'varchar', length: 255, nullable: true })
+  @Column({ type: 'varchar', length: 255, name: 'telegram_last_name', nullable: true })
   telegramLastName: string | null;
 
-  @Column({ type: 'varchar', length: 255, nullable: true })
+  @Column({ type: 'varchar', length: 255, name: 'telegram_language_code', nullable: true })
   telegramLanguageCode: string | null;
 
   @Column({ type: 'varchar', length: 255, unique: true, nullable: true })
   @Index()
   email: string | null;
 
-  @Column({ type: 'varchar', length: 255, nullable: true })
+  @Column({ type: 'varchar', length: 255, name: 'password_hash', nullable: true })
   passwordHash: string | null;
 
   @Column({
@@ -63,7 +63,9 @@ export class User {
   status: UserStatus;
 
   @Column({
-    type: 'varchar',
+    type: 'enum',
+    enum: UserType,
+    enumName: 'user_type_enum',
     array: true,
     default: [UserType.BUYER],
   })
@@ -72,28 +74,28 @@ export class User {
   @Column({ type: 'decimal', precision: 10, scale: 2, default: 0 })
   balance: number;
 
-  @Column({ type: 'decimal', precision: 5, scale: 2, default: 0 })
+  @Column({ type: 'decimal', name: 'reputation_score', precision: 5, scale: 2, default: 0 })
   reputationScore: number;
 
-  @Column({ type: 'int', default: 0 })
+  @Column({ type: 'int', name: 'completed_deals', default: 0 })
   completedDeals: number;
 
-  @Column({ type: 'int', default: 0 })
+  @Column({ type: 'int', name: 'cancelled_deals', default: 0 })
   cancelledDeals: number;
 
-  @Column({ type: 'int', default: 0 })
+  @Column({ type: 'int', name: 'disputed_deals', default: 0 })
   disputedDeals: number;
 
-  @Column({ type: 'timestamp', nullable: true })
+  @Column({ type: 'timestamp', name: 'last_login_at', nullable: true })
   lastLoginAt: Date | null;
 
-  @Column({ type: 'varchar', length: 45, nullable: true })
+  @Column({ type: 'varchar', length: 45, name: 'last_login_ip', nullable: true })
   lastLoginIp: string | null;
 
-  @Column({ type: 'varchar', length: 255, nullable: true })
+  @Column({ type: 'varchar', length: 255, name: 'ban_reason', nullable: true })
   banReason: string | null;
 
-  @Column({ type: 'timestamp', nullable: true })
+  @Column({ type: 'timestamp', name: 'banned_at', nullable: true })
   bannedAt: Date | null;
 
   /**
@@ -120,13 +122,13 @@ export class User {
   @OneToMany(() => LanguagePreference, (lang) => lang.user, { cascade: true })
   languagePreferences: LanguagePreference[];
 
-  @CreateDateColumn({ type: 'timestamp' })
+  @CreateDateColumn({ type: 'timestamp', name: 'created_at' })
   createdAt: Date;
 
-  @UpdateDateColumn({ type: 'timestamp' })
+  @UpdateDateColumn({ type: 'timestamp', name: 'updated_at' })
   updatedAt: Date;
 
-  @Column({ type: 'timestamp', nullable: true })
+  @Column({ type: 'timestamp', name: 'deleted_at', nullable: true })
   deletedAt: Date | null;
 
   // Геттеры для вычисляемых полей

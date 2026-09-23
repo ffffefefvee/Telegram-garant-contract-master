@@ -1,19 +1,13 @@
 import {
   Controller,
   Get,
-  Post,
-  Body,
   Param,
   Query,
   UseGuards,
-  Req,
-  HttpCode,
-  HttpStatus,
 } from '@nestjs/common';
 import { Roles } from './decorators/roles.decorator';
 import { Role } from './enums/role.enum';
 import { RolesGuard } from './guards/roles.guard';
-import { AdminService } from './admin.service';
 import { DealService } from '../deal/deal.service';
 
 @Controller('admin/deals')
@@ -21,7 +15,6 @@ import { DealService } from '../deal/deal.service';
 export class AdminDealController {
   constructor(
     private readonly dealService: DealService,
-    private readonly adminService: AdminService,
   ) {}
 
   @Get()
@@ -39,36 +32,6 @@ export class AdminDealController {
   @Roles(Role.ADMIN, Role.SUPER_ADMIN)
   async getDeal(@Param('id') id: string) {
     return this.dealService.findById(id);
-  }
-
-  @Post(':id/complete')
-  @HttpCode(HttpStatus.NO_CONTENT)
-  @Roles(Role.ADMIN, Role.SUPER_ADMIN)
-  async completeDeal(@Param('id') id: string, @Req() req: any) {
-    await this.dealService.forceComplete(id);
-    await this.adminService.logAction({
-      adminId: req.user?.id,
-      action: 'DEAL_COMPLETED',
-      targetId: id,
-      description: 'Принудительно завершена',
-    });
-  }
-
-  @Post(':id/cancel')
-  @HttpCode(HttpStatus.NO_CONTENT)
-  @Roles(Role.ADMIN, Role.SUPER_ADMIN)
-  async cancelDeal(
-    @Param('id') id: string,
-    @Body('reason') reason: string,
-    @Req() req: any,
-  ) {
-    await this.dealService.forceCancel(id, reason);
-    await this.adminService.logAction({
-      adminId: req.user?.id,
-      action: 'DEAL_CANCELLED',
-      targetId: id,
-      description: `Отменена. Причина: ${reason}`,
-    });
   }
 
   @Get(':id/messages')

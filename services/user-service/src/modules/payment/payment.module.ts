@@ -29,8 +29,8 @@ import { TonFundingLockService } from './rails/ton-funding-lock.service';
 import { TonUnmatchedScanner } from './rails/ton-unmatched.scanner';
 import { TonRecoveryService } from './rails/ton-recovery.service';
 import { TonUnmatchedDeposit } from './entities/ton-unmatched-deposit.entity';
+import { TonUnmatchedRecoveryRequest } from './entities/ton-unmatched-recovery-request.entity';
 import { RailRegistryService } from './rails/rail-registry.service';
-import { EscrowDeadlineService } from './escrow-deadline.service';
 import { DirectDepositWatcher } from './direct-deposit.watcher';
 import { WebhookIdempotencyService } from './webhook-idempotency.service';
 import { PaymentOperationService } from './payment-operation.service';
@@ -43,6 +43,7 @@ import { PaymentOperationService } from './payment-operation.service';
       CurrencyRate,
       Deal,
       TonUnmatchedDeposit,
+      TonUnmatchedRecoveryRequest,
       ProcessedWebhookEvent,
       PaymentOperation,
     ]),
@@ -73,7 +74,6 @@ import { PaymentOperationService } from './payment-operation.service';
     DirectDepositWatcher,
     TonUnmatchedScanner,
     TonRecoveryService,
-    EscrowDeadlineService,
   ],
   exports: [
     PaymentService,
@@ -83,7 +83,6 @@ import { PaymentOperationService } from './payment-operation.service';
     CommissionConfigService,
     RailRegistryService,
     TonRecoveryService,
-    EscrowDeadlineService,
     TonApiService,
     TypeOrmModule,
   ],

@@ -6,6 +6,7 @@ import {
   NotFoundException,
 } from "@nestjs/common";
 import { InjectRepository } from "@nestjs/typeorm";
+import { createHash } from "crypto";
 import { DataSource, EntityManager, IsNull, Not, Repository } from "typeorm";
 import { AuditLogService } from "../ops/audit-log.service";
 import { TonNetwork } from "../user/entities/ton-wallet-binding.entity";
@@ -25,6 +26,9 @@ import {
 export interface TonNativeRecoveryActor {
   id: string;
   role: string;
+  jti: string;
+  sid: string;
+  scopes: string[];
 }
 
 /**
@@ -34,6 +38,7 @@ export interface TonNativeRecoveryActor {
  */
 @Injectable()
 export class TonNativeRecoveryService {
+  private static readonly RECOVERY_SCOPE = "garant:admin:recovery";
   constructor(
     @InjectRepository(TonNativeChainEvent)
     private readonly eventRepo: Repository<TonNativeChainEvent>,
@@ -223,6 +228,7 @@ export class TonNativeRecoveryService {
   ) {
     this.assertActor(actor);
     this.assertSuperAdmin(actor);
+    this.assertRecoveryActor(actor);
     const reason = normalizeReason(input.reason);
     return this.dataSource.transaction(async (manager) => {
       const event = await this.lockStoppedEvent(manager, eventId);
@@ -242,20 +248,48 @@ export class TonNativeRecoveryService {
         },
       });
       if (existing) {
-        throw new ConflictException(
-          "A native TON requeue request is already awaiting approval",
-        );
+        if (existing.expiresAt.getTime() > Date.now()) {
+          throw new ConflictException(
+            "A native TON requeue request is already awaiting approval",
+          );
+        }
+        existing.status = TonNativeRecoveryRequestStatus.EXPIRED;
+        await requestRepo.save(existing);
+        await this.audit.writeRequired({
+          actorId: actor.id,
+          actorRole: actor.role,
+          aggregateType: "ton_native_chain_event",
+          aggregateId: event.id,
+          action: "TON_NATIVE_EVENT_REQUEUE_EXPIRED",
+          details: {
+            recoveryRequestId: existing.id,
+            replacedByNewRequest: true,
+            jti: actor.jti,
+            sid: actor.sid,
+          },
+          manager,
+        });
       }
+      const expiresAt = new Date(Date.now() + 300_000);
       const request = await requestRepo.save(
         requestRepo.create({
           eventId,
           requestedBy: actor.id,
+          requesterJti: actor.jti,
+          requesterSid: actor.sid,
           approvedBy: null,
+          approverJti: null,
+          approverSid: null,
           status: TonNativeRecoveryRequestStatus.PENDING,
           reason,
           expectedLastError: input.expectedLastError,
+          intentHash: this.intentHash(eventId, input.expectedLastError, reason, expiresAt, actor.jti),
+          expiresAt,
           approvedAt: null,
           executedAt: null,
+          cancelledAt: null,
+          cancelledBy: null,
+          cancellationReason: null,
         }),
       );
       await this.audit.writeRequired({
@@ -273,6 +307,9 @@ export class TonNativeRecoveryService {
           approvalsRequired: 2,
           reconciliationRequired: true,
           forceApply: false,
+          requesterJti: actor.jti,
+          requesterSid: actor.sid,
+          expiresAt: request.expiresAt.toISOString(),
         },
         manager,
       });
@@ -293,7 +330,8 @@ export class TonNativeRecoveryService {
   ) {
     this.assertActor(actor);
     this.assertSuperAdmin(actor);
-    return this.dataSource.transaction(async (manager) => {
+    this.assertRecoveryActor(actor);
+    const outcome = await this.dataSource.transaction(async (manager) => {
       const event = await this.lockStoppedEvent(manager, eventId);
       const request = await this.lockRecoveryRequest(manager, requestId);
       if (
@@ -302,9 +340,28 @@ export class TonNativeRecoveryService {
       ) {
         throw new ConflictException("Requeue request is not pending for event");
       }
+      if (request.expiresAt.getTime() <= Date.now()) {
+        request.status = TonNativeRecoveryRequestStatus.EXPIRED;
+        await manager.getRepository(TonNativeRecoveryRequest).save(request);
+        await this.audit.writeRequired({
+          actorId: actor.id,
+          actorRole: actor.role,
+          aggregateType: "ton_native_chain_event",
+          aggregateId: event.id,
+          action: "TON_NATIVE_EVENT_REQUEUE_EXPIRED",
+          details: { recoveryRequestId: request.id, jti: actor.jti, sid: actor.sid },
+          manager,
+        });
+        return { expired: true as const };
+      }
       if (request.requestedBy === actor.id) {
         throw new ForbiddenException(
           "A different super admin must approve native TON recovery",
+        );
+      }
+      if (request.requesterSid === actor.sid) {
+        throw new ForbiddenException(
+          "A different privileged IdP session must approve native TON recovery",
         );
       }
       if (
@@ -327,6 +384,8 @@ export class TonNativeRecoveryService {
       event.lastApplyError = null;
       request.status = TonNativeRecoveryRequestStatus.EXECUTED;
       request.approvedBy = actor.id;
+      request.approverJti = actor.jti;
+      request.approverSid = actor.sid;
       request.approvedAt = now;
       request.executedAt = now;
       await manager.getRepository(TonNativeChainEvent).save(event);
@@ -354,16 +413,21 @@ export class TonNativeRecoveryService {
           previousError,
           reconciliationRequired: true,
           forceApply: false,
+          approverJti: actor.jti,
+          approverSid: actor.sid,
         },
         manager,
       });
       return {
+        expired: false as const,
         eventId: event.id,
         recoveryRequestId: request.id,
         status: "queued" as const,
         replayRequiresReconciliation: true,
       };
     });
+    if (outcome.expired) throw new ConflictException("Requeue request has expired");
+    return outcome;
   }
 
   async cancelRequeue(
@@ -374,8 +438,9 @@ export class TonNativeRecoveryService {
   ) {
     this.assertActor(actor);
     this.assertSuperAdmin(actor);
+    this.assertRecoveryActor(actor);
     const normalizedReason = normalizeReason(reason);
-    return this.dataSource.transaction(async (manager) => {
+    const outcome = await this.dataSource.transaction(async (manager) => {
       const event = await this.lockStoppedEvent(manager, eventId);
       const request = await this.lockRecoveryRequest(manager, requestId);
       if (
@@ -384,7 +449,24 @@ export class TonNativeRecoveryService {
       ) {
         throw new ConflictException("Requeue request is not pending for event");
       }
+      if (request.expiresAt.getTime() <= Date.now()) {
+        request.status = TonNativeRecoveryRequestStatus.EXPIRED;
+        await manager.getRepository(TonNativeRecoveryRequest).save(request);
+        await this.audit.writeRequired({
+          actorId: actor.id,
+          actorRole: actor.role,
+          aggregateType: "ton_native_chain_event",
+          aggregateId: event.id,
+          action: "TON_NATIVE_EVENT_REQUEUE_EXPIRED",
+          details: { recoveryRequestId: request.id, jti: actor.jti, sid: actor.sid },
+          manager,
+        });
+        return { expired: true as const };
+      }
       request.status = TonNativeRecoveryRequestStatus.CANCELLED;
+      request.cancelledAt = new Date();
+      request.cancelledBy = actor.id;
+      request.cancellationReason = normalizedReason;
       await manager.getRepository(TonNativeRecoveryRequest).save(request);
       await this.audit.writeRequired({
         actorId: actor.id,
@@ -401,11 +483,14 @@ export class TonNativeRecoveryService {
         manager,
       });
       return {
+        expired: false as const,
         eventId: event.id,
         recoveryRequestId: request.id,
         status: "cancelled" as const,
       };
     });
+    if (outcome.expired) throw new ConflictException("Requeue request has expired");
+    return outcome;
   }
 
   private async findStoppedEvent(
@@ -491,6 +576,38 @@ export class TonNativeRecoveryService {
     if (actor.role !== "super_admin") {
       throw new ForbiddenException("Native TON requeue requires a super admin");
     }
+  }
+
+  private assertRecoveryActor(actor: TonNativeRecoveryActor): void {
+    if (
+      !actor.jti ||
+      !actor.sid ||
+      !actor.scopes?.includes(TonNativeRecoveryService.RECOVERY_SCOPE)
+    ) {
+      throw new ForbiddenException(
+        `Native TON recovery requires ${TonNativeRecoveryService.RECOVERY_SCOPE}`,
+      );
+    }
+  }
+
+  private intentHash(
+    eventId: string,
+    expectedLastError: string,
+    reason: string,
+    expiresAt: Date,
+    requesterJti: string,
+  ): string {
+    return createHash("sha256")
+      .update(
+        JSON.stringify({
+          eventId,
+          expectedLastError,
+          reason,
+          expiresAt: expiresAt.toISOString(),
+          requesterJti,
+        }),
+      )
+      .digest("hex");
   }
 
   private publicEvent(event: TonNativeChainEvent) {

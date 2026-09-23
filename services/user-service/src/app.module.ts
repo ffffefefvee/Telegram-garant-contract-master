@@ -46,6 +46,8 @@ import { CommissionRate } from "./modules/payment/entities/commission-rate.entit
 import { CurrencyRate } from "./modules/payment/entities/currency-rate.entity";
 import { ProcessedWebhookEvent } from "./modules/payment/entities/processed-webhook-event.entity";
 import { PaymentOperation } from "./modules/payment/entities/payment-operation.entity";
+import { TonUnmatchedDeposit } from "./modules/payment/entities/ton-unmatched-deposit.entity";
+import { TonUnmatchedRecoveryRequest } from "./modules/payment/entities/ton-unmatched-recovery-request.entity";
 import { PaymentModule } from "./modules/payment/payment.module";
 import { Review } from "./modules/review/entities/review.entity";
 import { ReputationScore } from "./modules/review/entities/reputation-score.entity";
@@ -72,6 +74,10 @@ import { MonitoringModule } from "./modules/monitoring/monitoring.module";
 import { OpsModule } from "./modules/ops/ops.module";
 import { OutboxEvent } from "./modules/ops/entities/outbox-event.entity";
 import { AuditLogEntry } from "./modules/ops/entities/audit-log.entity";
+import {
+  AuditExportCheckpoint,
+  AuditExportReceipt,
+} from "./modules/ops/entities/audit-export.entity";
 import { MoneyLedgerEntry } from "./modules/ops/entities/money-ledger-entry.entity";
 import { AdminLog } from "./modules/admin/entities/admin-log.entity";
 import { AdminProfile } from "./modules/admin/entities/admin-profile.entity";
@@ -177,6 +183,8 @@ import {
               CurrencyRate,
               ProcessedWebhookEvent,
               PaymentOperation,
+              TonUnmatchedDeposit,
+              TonUnmatchedRecoveryRequest,
               Review,
               ReputationScore,
               Dispute,
@@ -198,6 +206,8 @@ import {
               NotificationPreference,
               OutboxEvent,
               AuditLogEntry,
+              AuditExportCheckpoint,
+              AuditExportReceipt,
               MoneyLedgerEntry,
               AdminLog,
               AdminProfile,
@@ -256,6 +266,8 @@ import {
             CurrencyRate,
             ProcessedWebhookEvent,
             PaymentOperation,
+            TonUnmatchedDeposit,
+            TonUnmatchedRecoveryRequest,
             Review,
             ReputationScore,
             Dispute,
@@ -277,13 +289,15 @@ import {
             NotificationPreference,
             OutboxEvent,
             AuditLogEntry,
+            AuditExportCheckpoint,
+            AuditExportReceipt,
             MoneyLedgerEntry,
             AdminLog,
             AdminProfile,
             ScammerRecord,
             ScamReport,
           ],
-          migrations: [__dirname + "/../migrations/*{.ts,.js}"],
+          migrations: [__dirname + "/migrations/*{.ts,.js}"],
           // synchronize lets TypeORM mutate the schema on boot. Convenient in
           // dev, destructive in production (can drop/alter columns under
           // load). Default ON only outside production; in production it must

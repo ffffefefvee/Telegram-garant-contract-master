@@ -47,28 +47,28 @@ export class Evidence {
   @Column({ type: 'text', nullable: true })
   content: string | null; // Для текста или ссылок
 
-  @Column({ type: 'varchar', length: 255, nullable: true })
+  @Column({ name: 'file_name', type: 'varchar', length: 255, nullable: true })
   fileName: string | null;
 
-  @Column({ type: 'varchar', length: 255, nullable: true })
+  @Column({ name: 'file_path', type: 'varchar', length: 255, nullable: true })
   filePath: string | null;
 
-  @Column({ type: 'varchar', length: 100, nullable: true })
+  @Column({ name: 'file_type', type: 'varchar', length: 100, nullable: true })
   fileType: string | null; // MIME type
 
-  @Column({ type: 'bigint', nullable: true })
+  @Column({ name: 'file_size', type: 'bigint', nullable: true })
   fileSize: number | null; // В байтах
 
-  @Column({ type: 'varchar', length: 255, nullable: true })
+  @Column({ name: 'file_hash', type: 'varchar', length: 255, nullable: true })
   fileHash: string | null; // SHA256 hash для верификации
 
   @Column({ type: 'text', nullable: true })
   metadata: string | null; // JSON string для доп. данных
 
-  @Column({ type: 'boolean', default: false })
+  @Column({ name: 'is_verified', type: 'boolean', default: false })
   isVerified: boolean;
 
-  @Column({ type: 'timestamp', nullable: true })
+  @Column({ name: 'verified_at', type: 'timestamp', nullable: true })
   verifiedAt: Date | null;
 
   @ManyToOne(() => User, { eager: false, nullable: true })
@@ -78,10 +78,10 @@ export class Evidence {
   @Column({ type: 'uuid', name: 'verified_by_id', nullable: true })
   verifiedById: string | null;
 
-  @CreateDateColumn({ type: 'timestamp' })
+  @CreateDateColumn({ name: 'created_at', type: 'timestamp' })
   createdAt: Date;
 
-  @Column({ type: 'int', default: 0 })
+  @Column({ name: 'view_count', type: 'int', default: 0 })
   viewCount: number;
 
   // Геттеры

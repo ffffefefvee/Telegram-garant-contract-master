@@ -1,20 +1,9 @@
 import { ForbiddenException, UnauthorizedException } from "@nestjs/common";
-import { JwtService } from "@nestjs/jwt";
-import { generateKeyPairSync } from "crypto";
 import { ArbitratorAccessGuard } from "./arbitrator-access.guard";
-
-const KEY_PAIR = generateKeyPairSync("rsa", { modulusLength: 2048 });
-const PUBLIC_KEY = KEY_PAIR.publicKey.export({ type: "spki", format: "pem" }).toString();
-const PRIVATE_KEY = KEY_PAIR.privateKey.export({ type: "pkcs8", format: "pem" }).toString();
-const ISSUER = "https://identity.example.test";
 
 function config(overrides: Record<string, string> = {}) {
   const values: Record<string, string> = {
     ARBITRATOR_ALLOWED_ORIGINS: "https://arbitrator.example.test",
-    ARBITRATOR_STEP_UP_JWT_PUBLIC_KEY_BASE64: Buffer.from(PUBLIC_KEY).toString("base64"),
-    ARBITRATOR_STEP_UP_ISSUER: ISSUER,
-    ARBITRATOR_STEP_UP_AUDIENCE: "telegram-garant-arbitrator",
-    ARBITRATOR_STEP_UP_MAX_AGE_SECONDS: "300",
     ARBITRATOR_EMERGENCY_LOCKOUT: "false",
     ...overrides,
   };
@@ -44,78 +33,81 @@ function context(input: {
   } as any;
 }
 
-function assertion(jwt: JwtService, actorId = "arbitrator-1") {
-  return jwt.sign(
-    {
-      sub: actorId,
-      purpose: "arbitrator_step_up",
-      amr: ["pwd", "mfa"],
-      jti: "assertion-1",
-    },
-    {
-      privateKey: PRIVATE_KEY,
-      algorithm: "RS256",
-      issuer: ISSUER,
-      audience: "telegram-garant-arbitrator",
-      expiresIn: 300,
-    },
-  );
-}
-
 describe("ArbitratorAccessGuard", () => {
-  const jwt = new JwtService();
+  const identity = {
+    verify: jest.fn().mockResolvedValue({ sub: "arbitrator-1", jti: "jti-1" }),
+  };
 
-  it("does not affect ordinary dispute-party routes", () => {
-    const guard = new ArbitratorAccessGuard(config(), jwt);
-    expect(guard.canActivate(context({ path: "/arbitration/disputes/one" }))).toBe(true);
+  beforeEach(() => jest.clearAllMocks());
+
+  it("does not affect ordinary dispute-party routes", async () => {
+    const guard = new ArbitratorAccessGuard(config(), identity as any);
+    await expect(
+      guard.canActivate(context({ path: "/arbitration/disputes/one" })),
+    ).resolves.toBe(true);
   });
 
-  it("requires the dedicated arbitrator origin", () => {
-    const guard = new ArbitratorAccessGuard(config(), jwt);
-    expect(() =>
+  it("requires the dedicated arbitrator origin", async () => {
+    const guard = new ArbitratorAccessGuard(config(), identity as any);
+    await expect(
       guard.canActivate(
         context({
           path: "/arbitration/disputes/one/decision",
           origin: "https://admin.example.test",
           actorId: "arbitrator-1",
-          assertion: assertion(jwt),
+          assertion: "assertion",
         }),
       ),
-    ).toThrow(ForbiddenException);
+    ).rejects.toThrow(ForbiddenException);
   });
 
-  it("requires a fresh MFA assertion bound to the arbitrator", () => {
-    const guard = new ArbitratorAccessGuard(config(), jwt);
+  it("requires a bound assertion and delegates full IdP verification", async () => {
+    const guard = new ArbitratorAccessGuard(config(), identity as any);
     const base = {
       path: "/arbitration/evidence/one/verify",
       origin: "https://arbitrator.example.test",
       actorId: "arbitrator-1",
     };
-    expect(() => guard.canActivate(context(base))).toThrow(UnauthorizedException);
-    expect(() =>
-      guard.canActivate(
-        context({ ...base, assertion: assertion(jwt, "arbitrator-2") }),
-      ),
-    ).toThrow(UnauthorizedException);
-    expect(
-      guard.canActivate(context({ ...base, assertion: assertion(jwt) })),
-    ).toBe(true);
+    await expect(guard.canActivate(context(base))).rejects.toThrow(
+      UnauthorizedException,
+    );
+    await expect(
+      guard.canActivate(context({ ...base, assertion: "signed-assertion" })),
+    ).resolves.toBe(true);
+    expect(identity.verify).toHaveBeenCalledWith({
+      kind: "ARBITRATOR",
+      actorId: "arbitrator-1",
+      assertion: "signed-assertion",
+    });
   });
 
-  it("supports emergency lockout", () => {
+  it("supports emergency lockout", async () => {
     const guard = new ArbitratorAccessGuard(
       config({ ARBITRATOR_EMERGENCY_LOCKOUT: "true" }),
-      jwt,
+      identity as any,
     );
-    expect(() =>
+    await expect(
       guard.canActivate(
         context({
           path: "/arbitration/arbitrators/me",
           origin: "https://arbitrator.example.test",
           actorId: "arbitrator-1",
-          assertion: assertion(jwt),
+          assertion: "assertion",
         }),
       ),
-    ).toThrow(ForbiddenException);
+    ).rejects.toThrow(ForbiddenException);
+  });
+
+  it("requires arbitrator step-up before recording an on-chain resolution", async () => {
+    const guard = new ArbitratorAccessGuard(config(), identity as any);
+    await expect(
+      guard.canActivate(
+        context({
+          path: "/arbitration/disputes/dispute-1/record-resolution",
+          origin: "https://arbitrator.example.test",
+          actorId: "arbitrator-1",
+        }),
+      ),
+    ).rejects.toThrow(UnauthorizedException);
   });
 });

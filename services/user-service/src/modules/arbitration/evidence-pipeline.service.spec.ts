@@ -1,4 +1,5 @@
 import { ForbiddenException, UnsupportedMediaTypeException } from "@nestjs/common";
+import { createHash } from "crypto";
 import { EvidencePipelineService } from "./evidence-pipeline.service";
 import { Evidence } from "./entities/evidence.entity";
 import { EvidenceType } from "./entities/enums/arbitration.enum";
@@ -71,8 +72,12 @@ describe("EvidencePipelineService", () => {
     storage.delete.mockResolvedValue(undefined);
     scanner.scan.mockResolvedValue({
       clean: true,
+      sha256: createHash("sha256").update(PNG).digest("hex"),
       scannerName: "scanner-a",
       scannerVersion: "1.0.0",
+      policyVersion: "policy-2026-09",
+      scannedAt: new Date().toISOString(),
+      resultId: "scan-result-1",
       evidence: "signed-scan-result",
     });
     evidenceRepository.save.mockImplementation(async (value) => ({
@@ -112,8 +117,12 @@ describe("EvidencePipelineService", () => {
   it("deletes quarantined malware and persists no evidence", async () => {
     scanner.scan.mockResolvedValue({
       clean: false,
+      sha256: createHash("sha256").update(PNG).digest("hex"),
       scannerName: "scanner-a",
       scannerVersion: "1.0.0",
+      policyVersion: "policy-2026-09",
+      scannedAt: new Date().toISOString(),
+      resultId: "scan-result-1",
       evidence: "infected",
     });
 
@@ -138,6 +147,8 @@ describe("EvidencePipelineService", () => {
         storageKey: "clean/dispute-1/object-1",
         sha256: expect.stringMatching(/^[0-9a-f]{64}$/),
         scanEvidenceHash: expect.stringMatching(/^[0-9a-f]{64}$/),
+        scannerPolicyVersion: "policy-2026-09",
+        scannerResultId: "scan-result-1",
         manifestHash: expect.stringMatching(/^[0-9a-f]{64}$/),
         deletedAt: null,
       }),

@@ -1,15 +1,14 @@
 import { validateEnvironment } from "./environment.validation";
 import { generateKeyPairSync } from "crypto";
 
-function publicKeyBase64(): string {
-  const { publicKey } = generateKeyPairSync("rsa", { modulusLength: 2048 });
+function ed25519PublicKeyBase64(): string {
+  const { publicKey } = generateKeyPairSync("ed25519");
   return Buffer.from(
     publicKey.export({ type: "spki", format: "pem" }).toString(),
   ).toString("base64");
 }
 
-const ADMIN_PUBLIC_KEY = publicKeyBase64();
-const ARBITRATOR_PUBLIC_KEY = publicKeyBase64();
+const SCANNER_PUBLIC_KEY = ed25519PublicKeyBase64();
 
 function productionEnvironment(
   overrides: Record<string, string | undefined> = {},
@@ -27,12 +26,42 @@ function productionEnvironment(
     CORS_ORIGIN: "https://app.example.com,https://admin.example.com",
     ADMIN_ALLOWED_ORIGINS: "https://admin.example.com",
     ARBITRATOR_ALLOWED_ORIGINS: "https://arbitrator.example.com",
-    ADMIN_STEP_UP_JWT_PUBLIC_KEY_BASE64: ADMIN_PUBLIC_KEY,
     ADMIN_STEP_UP_ISSUER: "https://identity.example.com",
+    ADMIN_STEP_UP_AUDIENCE: "telegram-garant-admin",
     ADMIN_STEP_UP_MAX_AGE_SECONDS: "300",
-    ARBITRATOR_STEP_UP_JWT_PUBLIC_KEY_BASE64: ARBITRATOR_PUBLIC_KEY,
+    ADMIN_STEP_UP_JWKS_URL: "https://identity.example.com/admin/jwks",
+    ADMIN_STEP_UP_JWKS_CACHE_SECONDS: "300",
+    ADMIN_STEP_UP_INTROSPECTION_URL: "https://identity.example.com/admin/introspect",
+    ADMIN_STEP_UP_INTROSPECTION_TOKEN: "admin-introspection-secret",
+    ADMIN_STEP_UP_REQUIRED_SCOPE: "garant:admin:step-up",
+    ADMIN_STEP_UP_REQUIRED_ACR: "urn:garant:acr:phishing-resistant",
+    ADMIN_STEP_UP_IDP_TIMEOUT_MS: "2000",
     ARBITRATOR_STEP_UP_ISSUER: "https://identity.example.com",
+    ARBITRATOR_STEP_UP_AUDIENCE: "telegram-garant-arbitrator",
     ARBITRATOR_STEP_UP_MAX_AGE_SECONDS: "300",
+    ARBITRATOR_STEP_UP_JWKS_URL: "https://identity.example.com/arbitrator/jwks",
+    ARBITRATOR_STEP_UP_JWKS_CACHE_SECONDS: "300",
+    ARBITRATOR_STEP_UP_INTROSPECTION_URL: "https://identity.example.com/arbitrator/introspect",
+    ARBITRATOR_STEP_UP_INTROSPECTION_TOKEN: "arbitrator-introspection-secret",
+    ARBITRATOR_STEP_UP_REQUIRED_SCOPE: "garant:arbitrator:step-up",
+    ARBITRATOR_STEP_UP_REQUIRED_ACR: "urn:garant:acr:phishing-resistant",
+    ARBITRATOR_STEP_UP_IDP_TIMEOUT_MS: "2000",
+    EVIDENCE_PIPELINE_ENABLED: "true",
+    EVIDENCE_S3_REGION: "eu-central-1",
+    EVIDENCE_S3_QUARANTINE_BUCKET: "garant-evidence-quarantine",
+    EVIDENCE_S3_CLEAN_BUCKET: "garant-evidence-clean",
+    EVIDENCE_S3_KMS_KEY_ID: "arn:aws:kms:eu-central-1:123456789012:key/test",
+    EVIDENCE_SCANNER_URL: "https://scanner.example.com/v1/scan",
+    EVIDENCE_SCANNER_API_TOKEN: "scanner-production-secret",
+    EVIDENCE_SCANNER_PUBLIC_KEY_BASE64: SCANNER_PUBLIC_KEY,
+    EVIDENCE_SCANNER_TIMEOUT_MS: "30000",
+    EVIDENCE_SCANNER_RESULT_MAX_AGE_SECONDS: "300",
+    AUDIT_WORM_EXPORT_ENABLED: "true",
+    AUDIT_WORM_S3_REGION: "eu-central-1",
+    AUDIT_WORM_S3_BUCKET: "garant-offsite-audit-worm",
+    AUDIT_WORM_S3_KMS_KEY_ID: "arn:aws:kms:eu-central-1:123456789012:key/worm",
+    AUDIT_WORM_BATCH_SIZE: "500",
+    AUDIT_WORM_RETENTION_DAYS: "2555",
     ...overrides,
   };
 }
@@ -68,9 +97,9 @@ describe("validateEnvironment", () => {
       "separate origins",
     ],
     [
-      "invalid step-up public key",
-      { ADMIN_STEP_UP_JWT_PUBLIC_KEY_BASE64: Buffer.from("not a key").toString("base64") },
-      "ADMIN_STEP_UP_JWT_PUBLIC_KEY_BASE64",
+      "insecure JWKS endpoint",
+      { ADMIN_STEP_UP_JWKS_URL: "http://identity.example.com/jwks" },
+      "ADMIN_STEP_UP_JWKS_URL",
     ],
     [
       "insecure step-up issuer",
@@ -78,11 +107,16 @@ describe("validateEnvironment", () => {
       "ADMIN_STEP_UP_ISSUER",
     ],
     [
-      "shared step-up public key",
+      "staging mock IdP in production",
+      { ADMIN_STEP_UP_JWKS_URL: "https://127.0.0.1:9443/jwks" },
+      "loopback fixture",
+    ],
+    [
+      "shared step-up scope",
       {
-        ARBITRATOR_STEP_UP_JWT_PUBLIC_KEY_BASE64: ADMIN_PUBLIC_KEY,
+        ARBITRATOR_STEP_UP_REQUIRED_SCOPE: "garant:admin:step-up",
       },
-      "must be distinct",
+      "scopes must be distinct",
     ],
     [
       "test injection",

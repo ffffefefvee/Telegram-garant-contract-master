@@ -24,6 +24,7 @@ import { TonNativeBackfillService } from "../deal/ton-native-backfill.service";
 import { Roles } from "./decorators/roles.decorator";
 import { Role } from "./enums/role.enum";
 import { RolesGuard } from "./guards/roles.guard";
+import type { VerifiedPrivilegedIdentity } from "../auth/privileged-identity.service";
 
 @Controller("admin/ops/ton-native")
 @UseGuards(RolesGuard)
@@ -60,7 +61,7 @@ export class AdminTonNativeRecoveryController {
   ) {
     return this.backfill.run(
       watchId,
-      { id: request.user!.id, role: Role.SUPER_ADMIN },
+      this.actor(request, Role.SUPER_ADMIN),
       body,
     );
   }
@@ -87,10 +88,7 @@ export class AdminTonNativeRecoveryController {
     const isSuperAdmin = request.user!.roles.includes(UserType.SUPER_ADMIN);
     return this.recovery.keepBlocked(
       eventId,
-      {
-        id: request.user!.id,
-        role: isSuperAdmin ? Role.SUPER_ADMIN : Role.ADMIN,
-      },
+      this.actor(request, isSuperAdmin ? Role.SUPER_ADMIN : Role.ADMIN),
       body.reason,
     );
   }
@@ -104,7 +102,7 @@ export class AdminTonNativeRecoveryController {
   ) {
     return this.recovery.requestRequeue(
       eventId,
-      { id: request.user!.id, role: Role.SUPER_ADMIN },
+      this.actor(request, Role.SUPER_ADMIN),
       body,
     );
   }
@@ -116,10 +114,11 @@ export class AdminTonNativeRecoveryController {
     @Param("requestId", ParseUUIDPipe) requestId: string,
     @Req() request: Request,
   ) {
-    return this.recovery.approveRequeue(eventId, requestId, {
-      id: request.user!.id,
-      role: Role.SUPER_ADMIN,
-    });
+    return this.recovery.approveRequeue(
+      eventId,
+      requestId,
+      this.actor(request, Role.SUPER_ADMIN),
+    );
   }
 
   @Post("manual-reviews/:eventId/requeue-requests/:requestId/cancel")
@@ -133,8 +132,21 @@ export class AdminTonNativeRecoveryController {
     return this.recovery.cancelRequeue(
       eventId,
       requestId,
-      { id: request.user!.id, role: Role.SUPER_ADMIN },
+      this.actor(request, Role.SUPER_ADMIN),
       body.reason,
     );
+  }
+
+  private actor(request: Request, role: Role) {
+    const identity = (
+      request as Request & { privilegedIdentity?: VerifiedPrivilegedIdentity }
+    ).privilegedIdentity;
+    return {
+      id: request.user!.id,
+      role,
+      jti: identity?.jti ?? "",
+      sid: identity?.sid ?? "",
+      scopes: identity?.scope ?? [],
+    };
   }
 }

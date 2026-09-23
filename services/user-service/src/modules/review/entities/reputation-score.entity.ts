@@ -39,13 +39,13 @@ export class ReputationScore {
   })
   type: ReputationEventType;
 
-  @Column({ type: 'int' })
+  @Column({ name: 'score_delta', type: 'int' })
   scoreDelta: number;
 
-  @Column({ type: 'int' })
+  @Column({ name: 'score_before', type: 'int' })
   scoreBefore: number;
 
-  @Column({ type: 'int' })
+  @Column({ name: 'score_after', type: 'int' })
   scoreAfter: number;
 
   @Column({ type: 'text', nullable: true })
@@ -54,7 +54,7 @@ export class ReputationScore {
   @Column({ type: 'text', nullable: true })
   reason: string | null;
 
-  @CreateDateColumn({ type: 'timestamp' })
+  @CreateDateColumn({ name: 'created_at', type: 'timestamp' })
   createdAt: Date;
 
   @Column({ type: 'jsonb', default: {} })

@@ -48,7 +48,7 @@ export class DealAttachment {
   @Column({ type: 'varchar', length: 255 })
   filename: string;
 
-  @Column({ type: 'varchar', length: 100, nullable: true })
+  @Column({ name: 'mime_type', type: 'varchar', length: 100, nullable: true })
   mimeType: string | null;
 
   @Column({ type: 'bigint', default: 0 })
@@ -57,7 +57,7 @@ export class DealAttachment {
   @Column({ type: 'text', nullable: true })
   description: string | null;
 
-  @Column({ type: 'boolean', default: false })
+  @Column({ name: 'is_image', type: 'boolean', default: false })
   isImage: boolean;
 
   @Column({ type: 'int', nullable: true })
@@ -69,13 +69,13 @@ export class DealAttachment {
   @Column({ type: 'int', nullable: true })
   duration: number | null;
 
-  @CreateDateColumn({ type: 'timestamp' })
+  @CreateDateColumn({ name: 'created_at', type: 'timestamp' })
   createdAt: Date;
 
-  @Column({ type: 'boolean', default: false })
+  @Column({ name: 'is_deleted', type: 'boolean', default: false })
   isDeleted: boolean;
 
-  @Column({ type: 'timestamp', nullable: true })
+  @Column({ name: 'deleted_at', type: 'timestamp', nullable: true })
   deletedAt: Date | null;
 
   @Column({ type: 'jsonb', default: {} })

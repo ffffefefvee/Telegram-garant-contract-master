@@ -96,8 +96,13 @@ export class EvidencePipelineService {
       // The content commitment is deliberately calculated only after the
       // scanner accepted the exact bytes that will be promoted.
       const sha256 = hash(input.file.buffer);
+      if (scan.sha256 !== sha256) {
+        throw new UnsupportedMediaTypeException(
+          "Malware scan result does not match the uploaded bytes",
+        );
+      }
       promotedKey = await this.storage.promoteClean({ quarantineKey, sha256 });
-      const scannedAt = new Date();
+      const scannedAt = new Date(scan.scannedAt);
       const retentionUntil = new Date(
         scannedAt.getTime() + RETENTION_DAYS * 24 * 60 * 60 * 1000,
       );
@@ -129,6 +134,8 @@ export class EvidencePipelineService {
           sha256,
           scannerName: scan.scannerName,
           scannerVersion: scan.scannerVersion,
+          scannerPolicyVersion: scan.policyVersion,
+          scannerResultId: scan.resultId,
           scanEvidenceHash,
           scannedAt,
           retentionUntil,
@@ -142,6 +149,8 @@ export class EvidencePipelineService {
             sha256,
             scannerName: scan.scannerName,
             scannerVersion: scan.scannerVersion,
+            scannerPolicyVersion: scan.policyVersion,
+            scannerResultId: scan.resultId,
             scanEvidenceHash,
             manifestHash,
             scannedAt,
@@ -238,16 +247,26 @@ function isFileEvidenceType(type: EvidenceType): boolean {
 }
 
 function assertScanMetadata(scan: {
+  sha256: string;
   scannerName: string;
   scannerVersion: string;
+  policyVersion: string;
+  scannedAt: string;
+  resultId: string;
   evidence: string;
 }): void {
   if (
     !scan.scannerName?.trim() ||
     !scan.scannerVersion?.trim() ||
+    !scan.policyVersion?.trim() ||
+    !scan.resultId?.trim() ||
     !scan.evidence?.trim() ||
+    !/^[0-9a-f]{64}$/.test(scan.sha256) ||
+    !Number.isFinite(new Date(scan.scannedAt).getTime()) ||
     scan.scannerName.length > 100 ||
-    scan.scannerVersion.length > 128
+    scan.scannerVersion.length > 128 ||
+    scan.policyVersion.length > 128 ||
+    scan.resultId.length > 128
   ) {
     throw new BadRequestException("Malware scanner returned incomplete evidence");
   }

@@ -23,7 +23,7 @@ export class Payment {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Column({ type: 'varchar', length: 100, unique: true })
+  @Column({ name: 'transaction_id', type: 'varchar', length: 100, unique: true })
   transactionId: string;
 
   @Column({
@@ -60,13 +60,13 @@ export class Payment {
   @Column({ type: 'varchar', length: 10, default: 'RUB' })
   currency: string;
 
-  @Column({ type: 'decimal', precision: 12, scale: 8, nullable: true })
+  @Column({ name: 'crypto_amount', type: 'decimal', precision: 12, scale: 8, nullable: true })
   cryptoAmount: number | null;
 
-  @Column({ type: 'varchar', length: 10, nullable: true })
+  @Column({ name: 'crypto_currency', type: 'varchar', length: 10, nullable: true })
   cryptoCurrency: string | null;
 
-  @Column({
+  @Column({ name: 'payment_method',
     type: 'enum',
     enum: PaymentMethod,
     default: PaymentMethod.CRYPTOMUS,
@@ -79,46 +79,46 @@ export class Payment {
   @Column({ type: 'text', nullable: true })
   description: string | null;
 
-  @Column({ type: 'text', nullable: true })
+  @Column({ name: 'payment_url', type: 'text', nullable: true })
   paymentUrl: string | null;
 
-  @Column({ type: 'varchar', length: 100, nullable: true })
+  @Column({ name: 'wallet_address', type: 'varchar', length: 100, nullable: true })
   walletAddress: string | null;
 
-  @Column({ type: 'jsonb', default: {} })
+  @Column({ name: 'cryptomus_data', type: 'jsonb', default: {} })
   cryptomusData: Record<string, any>;
 
-  @Column({ type: 'timestamp', nullable: true })
+  @Column({ name: 'paid_at', type: 'timestamp', nullable: true })
   paidAt: Date | null;
 
-  @Column({ type: 'timestamp', nullable: true })
+  @Column({ name: 'expires_at', type: 'timestamp', nullable: true })
   expiresAt: Date | null;
 
-  @Column({ type: 'varchar', length: 255, nullable: true })
+  @Column({ name: 'tx_id', type: 'varchar', length: 255, nullable: true })
   txId: string | null;
 
-  @Column({ type: 'varchar', length: 255, nullable: true })
+  @Column({ name: 'escrow_address', type: 'varchar', length: 255, nullable: true })
   escrowAddress: string | null;
 
-  @Column({ type: 'varchar', length: 100, nullable: true })
+  @Column({ name: 'failure_reason', type: 'varchar', length: 100, nullable: true })
   failureReason: string | null;
 
-  @Column({ type: 'varchar', length: 100, nullable: true })
+  @Column({ name: 'refund_reason', type: 'varchar', length: 100, nullable: true })
   refundReason: string | null;
 
-  @CreateDateColumn({ type: 'timestamp' })
+  @CreateDateColumn({ name: 'created_at', type: 'timestamp' })
   createdAt: Date;
 
-  @UpdateDateColumn({ type: 'timestamp' })
+  @UpdateDateColumn({ name: 'updated_at', type: 'timestamp' })
   updatedAt: Date;
 
-  @Column({ type: 'timestamp', nullable: true })
+  @Column({ name: 'refunded_at', type: 'timestamp', nullable: true })
   refundedAt: Date | null;
 
-  @Column({ type: 'uuid', nullable: true })
+  @Column({ name: 'refunded_by', type: 'uuid', nullable: true })
   refundedBy: string | null;
 
-  @Column({ type: 'varchar', length: 45, nullable: true })
+  @Column({ name: 'ip_address', type: 'varchar', length: 45, nullable: true })
   ipAddress: string | null;
 
   @Column({ type: 'jsonb', default: {} })

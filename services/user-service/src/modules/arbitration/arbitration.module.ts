@@ -1,5 +1,6 @@
 import { Module, forwardRef } from "@nestjs/common";
 import { APP_GUARD } from "@nestjs/core";
+import { ConfigService } from "@nestjs/config";
 import { JwtModule } from "@nestjs/jwt";
 import { TypeOrmModule } from "@nestjs/typeorm";
 
@@ -26,12 +27,17 @@ import { ArbitratorSelectionService } from "./arbitrator-selection.service";
 import { DisputeBlockchainService } from "./dispute-blockchain.service";
 import { TonNativeResolutionRequestService } from "./ton-native-resolution-request.service";
 import { EvidencePipelineService } from "./evidence-pipeline.service";
+import { EvidenceRetentionScheduler } from "./evidence-retention.scheduler";
 import {
   DisabledEvidenceMalwareScanner,
   DisabledEvidenceObjectStorage,
   EVIDENCE_MALWARE_SCANNER,
   EVIDENCE_OBJECT_STORAGE,
 } from "./evidence-pipeline.ports";
+import {
+  AuthenticatedEvidenceMalwareScanner,
+  S3EvidenceObjectStorage,
+} from "./production-evidence.adapters";
 
 // Controllers
 import { ArbitrationController } from "./arbitration.controller";
@@ -49,6 +55,7 @@ import { Deal } from "../deal/entities/deal.entity";
 import { User } from "../user/entities/user.entity";
 import { RolesGuard } from "../admin/guards/roles.guard";
 import { ArbitratorAccessGuard } from "./arbitrator-access.guard";
+import { PrivilegedIdentityService } from "../auth/privileged-identity.service";
 
 @Module({
   imports: [
@@ -90,18 +97,36 @@ import { ArbitratorAccessGuard } from "./arbitrator-access.guard";
     DisputeBlockchainService,
     TonNativeResolutionRequestService,
     EvidencePipelineService,
+    EvidenceRetentionScheduler,
     DisabledEvidenceObjectStorage,
     DisabledEvidenceMalwareScanner,
+    S3EvidenceObjectStorage,
+    AuthenticatedEvidenceMalwareScanner,
     {
       provide: EVIDENCE_OBJECT_STORAGE,
-      useExisting: DisabledEvidenceObjectStorage,
+      inject: [ConfigService, S3EvidenceObjectStorage, DisabledEvidenceObjectStorage],
+      useFactory: (
+        config: ConfigService,
+        enabled: S3EvidenceObjectStorage,
+        disabled: DisabledEvidenceObjectStorage,
+      ) => config.get("EVIDENCE_PIPELINE_ENABLED") === "true" ? enabled : disabled,
     },
     {
       provide: EVIDENCE_MALWARE_SCANNER,
-      useExisting: DisabledEvidenceMalwareScanner,
+      inject: [
+        ConfigService,
+        AuthenticatedEvidenceMalwareScanner,
+        DisabledEvidenceMalwareScanner,
+      ],
+      useFactory: (
+        config: ConfigService,
+        enabled: AuthenticatedEvidenceMalwareScanner,
+        disabled: DisabledEvidenceMalwareScanner,
+      ) => config.get("EVIDENCE_PIPELINE_ENABLED") === "true" ? enabled : disabled,
     },
     RolesGuard,
     ArbitratorAccessGuard,
+    PrivilegedIdentityService,
     { provide: APP_GUARD, useClass: ArbitratorAccessGuard },
   ],
   exports: [

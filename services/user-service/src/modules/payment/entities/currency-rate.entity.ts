@@ -14,28 +14,28 @@ export class CurrencyRate {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Column({ type: 'varchar', length: 10 })
+  @Column({ name: 'from_currency', type: 'varchar', length: 10 })
   fromCurrency: string; // RUB, USD, USDT, etc.
 
-  @Column({ type: 'varchar', length: 10 })
+  @Column({ name: 'to_currency', type: 'varchar', length: 10 })
   toCurrency: string;
 
   @Column({ type: 'decimal', precision: 18, scale: 8 })
   rate: number;
 
-  @Column({ type: 'decimal', precision: 18, scale: 8, default: 1 })
+  @Column({ name: 'inverse_rate', type: 'decimal', precision: 18, scale: 8, default: 1 })
   inverseRate: number;
 
   @Column({ type: 'varchar', length: 50, default: 'manual' })
   source: string; // manual, cryptomus, coingecko, exchanger
 
-  @Column({ type: 'boolean', default: true })
+  @Column({ name: 'is_active', type: 'boolean', default: true })
   isActive: boolean;
 
-  @Column({ type: 'timestamp' })
+  @Column({ name: 'valid_at', type: 'timestamp' })
   validAt: Date;
 
-  @CreateDateColumn({ type: 'timestamp' })
+  @CreateDateColumn({ name: 'created_at', type: 'timestamp' })
   createdAt: Date;
 
   @Column({ type: 'jsonb', default: {} })

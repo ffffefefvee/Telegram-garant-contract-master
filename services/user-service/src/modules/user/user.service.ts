@@ -255,55 +255,6 @@ export class UserService {
     });
   }
 
-  async setStatus(id: string, status: UserStatus): Promise<User> {
-    const user = await this.findById(id);
-    user.status = status;
-    user.updatedAt = new Date();
-    return this.userRepository.save(user);
-  }
-
-  async ban(id: string, reason?: string): Promise<User> {
-    const user = await this.findById(id);
-    user.status = UserStatus.BANNED;
-    user.metadata = {
-      ...user.metadata,
-      banReason: reason,
-      bannedAt: new Date().toISOString(),
-    };
-    user.updatedAt = new Date();
-    return this.userRepository.save(user);
-  }
-
-  async unban(id: string): Promise<User> {
-    const user = await this.findById(id);
-    user.status = UserStatus.ACTIVE;
-    user.metadata = {
-      ...user.metadata,
-      unbannedAt: new Date().toISOString(),
-    };
-    user.updatedAt = new Date();
-    return this.userRepository.save(user);
-  }
-
-  async addRole(id: string, role: UserType): Promise<User> {
-    const user = await this.findById(id);
-
-    if (!user.roles.includes(role)) {
-      user.roles.push(role);
-      user.updatedAt = new Date();
-      await this.userRepository.save(user);
-    }
-
-    return user;
-  }
-
-  async removeRole(id: string, role: UserType): Promise<User> {
-    const user = await this.findById(id);
-    user.roles = user.roles.filter((r) => r !== role);
-    user.updatedAt = new Date();
-    return this.userRepository.save(user);
-  }
-
   async createSession(data: CreateSessionDto): Promise<UserSession> {
     const user = await this.findById(data.userId);
 
@@ -466,19 +417,6 @@ export class UserService {
     user.reputationScore = newScore;
     user.updatedAt = new Date();
 
-    return this.userRepository.save(user);
-  }
-
-  async updateBalance(userId: string, amount: number): Promise<User> {
-    const user = await this.findById(userId);
-
-    user.balance += amount;
-
-    if (user.balance < 0) {
-      throw new ConflictException('Insufficient balance');
-    }
-
-    user.updatedAt = new Date();
     return this.userRepository.save(user);
   }
 

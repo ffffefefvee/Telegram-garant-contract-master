@@ -17,8 +17,12 @@ export interface EvidenceObjectStorage {
 export interface EvidenceMalwareScanner {
   scan(input: { bytes: Buffer; mediaType: string }): Promise<{
     clean: boolean;
+    sha256: string;
     scannerName: string;
     scannerVersion: string;
+    policyVersion: string;
+    scannedAt: string;
+    resultId: string;
     evidence: string;
   }>;
 }

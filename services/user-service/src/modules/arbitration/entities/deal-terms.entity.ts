@@ -28,58 +28,58 @@ export class DealTerms {
   @Column({ type: 'uuid', name: 'deal_id', unique: true })
   dealId: string;
 
-  @Column({ type: 'text', nullable: true })
+  @Column({ name: 'acceptance_criteria', type: 'text', nullable: true })
   acceptanceCriteria: string | null;
   // Критерии приёмки: "Товар должен работать 7 дней без сбоев"
 
-  @Column({ type: 'text', nullable: true })
+  @Column({ name: 'required_evidence', type: 'text', nullable: true })
   requiredEvidence: string | null;
   // JSON array: ["скриншоты", "видео", "логи"]
 
-  @Column({ type: 'int', default: 24 })
+  @Column({ name: 'study_period_hours', type: 'int', default: 24 })
   studyPeriodHours: number;
   // Срок проверки в часах (24, 48, 72)
 
-  @Column({ type: 'text', nullable: true })
+  @Column({ name: 'custom_conditions', type: 'text', nullable: true })
   customConditions: string | null;
   // Особые условия: "Продавец предоставляет инструкцию"
 
-  @Column({ type: 'text', nullable: true })
+  @Column({ name: 'delivery_method', type: 'text', nullable: true })
   deliveryMethod: string | null;
   // Способ доставки: "Email", "Telegram", "Курьер", "СДЭК"
 
-  @Column({ type: 'text', nullable: true })
+  @Column({ name: 'delivery_timeframe', type: 'text', nullable: true })
   deliveryTimeframe: string | null;
   // Сроки доставки: "В течение 24 часов после оплаты"
 
-  @Column({ type: 'text', nullable: true })
+  @Column({ name: 'warranty_terms', type: 'text', nullable: true })
   warrantyTerms: string | null;
   // Гарантийные условия: "Гарантия 30 дней"
 
-  @Column({ type: 'boolean', default: false })
+  @Column({ name: 'has_warranty', type: 'boolean', default: false })
   hasWarranty: boolean;
 
-  @Column({ type: 'int', nullable: true })
+  @Column({ name: 'warranty_days', type: 'int', nullable: true })
   warrantyDays: number | null;
 
-  @Column({ type: 'text', nullable: true })
+  @Column({ name: 'refund_policy', type: 'text', nullable: true })
   refundPolicy: string | null;
   // Условия возврата: "Возврат в течение 14 дней если товар не работает"
 
-  @Column({ type: 'boolean', default: false })
+  @Column({ name: 'is_refundable', type: 'boolean', default: false })
   isRefundable: boolean;
 
-  @Column({ type: 'int', nullable: true })
+  @Column({ name: 'refund_days', type: 'int', nullable: true })
   refundDays: number | null;
 
-  @Column({ type: 'text', nullable: true })
+  @Column({ name: 'additional_notes', type: 'text', nullable: true })
   additionalNotes: string | null;
   // Дополнительные заметки
 
-  @CreateDateColumn({ type: 'timestamp' })
+  @CreateDateColumn({ name: 'created_at', type: 'timestamp' })
   createdAt: Date;
 
-  @UpdateDateColumn({ type: 'timestamp' })
+  @UpdateDateColumn({ name: 'updated_at', type: 'timestamp' })
   updatedAt: Date;
 
   @Column({ type: 'jsonb', default: {} })

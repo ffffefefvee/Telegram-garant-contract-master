@@ -64,34 +64,34 @@ export class Review {
   })
   status: ReviewStatus;
 
-  @Column({ type: 'boolean', default: false })
+  @Column({ name: 'is_anonymous', type: 'boolean', default: false })
   isAnonymous: boolean;
 
   @Column({ type: 'jsonb', default: {} })
   ratings: Record<string, number>; // { communication: 5, quality: 4, speed: 5 }
 
-  @Column({ type: 'int', default: 0 })
+  @Column({ name: 'helpful_count', type: 'int', default: 0 })
   helpfulCount: number;
 
-  @Column({ type: 'int', default: 0 })
+  @Column({ name: 'not_helpful_count', type: 'int', default: 0 })
   notHelpfulCount: number;
 
-  @CreateDateColumn({ type: 'timestamp' })
+  @CreateDateColumn({ name: 'created_at', type: 'timestamp' })
   createdAt: Date;
 
-  @UpdateDateColumn({ type: 'timestamp' })
+  @UpdateDateColumn({ name: 'updated_at', type: 'timestamp' })
   updatedAt: Date;
 
-  @Column({ type: 'timestamp', nullable: true })
+  @Column({ name: 'published_at', type: 'timestamp', nullable: true })
   publishedAt: Date | null;
 
-  @Column({ type: 'timestamp', nullable: true })
+  @Column({ name: 'hidden_at', type: 'timestamp', nullable: true })
   hiddenAt: Date | null;
 
-  @Column({ type: 'varchar', length: 255, nullable: true })
+  @Column({ name: 'hide_reason', type: 'varchar', length: 255, nullable: true })
   hideReason: string | null;
 
-  @Column({ type: 'uuid', nullable: true })
+  @Column({ name: 'hidden_by', type: 'uuid', nullable: true })
   hiddenBy: string | null;
 
   @Column({ type: 'jsonb', default: {} })

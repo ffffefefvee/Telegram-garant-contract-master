@@ -33,7 +33,6 @@ import {
   ArbitrationChatMessageDto,
   DealTermsDto,
   EnforceDecisionDto,
-  AssignArbitratorDto,
 } from "./dto";
 import {
   ArbitratorAvailability,
@@ -108,20 +107,6 @@ export class ArbitrationController {
     @CurrentUser() user: UserPayload,
   ) {
     return this.disputeService.getDisputeForUser(id, user.id, user.roles);
-  }
-
-  @Post("disputes/:id/assign-arbitrator")
-  async assignArbitrator(
-    @Param("id", ParseUUIDPipe) id: string,
-    @Body() dto: AssignArbitratorDto,
-    @CurrentUser() user: UserPayload,
-  ) {
-    return this.disputeService.assignArbitrator(
-      id,
-      dto.arbitratorId,
-      user.id,
-      dto.isAutoAssigned,
-    );
   }
 
   @Put("disputes/:id/status")

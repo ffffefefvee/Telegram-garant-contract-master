@@ -28,6 +28,7 @@ import { OpsModule } from "../ops/ops.module";
 import { BlockchainModule } from "../blockchain/blockchain.module";
 import { RolesGuard } from "./guards/roles.guard";
 import { PrivilegedAccessGuard } from "./guards/privileged-access.guard";
+import { PrivilegedIdentityService } from "../auth/privileged-identity.service";
 
 @Module({
   imports: [
@@ -64,6 +65,7 @@ import { PrivilegedAccessGuard } from "./guards/privileged-access.guard";
     AdminDashboardService,
     RolesGuard,
     PrivilegedAccessGuard,
+    PrivilegedIdentityService,
     { provide: APP_GUARD, useClass: PrivilegedAccessGuard },
   ],
   exports: [AdminService, AdminDashboardService, RolesGuard],
