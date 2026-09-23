@@ -3,26 +3,23 @@ import { JwtService } from '@nestjs/jwt';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
+import { Agent, fetch as undiciFetch, getGlobalDispatcher, setGlobalDispatcher } from 'undici';
 import { PrivilegedIdentityService } from './privileged-identity.service';
 
 // The actual fixture speaks TLS over loopback; this test does not mock fetch.
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const { createMockIdp } = require('../../../scripts/mock-idp.js');
-// The installed Node 20 type package predates these Node 24 trust APIs.
-// eslint-disable-next-line @typescript-eslint/no-var-requires
-const { getCACertificates, setDefaultCACertificates } = require('node:tls') as {
-  getCACertificates: (type: string) => string[];
-  setDefaultCACertificates: (certificates: string[]) => void;
-};
-
 describe('staging mock IdP over HTTPS', () => {
   it('issues and introspects admin and arbitrator assertions accepted by the verifier', async () => {
     const root = mkdtempSync(join(tmpdir(), 'garant-mock-idp-'));
     const fixture = createMockIdp({ port: 0, root });
-    const originalCas = getCACertificates('default');
+    const originalDispatcher = getGlobalDispatcher();
+    const originalFetch = globalThis.fetch;
+    const fixtureDispatcher = new Agent({ connect: { ca: fixture.identity.cert } });
     try {
       await fixture.start();
-      setDefaultCACertificates([...originalCas, fixture.identity.cert]);
+      setGlobalDispatcher(fixtureDispatcher);
+      globalThis.fetch = undiciFetch as unknown as typeof fetch;
       const base = fixture.issuer();
       const health = await fetch(`${base}/health`);
       expect(await health.json()).toEqual({ status: 'ok', fixture: 'staging-mock-idp' });
@@ -59,7 +56,9 @@ describe('staging mock IdP over HTTPS', () => {
         expect(result.jti).toBeTruthy();
       }
     } finally {
-      setDefaultCACertificates(originalCas);
+      globalThis.fetch = originalFetch;
+      setGlobalDispatcher(originalDispatcher);
+      await fixtureDispatcher.close();
       await new Promise<void>((resolveClose) => fixture.server.close(() => resolveClose()));
       rmSync(root, { recursive: true, force: true });
     }
