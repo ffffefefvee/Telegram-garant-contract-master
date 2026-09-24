@@ -223,3 +223,14 @@ passwords.
 This update is **local evidence**, not a new hosted CI result or a waiver of
 external two-identity/concurrency drills. The overall release result remains
 **BLOCKED**.
+
+## Local two-person recovery exercise (2026-09-24)
+
+A disposable PostgreSQL database and separate HTTPS mock-IdP instance exercised
+two distinct recovery-admin assertions through the privileged verifier and
+Jetton recovery service. Self-approval was denied; second approval produced
+one checkpoint and two audit records with zero ledger delta. The measured
+request-to-approval interval was 52 ms; all 35 isolated PostgreSQL gate tests
+passed. See `docs/operations/jetton-two-person-local-drill.md`. This is a
+local service-level exercise, not an HTTP-route, external IdP or human-witnessed
+release drill. The external two-identity gate remains **BLOCKED**.

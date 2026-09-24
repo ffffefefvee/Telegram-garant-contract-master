@@ -20,6 +20,11 @@ record and evidence links to the corresponding file.
 | False reconciliation report | BLOCKED | UNASSIGNED | `false-reconciliation-report.md` |
 | Global settlement stop/recovery | BLOCKED | UNASSIGNED | `global-settlement-stop-recovery.md` |
 
+Supplemental local engineering exercise (not one of the ten mandatory
+production-candidate drills): Jetton two-person cursor recovery, LOCAL PASS,
+Engineering automation; see `jetton-two-person-local-drill.md`. It does not
+change any `BLOCKED` status above.
+
 Every executed record must name the owner and participants; include UTC start
 and end, exact commit/environment, initial and final ledger/chain/queue/nonce/
 evidence state, injected failure, invariant, alerts, operator decisions, exact
