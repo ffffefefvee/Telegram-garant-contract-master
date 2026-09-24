@@ -73,7 +73,7 @@ Commands and results through 2026-09-21:
 | Retention deletion/retry/DLQ implementation | PASS | Scheduler, migration and unit tests | Engineering | External lifecycle/DLQ operations drill pending |
 | Off-site WORM implementation and local verification | PASS | ADR-023, WORM service/migration and hash-chain tests | Engineering | Real Object Lock policy, cross-account custody and restore pending |
 | WORM external restore/continuity drill | BLOCKED | No external destination or executed restore report | UNASSIGNED | Destination rollback/availability not operationally proven |
-| Two-person Polygon/shared-ledger recovery | BLOCKED | ADR-025, 20/20 focused tests and 7/7 PostgreSQL gate cover unmatched-deposit and native-TON replay | Engineering / UNASSIGNED | Dormant Jetton cursor/requeue primitives need equivalent controls; external concurrency/two-identity drills remain unproven |
+| Two-person Polygon/shared-ledger recovery | BLOCKED | ADR-025; unmatched-deposit, native-TON and Jetton cursor/requeue now have code-level two-person controls | Engineering / UNASSIGNED | External concurrency/two-identity drills and any remaining Polygon/shared-ledger inventory remain unproven |
 | Hardware/threshold key custody inventory | BLOCKED | No redacted custody attestations | UNASSIGNED | Key separation, backup and break-glass not evidenced |
 | Ten mandatory operational drills | BLOCKED | `docs/operations/` contains explicit unexecuted records | UNASSIGNED | Recovery time and final balance remain unknown |
 | Real-network money egress remains disabled | PASS | `.env.example` retains `MONEY_EGRESS_ENABLED=false`; no enabling change | Engineering | Deployment environment must be independently checked |
@@ -207,3 +207,19 @@ not the Phase 5/6 release gates. External Amoy/signer/RPC, production IdP,
 scanner/storage/WORM, custody, independent review, and witnessed recovery
 drills remain `BLOCKED`. `MONEY_EGRESS_ENABLED=false` remains required for real
 networks; neither Draft PR is ready to merge and Phase 7 must not start.
+
+## Jetton recovery code update (2026-09-24)
+
+The legacy single-actor Jetton cursor rewind and manual-review requeue methods
+now fail closed. New super-admin recovery endpoints use distinct privileged
+IdP sessions, the dedicated recovery scope, immutable expiring requests,
+stale-state checks, single-use approval, transactional audit, and PostgreSQL
+uniqueness/immutability constraints. Local backend build, full unit run
+(1,099 passed; 34 PostgreSQL-gated tests skipped), and the isolated
+Phase 3/4/5/6 PostgreSQL gates pass (34/34 after adding Jetton negative and
+concurrency tests). The offline staging fixture now automatically provisions
+two distinct super-admin recovery identities without replacing existing test
+passwords.
+This update is **local evidence**, not a new hosted CI result or a waiver of
+external two-identity/concurrency drills. The overall release result remains
+**BLOCKED**.

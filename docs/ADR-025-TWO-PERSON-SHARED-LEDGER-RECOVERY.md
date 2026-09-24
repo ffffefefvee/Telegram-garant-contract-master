@@ -2,7 +2,7 @@
 
 Date: 2026-09-21
 
-Status: accepted for the unmatched TON deposit ledger; other recovery paths remain gated
+Status: accepted for unmatched TON, native-TON replay, and Jetton recovery code; external drills remain gated
 
 ## Decision
 
@@ -32,7 +32,7 @@ The legacy HTTP routes for one-person deal force-complete/force-cancel,
 administrator payment refund, self-service payment refund and funding
 deadline extension are also removed. Their underlying code is not an approved
 recovery interface and is unreachable from controllers until a reconciled
-  two-person intent is designed for each operation.
+two-person intent is designed for each operation.
 
 The pre-existing native-TON manual-review requeue follows the same identity
 policy. Its requests now store the requester/approver IdP credential and
@@ -44,6 +44,17 @@ cursor or scan a stopped/terminal watch. A PostgreSQL trigger makes the native
 intent and every terminal request immutable, and a partial unique index allows
 only one pending request per event.
 
+Jetton cursor rewind and stopped-application requeue now use a separate
+five-minute, IdP-bound two-person request. The old single-actor service methods
+fail closed. The request captures the cursor/application state hash and an
+immutable intent; approval rechecks that state while holding the target and
+request locks, then writes the checkpoint/review record, mutation, terminal
+request and required audit record in one transaction. Cursor targets other
+than the empty baseline must match an already recorded immutable event. The
+new super-admin endpoints require the same `garant:admin:recovery` scope and
+distinct IdP sessions. A partial unique index limits pending requests per
+target, and a trigger protects request intent and terminal state.
+
 ## Consequences
 
 - Operators need two separately enrolled eligible IdP identities and sessions.
@@ -51,10 +62,7 @@ only one pending request per event.
   execution.
 - External IdP lifecycle drills and PostgreSQL concurrency evidence are still
   required before this control is production evidence.
-- This ADR covers unmatched-deposit matching and native-TON manual-review
-  replay. Phase 6 remains blocked until any remaining Polygon/shared-ledger
-  path is inventoried and external two-identity/concurrency drills are run.
-- Jetton cursor rewind and stopped-application requeue are wired service
-  primitives but currently have no HTTP controller or runtime caller. They
-  must remain unexposed until an equivalent IdP-bound two-person request model
-  replaces their single `actorId` inputs.
+- This ADR covers unmatched-deposit matching, native-TON manual-review replay,
+  and Jetton cursor/requeue. Phase 6 remains blocked until any remaining
+  Polygon/shared-ledger path is inventoried and external two-identity and
+  concurrency drills are run.

@@ -10,6 +10,8 @@ import {
   type TonVerificationEvidencePolicy,
 } from "../escrow/adapters/ton-proof/ton-verification-evidence";
 import { SettlementCircuitBreakerService } from "../safety/settlement-circuit-breaker.service";
+import { AuditLogService } from "../ops/audit-log.service";
+import { AuditLogEntry } from "../ops/entities/audit-log.entity";
 import { SettlementCircuitScope } from "../safety/entities/settlement-circuit-breaker.entity";
 import { TonNetwork } from "../user/entities/ton-wallet-binding.entity";
 import { TonJettonAction } from "./entities/ton-jetton-action-intent.entity";
@@ -25,6 +27,7 @@ import {
   TonJettonFinalizedEventInput,
 } from "./ton-jetton-durable-ingestion.service";
 import { TonJettonLedgerReconciliationService } from "./ton-jetton-ledger-reconciliation.service";
+import { TonJettonRecoveryService } from "./ton-jetton-recovery.service";
 import {
   TonJettonPreparationInput,
   TonJettonPreparationService,
@@ -50,6 +53,16 @@ const RECONCILIATION = ADDRESS("9");
 const APPROVAL_KEYS = ["operator-a", "operator-b", "operator-c"].map(
   (signerId) => ({ signerId, ...generateKeyPairSync("ed25519") }),
 );
+const RECOVERY_REQUESTER = {
+  id: "11111111-1111-4111-8111-111111111111", role: "super_admin",
+  jti: "jetton-request-jti", sid: "jetton-request-sid",
+  scopes: ["garant:admin:recovery"],
+};
+const RECOVERY_APPROVER = {
+  id: "22222222-2222-4222-8222-222222222222", role: "super_admin",
+  jti: "jetton-approve-jti", sid: "jetton-approve-sid",
+  scopes: ["garant:admin:recovery"],
+};
 
 interface SeededDeal {
   dealId: string;
@@ -62,6 +75,7 @@ describePostgres("Phase 3 Jetton PostgreSQL exit gate", () => {
   let circuitBreaker: SettlementCircuitBreakerService;
   let preparationService: TonJettonPreparationService;
   let ingestion: TonJettonDurableIngestionService;
+  let recovery: TonJettonRecoveryService;
   let application: TonJettonTransactionalApplicationService;
   let intents: TonJettonActionIntentService;
   let ledgerReconciliation: TonJettonLedgerReconciliationService;
@@ -80,6 +94,8 @@ describePostgres("Phase 3 Jetton PostgreSQL exit gate", () => {
       circuitBreaker,
     );
     ingestion = new TonJettonDurableIngestionService(dataSource, 3);
+    recovery = new TonJettonRecoveryService(dataSource,
+      new AuditLogService(dataSource.getRepository(AuditLogEntry)));
     application = new TonJettonTransactionalApplicationService(
       dataSource,
       ingestion,
@@ -171,17 +187,20 @@ describePostgres("Phase 3 Jetton PostgreSQL exit gate", () => {
     ).resolves.toMatchObject({
       status: "replayed",
     });
-    await expect(
-      ingestion.rewindCursor({
+    const rewindRequest = await recovery.requestCursorRewind({
         network: preparation.network,
         accountAddress: preparation.escrowAddress,
         toLt: null,
         toTransactionHash: null,
         toMasterchainSeqno: null,
         reasonCode: "BOUNDED_SOURCE_RESCAN",
-        actorId: "operator.phase3",
-      }),
-    ).resolves.toMatchObject({ lastFinalizedLt: null });
+      }, RECOVERY_REQUESTER);
+    await expect(recovery.approveCursorRewind(rewindRequest.requestId, RECOVERY_REQUESTER))
+      .rejects.toThrow("different super admin");
+    await expect(recovery.approveCursorRewind(rewindRequest.requestId, RECOVERY_APPROVER))
+      .resolves.toMatchObject({ cursor: { lastFinalizedLt: null } });
+    await expect(recovery.approveCursorRewind(rewindRequest.requestId, RECOVERY_APPROVER))
+      .rejects.toThrow("not pending");
 
     const [{ events, applications, recoveries }] = await dataSource.query(`
       SELECT
@@ -198,6 +217,92 @@ describePostgres("Phase 3 Jetton PostgreSQL exit gate", () => {
     await expect(
       dataSource.query(`DELETE FROM "ton_jetton_chain_events"`),
     ).rejects.toThrow("immutable settlement evidence cannot be changed");
+  });
+
+  it("rejects a shared IdP session, missing recovery scope, and a cancelled cursor intent", async () => {
+    const seeded = await seedDeal(dataSource);
+    const preparation = (await preparationService.prepare(preparationInput(seeded.dealId))).preparation;
+    await ingestion.appendFinalizedEvent(fundingEvent(preparation, "100", "1"));
+    const target = { network: preparation.network, accountAddress: preparation.escrowAddress,
+      toLt: null, toTransactionHash: null, toMasterchainSeqno: null,
+      reasonCode: "BOUNDED_SOURCE_RESCAN" };
+    await expect(recovery.requestCursorRewind(target, { ...RECOVERY_REQUESTER, scopes: [] }))
+      .rejects.toThrow("requires a super admin");
+    const request = await recovery.requestCursorRewind(target, RECOVERY_REQUESTER);
+    await expect(dataSource.query(`UPDATE "ton_jetton_recovery_requests"
+      SET "reasonCode" = 'ALTERED_REASON' WHERE id = $1`, [request.requestId]))
+      .rejects.toThrow("jetton recovery intent is immutable");
+    await expect(dataSource.query(`DELETE FROM "ton_jetton_recovery_requests" WHERE id = $1`,
+      [request.requestId])).rejects.toThrow("jetton recovery requests cannot be deleted");
+    await expect(recovery.approveCursorRewind(request.requestId,
+      { ...RECOVERY_APPROVER, sid: RECOVERY_REQUESTER.sid }))
+      .rejects.toThrow("different super admin and IdP session");
+    await expect(recovery.requestCursorRewind(target, RECOVERY_APPROVER))
+      .rejects.toThrow("already awaits approval");
+    await recovery.cancel(request.requestId, RECOVERY_APPROVER);
+    await expect(recovery.approveCursorRewind(request.requestId, RECOVERY_APPROVER))
+      .rejects.toThrow("not pending");
+    const [{ recoveries }] = await dataSource.query(`SELECT count(*)::int AS recoveries
+      FROM "ton_jetton_ingestion_cursor_checkpoints" WHERE kind = 'recovery'`);
+    expect(recoveries).toBe(0);
+  });
+
+  it("rejects approval if a new finalized Jetton observation changes the cursor", async () => {
+    const seeded = await seedDeal(dataSource);
+    const preparation = (await preparationService.prepare(preparationInput(seeded.dealId))).preparation;
+    await ingestion.appendFinalizedEvent(fundingEvent(preparation, "100", "1"));
+    const request = await recovery.requestCursorRewind({
+      network: preparation.network, accountAddress: preparation.escrowAddress,
+      toLt: null, toTransactionHash: null, toMasterchainSeqno: null,
+      reasonCode: "BOUNDED_SOURCE_RESCAN",
+    }, RECOVERY_REQUESTER);
+    await ingestion.appendFinalizedEvent(fundingEvent(preparation, "101", "2"));
+    await expect(recovery.approveCursorRewind(request.requestId, RECOVERY_APPROVER))
+      .rejects.toThrow("changed after recovery was requested");
+  });
+
+  it("allows only one pending Jetton cursor request under concurrent operators", async () => {
+    const seeded = await seedDeal(dataSource);
+    const preparation = (await preparationService.prepare(preparationInput(seeded.dealId))).preparation;
+    await ingestion.appendFinalizedEvent(fundingEvent(preparation, "100", "1"));
+    const target = { network: preparation.network, accountAddress: preparation.escrowAddress,
+      toLt: null, toTransactionHash: null, toMasterchainSeqno: null,
+      reasonCode: "BOUNDED_SOURCE_RESCAN" };
+    const results = await Promise.allSettled([
+      recovery.requestCursorRewind(target, RECOVERY_REQUESTER),
+      recovery.requestCursorRewind(target, RECOVERY_APPROVER),
+    ]);
+    expect(results.filter((result) => result.status === "fulfilled")).toHaveLength(1);
+    expect(results.filter((result) => result.status === "rejected")).toHaveLength(1);
+    const [{ pending }] = await dataSource.query(`SELECT count(*)::int AS pending
+      FROM "ton_jetton_recovery_requests" WHERE status = 'pending'`);
+    expect(pending).toBe(1);
+  });
+
+  it("expires a Jetton recovery intent before replacement without mutating the cursor", async () => {
+    const seeded = await seedDeal(dataSource);
+    const preparation = (await preparationService.prepare(preparationInput(seeded.dealId))).preparation;
+    await ingestion.appendFinalizedEvent(fundingEvent(preparation, "100", "1"));
+    const target = { network: preparation.network, accountAddress: preparation.escrowAddress,
+      toLt: null, toTransactionHash: null, toMasterchainSeqno: null,
+      reasonCode: "BOUNDED_SOURCE_RESCAN" };
+    const first = await recovery.requestCursorRewind(target, RECOVERY_REQUESTER);
+    const clock = jest.spyOn(Date, "now").mockReturnValue(first.expiresAt.getTime() + 1);
+    try {
+      await expect(recovery.approveCursorRewind(first.requestId, RECOVERY_APPROVER))
+        .rejects.toThrow("expired");
+      const replacement = await recovery.requestCursorRewind(target, RECOVERY_APPROVER);
+      expect(replacement.requestId).not.toBe(first.requestId);
+    } finally {
+      clock.mockRestore();
+    }
+    const [old] = await dataSource.query(`SELECT status FROM "ton_jetton_recovery_requests"
+      WHERE id = $1`, [first.requestId]);
+    expect(old.status).toBe("expired");
+    const [cursor] = await dataSource.query(`SELECT "lastFinalizedLt" FROM
+      "ton_jetton_ingestion_cursors" WHERE "network" = $1 AND "accountAddress" = $2`,
+      [preparation.network, preparation.escrowAddress]);
+    expect(cursor.lastFinalizedLt).toBe("100");
   });
 
   it("uses SKIP LOCKED so two workers apply two deals exactly once", async () => {
@@ -358,11 +463,10 @@ describePostgres("Phase 3 Jetton PostgreSQL exit gate", () => {
     await expect(
       circuitBreaker.assertFundingAllowed(SettlementCircuitScope.POLYGON),
     ).resolves.toBeUndefined();
-    await ingestion.requeueManualReview({
-      eventId: appended.event.id,
-      reasonCode: "SOURCE_EVIDENCE_REVIEWED",
-      actorId: "operator.phase3",
-    });
+    const requeueRequest = await recovery.requestRequeue(
+      appended.event.id, "SOURCE_EVIDENCE_REVIEWED", RECOVERY_REQUESTER);
+    await expect(recovery.approveRequeue(requeueRequest.requestId, RECOVERY_APPROVER))
+      .resolves.toMatchObject({ status: "queued", replayRequiresReconciliation: true });
     const [{ reviews, ledger }] = await dataSource.query(`
       SELECT
         (SELECT count(*)::int FROM "ton_jetton_application_reviews") AS reviews,
@@ -468,7 +572,9 @@ async function resetDatabase(dataSource: DataSource): Promise<void> {
     TRUNCATE TABLE users, deals, "money_ledger_entries",
       "settlement_circuit_breaker_audit",
       "ton_jetton_ledger_reconciliations",
-      "ton_jetton_ingestion_cursor_checkpoints"
+      "ton_jetton_ingestion_cursor_checkpoints",
+      "ton_jetton_ingestion_cursors",
+      "ton_jetton_recovery_requests"
     RESTART IDENTITY CASCADE
   `);
   await dataSource.query(`

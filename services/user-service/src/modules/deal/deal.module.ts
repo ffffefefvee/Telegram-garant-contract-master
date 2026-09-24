@@ -10,6 +10,7 @@ import { TonNativeEscrowWatch } from "./entities/ton-native-escrow-watch.entity"
 import { TonNativeChainEvent } from "./entities/ton-native-chain-event.entity";
 import { TonNativeLifecycleIntent } from "./entities/ton-native-lifecycle-intent.entity";
 import { TonNativeRecoveryRequest } from "./entities/ton-native-recovery-request.entity";
+import { TonJettonRecoveryRequest } from "./entities/ton-jetton-recovery-request.entity";
 import { TonJettonEscrowPreparation } from "./entities/ton-jetton-escrow-preparation.entity";
 import { TonJettonEscrowWatch } from "./entities/ton-jetton-escrow-watch.entity";
 import { TonJettonLedgerReconciliation } from "./entities/ton-jetton-ledger-reconciliation.entity";
@@ -52,6 +53,7 @@ import { TonNativeBackfillService } from "./ton-native-backfill.service";
 import { TonJettonPreparationService } from "./ton-jetton-preparation.service";
 import { SafetyModule } from "../safety/safety.module";
 import { TonJettonDurableIngestionService } from "./ton-jetton-durable-ingestion.service";
+import { TonJettonRecoveryService } from "./ton-jetton-recovery.service";
 import {
   TonJettonApplicationEvidenceVerifier,
   TonJettonTransactionalApplicationService,
@@ -74,6 +76,7 @@ import { SettlementAgreementService } from "./settlement-agreement.service";
       TonNativeChainEvent,
       TonNativeLifecycleIntent,
       TonNativeRecoveryRequest,
+      TonJettonRecoveryRequest,
       TonJettonEscrowPreparation,
       TonJettonEscrowWatch,
       TonJettonLedgerReconciliation,
@@ -111,6 +114,7 @@ import { SettlementAgreementService } from "./settlement-agreement.service";
     TonNativeBackfillService,
     TonJettonPreparationService,
     TonJettonDurableIngestionService,
+    TonJettonRecoveryService,
     TonJettonApplicationEvidenceVerifier,
     TonJettonTransactionalApplicationService,
     TonJettonActionIntentService,
@@ -130,6 +134,7 @@ import { SettlementAgreementService } from "./settlement-agreement.service";
     TonNativeBackfillService,
     TonJettonPreparationService,
     TonJettonDurableIngestionService,
+    TonJettonRecoveryService,
     TonJettonTransactionalApplicationService,
     TonJettonActionIntentService,
     TonJettonLedgerReconciliationService,

@@ -10,6 +10,8 @@ const ROOT = resolve(__dirname, '../.local-e2e/mock-idp');
 const USERS = Object.freeze({
   'admin@local.test': { sub: '11111111-1111-4111-8111-111111111111', audience: 'garant-admin', purpose: 'admin_step_up', scope: 'garant:admin:step-up garant:admin:recovery' },
   'arbitrator@local.test': { sub: '22222222-2222-4222-8222-222222222222', audience: 'garant-arbitrator', purpose: 'arbitrator_step_up', scope: 'garant:arbitrator:step-up' },
+  'recovery1@local.test': { sub: '33333333-3333-4333-8333-333333333333', audience: 'garant-admin', purpose: 'admin_step_up', scope: 'garant:admin:step-up garant:admin:recovery' },
+  'recovery2@local.test': { sub: '44444444-4444-4444-8444-444444444444', audience: 'garant-admin', purpose: 'admin_step_up', scope: 'garant:admin:step-up garant:admin:recovery' },
 });
 
 function derLength(n) {
@@ -73,6 +75,18 @@ function loadOrCreateIdentity(root = ROOT) {
     writeFileSync(certPath, certificate(pair.privateKey, pair.publicKey), { mode: 0o600, flag: 'w' });
     writeFileSync(passwordsPath, JSON.stringify(Object.fromEntries(Object.keys(USERS).map((u) => [u, randomBytes(24).toString('base64url')])), null, 2), { mode: 0o600, flag: 'w' });
     writeFileSync(tokenPath, randomBytes(32).toString('base64url'), { mode: 0o600, flag: 'w' });
+  } else {
+    // Upgrade an existing local fixture without rotating its signing key or
+    // replacing already-issued test-user passwords.
+    const passwords = JSON.parse(readFileSync(passwordsPath, 'utf8'));
+    let changed = false;
+    for (const user of Object.keys(USERS)) {
+      if (!passwords[user]) {
+        passwords[user] = randomBytes(24).toString('base64url');
+        changed = true;
+      }
+    }
+    if (changed) writeFileSync(passwordsPath, JSON.stringify(passwords, null, 2), { mode: 0o600, flag: 'w' });
   }
   return {
     certPath,

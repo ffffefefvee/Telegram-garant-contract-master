@@ -10,7 +10,7 @@ import { PrivilegedIdentityService } from './privileged-identity.service';
 // eslint-disable-next-line @typescript-eslint/no-var-requires
 const { createMockIdp } = require('../../../scripts/mock-idp.js');
 describe('staging mock IdP over HTTPS', () => {
-  it('issues and introspects admin and arbitrator assertions accepted by the verifier', async () => {
+  it('issues distinct recovery-admin and arbitrator assertions accepted by the verifier', async () => {
     const root = mkdtempSync(join(tmpdir(), 'garant-mock-idp-'));
     const fixture = createMockIdp({ port: 0, root });
     const originalDispatcher = getGlobalDispatcher();
@@ -23,9 +23,12 @@ describe('staging mock IdP over HTTPS', () => {
       const base = fixture.issuer();
       const health = await fetch(`${base}/health`);
       expect(await health.json()).toEqual({ status: 'ok', fixture: 'staging-mock-idp' });
+      const recoverySessions: string[] = [];
 
       for (const [kind, email, audience, scope] of [
         ['ADMIN', 'admin@local.test', 'garant-admin', 'garant:admin:step-up'],
+        ['ADMIN', 'recovery1@local.test', 'garant-admin', 'garant:admin:recovery'],
+        ['ADMIN', 'recovery2@local.test', 'garant-admin', 'garant:admin:recovery'],
         ['ARBITRATOR', 'arbitrator@local.test', 'garant-arbitrator', 'garant:arbitrator:step-up'],
       ] as const) {
         const login = await fetch(`${base}/token`, {
@@ -54,7 +57,10 @@ describe('staging mock IdP over HTTPS', () => {
         expect(result.scope).toContain(scope);
         expect(result.sid).toBeTruthy();
         expect(result.jti).toBeTruthy();
+        if (email.startsWith('recovery')) recoverySessions.push(result.sid);
       }
+      expect(recoverySessions).toHaveLength(2);
+      expect(recoverySessions[0]).not.toBe(recoverySessions[1]);
     } finally {
       globalThis.fetch = originalFetch;
       setGlobalDispatcher(originalDispatcher);

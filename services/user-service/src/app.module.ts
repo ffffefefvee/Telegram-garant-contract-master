@@ -22,6 +22,7 @@ import { TonNativeEscrowWatch } from "./modules/deal/entities/ton-native-escrow-
 import { TonNativeChainEvent } from "./modules/deal/entities/ton-native-chain-event.entity";
 import { TonNativeLifecycleIntent } from "./modules/deal/entities/ton-native-lifecycle-intent.entity";
 import { TonNativeRecoveryRequest } from "./modules/deal/entities/ton-native-recovery-request.entity";
+import { TonJettonRecoveryRequest } from "./modules/deal/entities/ton-jetton-recovery-request.entity";
 import { TonJettonEscrowPreparation } from "./modules/deal/entities/ton-jetton-escrow-preparation.entity";
 import { TonJettonEscrowWatch } from "./modules/deal/entities/ton-jetton-escrow-watch.entity";
 import { TonJettonLedgerReconciliation } from "./modules/deal/entities/ton-jetton-ledger-reconciliation.entity";
@@ -159,6 +160,7 @@ import {
               TonNativeChainEvent,
               TonNativeLifecycleIntent,
               TonNativeRecoveryRequest,
+              TonJettonRecoveryRequest,
               TonJettonEscrowPreparation,
               TonJettonEscrowWatch,
               TonJettonLedgerReconciliation,
@@ -242,6 +244,7 @@ import {
             TonNativeChainEvent,
             TonNativeLifecycleIntent,
             TonNativeRecoveryRequest,
+            TonJettonRecoveryRequest,
             TonJettonEscrowPreparation,
             TonJettonEscrowWatch,
             TonJettonLedgerReconciliation,

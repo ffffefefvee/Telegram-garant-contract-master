@@ -4,7 +4,6 @@ import {
   TonJettonChainEventKind,
   TonJettonChainEventOutcome,
   TonJettonApplicationReview,
-  TonJettonApplicationReviewAction,
   TonJettonCursorCheckpointKind,
   TonJettonEventApplication,
   TonJettonEventApplicationStatus,
@@ -347,10 +346,10 @@ function cursorRecoveryHarness() {
 }
 
 describe("TonJettonDurableIngestionService cursor recovery", () => {
-  it("atomically records an immutable checkpoint before rewinding", async () => {
+  it("fails closed at the legacy single-actor cursor entry point", async () => {
     const h = cursorRecoveryHarness();
 
-    await h.service.rewindCursor({
+    await expect(h.service.rewindCursor({
       network: TonNetwork.TESTNET,
       accountAddress: ACCOUNT,
       toLt: "150",
@@ -358,38 +357,10 @@ describe("TonJettonDurableIngestionService cursor recovery", () => {
       toMasterchainSeqno: 55,
       reasonCode: "CURSOR_SOURCE_RECOVERY",
       actorId: "operator.phase3",
-    });
-
-    expect(h.cursorQuery.setLock).toHaveBeenCalledWith("pessimistic_write");
-    expect(h.checkpointRepo.save).toHaveBeenCalledWith(
-      expect.objectContaining({
-        kind: TonJettonCursorCheckpointKind.RECOVERY,
-        previousLt: "200",
-        nextLt: "150",
-        actorId: "operator.phase3",
-      }),
-    );
-    expect(h.cursor.lastFinalizedLt).toBe("150");
-    expect(h.queryRunner.commitTransaction).toHaveBeenCalledTimes(1);
-  });
-
-  it("rejects a recovery target that does not move backward", async () => {
-    const h = cursorRecoveryHarness();
-
-    await expect(
-      h.service.rewindCursor({
-        network: TonNetwork.TESTNET,
-        accountAddress: ACCOUNT,
-        toLt: "200",
-        toTransactionHash: "b".repeat(64),
-        toMasterchainSeqno: 55,
-        reasonCode: "CURSOR_SOURCE_RECOVERY",
-        actorId: "operator.phase3",
-      }),
-    ).rejects.toThrow("JETTON_CURSOR_RECOVERY_MUST_REWIND");
+    })).rejects.toThrow("JETTON_TWO_PERSON_RECOVERY_REQUIRED");
     expect(h.checkpointRepo.save).not.toHaveBeenCalled();
     expect(h.cursorRepo.save).not.toHaveBeenCalled();
-    expect(h.queryRunner.rollbackTransaction).toHaveBeenCalledTimes(1);
+    expect(h.queryRunner.startTransaction).not.toHaveBeenCalled();
   });
 });
 
@@ -436,51 +407,16 @@ function manualReviewHarness() {
 }
 
 describe("TonJettonDurableIngestionService manual review", () => {
-  it("requeues only after appending immutable operator evidence", async () => {
+  it("fails closed at the legacy single-actor requeue entry point", async () => {
     const h = manualReviewHarness();
 
-    await h.service.requeueManualReview({
+    await expect(h.service.requeueManualReview({
       eventId: h.application.eventId,
       reasonCode: "INDEPENDENT_SOURCES_RESTORED",
       actorId: "operator.phase3",
-    });
-
-    expect(h.applicationQuery.setLock).toHaveBeenCalledWith(
-      "pessimistic_write",
-    );
-    expect(h.reviewRepo.save).toHaveBeenCalledWith(
-      expect.objectContaining({
-        action: TonJettonApplicationReviewAction.REQUEUE,
-        previousAttempts: 3,
-        previousError: "source disagreement",
-      }),
-    );
-    expect(h.application).toEqual(
-      expect.objectContaining({
-        status: TonJettonEventApplicationStatus.PENDING,
-        attempts: 0,
-        lastError: null,
-        manualReviewAt: null,
-      }),
-    );
-    expect(h.reviewRepo.save.mock.invocationCallOrder[0]).toBeLessThan(
-      h.applicationRepo.save.mock.invocationCallOrder[0],
-    );
-  });
-
-  it("does not create review evidence for an event that is still automatic", async () => {
-    const h = manualReviewHarness();
-    h.application.status = TonJettonEventApplicationStatus.PENDING;
-
-    await expect(
-      h.service.requeueManualReview({
-        eventId: h.application.eventId,
-        reasonCode: "INDEPENDENT_SOURCES_RESTORED",
-        actorId: "operator.phase3",
-      }),
-    ).rejects.toThrow("JETTON_APPLICATION_NOT_IN_MANUAL_REVIEW");
+    })).rejects.toThrow("JETTON_TWO_PERSON_RECOVERY_REQUIRED");
     expect(h.reviewRepo.save).not.toHaveBeenCalled();
-    expect(h.queryRunner.rollbackTransaction).toHaveBeenCalledTimes(1);
+    expect(h.queryRunner.startTransaction).not.toHaveBeenCalled();
   });
 });
 

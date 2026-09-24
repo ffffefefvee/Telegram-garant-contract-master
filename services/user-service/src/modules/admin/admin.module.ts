@@ -19,6 +19,7 @@ import { AdminTreasuryController } from "./admin-treasury.controller";
 import { AdminAuditController } from "./admin-audit.controller";
 import { AdminOpsController } from "./admin-ops.controller";
 import { AdminTonNativeRecoveryController } from "./admin-ton-native-recovery.controller";
+import { AdminTonJettonRecoveryController } from "./admin-ton-jetton-recovery.controller";
 import { MonitoringModule } from "../monitoring/monitoring.module";
 import { UserModule } from "../user/user.module";
 import { DealModule } from "../deal/deal.module";
@@ -53,6 +54,7 @@ import { PrivilegedIdentityService } from "../auth/privileged-identity.service";
     AdminController,
     AdminOpsController,
     AdminTonNativeRecoveryController,
+    AdminTonJettonRecoveryController,
     AdminDealController,
     AdminDisputeController,
     AdminPaymentController,

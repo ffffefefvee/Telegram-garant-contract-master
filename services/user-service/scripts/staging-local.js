@@ -33,6 +33,8 @@ const dbName = 'garant_staging';
 const testUsers = [
   { id: '11111111-1111-4111-8111-111111111111', email: 'admin@local.test', telegramId: 990000001, role: 'admin' },
   { id: '22222222-2222-4222-8222-222222222222', email: 'arbitrator@local.test', telegramId: 990000002, role: 'arbitrator' },
+  { id: '33333333-3333-4333-8333-333333333333', email: 'recovery1@local.test', telegramId: 990000003, role: 'super_admin' },
+  { id: '44444444-4444-4444-8444-444444444444', email: 'recovery2@local.test', telegramId: 990000004, role: 'super_admin' },
 ];
 
 function checkLocalTarget(path, name) {
