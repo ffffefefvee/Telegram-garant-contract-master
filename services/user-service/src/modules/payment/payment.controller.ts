@@ -9,6 +9,7 @@ import {
   HttpStatus,
   ParseUUIDPipe,
   ParseIntPipe,
+  NotFoundException,
 } from '@nestjs/common';
 import { PaymentService, CreatedPaymentResult } from './payment.service';
 import { Payment } from './entities/payment.entity';
@@ -51,22 +52,23 @@ export class PaymentController {
   }
 
   @Get(':id')
-  async getPayment(@Param('id', ParseUUIDPipe) id: string): Promise<Payment> {
-    return this.paymentService.findById(id);
+  async getPayment(
+    @Param('id', ParseUUIDPipe) id: string,
+    @CurrentUser() user: UserPayload,
+  ): Promise<Payment> {
+    const payment = await this.paymentService.findById(id);
+    if (payment.userId !== user.id) throw new NotFoundException('Payment not found');
+    return payment;
   }
 
   @Post(':id/check')
-  async checkStatus(@Param('id', ParseUUIDPipe) id: string): Promise<Payment> {
-    return this.paymentService.checkPaymentStatus(id);
-  }
-
-  @Post(':id/refund')
-  async refund(
+  async checkStatus(
     @Param('id', ParseUUIDPipe) id: string,
-    @Body() body: { reason: string },
     @CurrentUser() user: UserPayload,
   ): Promise<Payment> {
-    return this.paymentService.refundPayment(id, body.reason, user.id);
+    const payment = await this.paymentService.findById(id);
+    if (payment.userId !== user.id) throw new NotFoundException('Payment not found');
+    return this.paymentService.checkPaymentStatus(id);
   }
 
   @Get('deal/:dealId')

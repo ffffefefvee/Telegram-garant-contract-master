@@ -1,4 +1,7 @@
 import { Module, forwardRef } from "@nestjs/common";
+import { APP_GUARD } from "@nestjs/core";
+import { ConfigService } from "@nestjs/config";
+import { JwtModule } from "@nestjs/jwt";
 import { TypeOrmModule } from "@nestjs/typeorm";
 
 // Entities
@@ -12,6 +15,7 @@ import { Appeal } from "./entities/appeal.entity";
 import { DealTerms } from "./entities/deal-terms.entity";
 import { ArbitrationSettings } from "./entities/arbitration-settings.entity";
 import { ArbitratorProfile } from "./entities/arbitrator-profile.entity";
+import { EvidenceFileManifest } from "./entities/evidence-file-manifest.entity";
 
 // Services
 import { ArbitrationService } from "./arbitration.service";
@@ -22,6 +26,18 @@ import { ArbitrationSettingsService } from "./arbitration-settings.service";
 import { ArbitratorSelectionService } from "./arbitrator-selection.service";
 import { DisputeBlockchainService } from "./dispute-blockchain.service";
 import { TonNativeResolutionRequestService } from "./ton-native-resolution-request.service";
+import { EvidencePipelineService } from "./evidence-pipeline.service";
+import { EvidenceRetentionScheduler } from "./evidence-retention.scheduler";
+import {
+  DisabledEvidenceMalwareScanner,
+  DisabledEvidenceObjectStorage,
+  EVIDENCE_MALWARE_SCANNER,
+  EVIDENCE_OBJECT_STORAGE,
+} from "./evidence-pipeline.ports";
+import {
+  AuthenticatedEvidenceMalwareScanner,
+  S3EvidenceObjectStorage,
+} from "./production-evidence.adapters";
 
 // Controllers
 import { ArbitrationController } from "./arbitration.controller";
@@ -38,6 +54,8 @@ import { OpsModule } from "../ops/ops.module";
 import { Deal } from "../deal/entities/deal.entity";
 import { User } from "../user/entities/user.entity";
 import { RolesGuard } from "../admin/guards/roles.guard";
+import { ArbitratorAccessGuard } from "./arbitrator-access.guard";
+import { PrivilegedIdentityService } from "../auth/privileged-identity.service";
 
 @Module({
   imports: [
@@ -52,6 +70,7 @@ import { RolesGuard } from "../admin/guards/roles.guard";
       DealTerms,
       ArbitrationSettings,
       ArbitratorProfile,
+      EvidenceFileManifest,
       Deal,
       User,
     ]),
@@ -61,6 +80,7 @@ import { RolesGuard } from "../admin/guards/roles.guard";
     ReviewModule,
     EscrowModule,
     OpsModule,
+    JwtModule.register({}),
   ],
   controllers: [
     ArbitrationController,
@@ -76,7 +96,38 @@ import { RolesGuard } from "../admin/guards/roles.guard";
     ArbitratorSelectionService,
     DisputeBlockchainService,
     TonNativeResolutionRequestService,
+    EvidencePipelineService,
+    EvidenceRetentionScheduler,
+    DisabledEvidenceObjectStorage,
+    DisabledEvidenceMalwareScanner,
+    S3EvidenceObjectStorage,
+    AuthenticatedEvidenceMalwareScanner,
+    {
+      provide: EVIDENCE_OBJECT_STORAGE,
+      inject: [ConfigService, S3EvidenceObjectStorage, DisabledEvidenceObjectStorage],
+      useFactory: (
+        config: ConfigService,
+        enabled: S3EvidenceObjectStorage,
+        disabled: DisabledEvidenceObjectStorage,
+      ) => config.get("EVIDENCE_PIPELINE_ENABLED") === "true" ? enabled : disabled,
+    },
+    {
+      provide: EVIDENCE_MALWARE_SCANNER,
+      inject: [
+        ConfigService,
+        AuthenticatedEvidenceMalwareScanner,
+        DisabledEvidenceMalwareScanner,
+      ],
+      useFactory: (
+        config: ConfigService,
+        enabled: AuthenticatedEvidenceMalwareScanner,
+        disabled: DisabledEvidenceMalwareScanner,
+      ) => config.get("EVIDENCE_PIPELINE_ENABLED") === "true" ? enabled : disabled,
+    },
     RolesGuard,
+    ArbitratorAccessGuard,
+    PrivilegedIdentityService,
+    { provide: APP_GUARD, useClass: ArbitratorAccessGuard },
   ],
   exports: [
     ArbitrationService,
@@ -87,6 +138,7 @@ import { RolesGuard } from "../admin/guards/roles.guard";
     ArbitratorSelectionService,
     DisputeBlockchainService,
     TonNativeResolutionRequestService,
+    EvidencePipelineService,
     TypeOrmModule,
   ],
 })

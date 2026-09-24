@@ -20,34 +20,34 @@ export class CommissionRate {
   @Column({ type: 'decimal', precision: 5, scale: 2 })
   rate: number; // 5.00 = 5%
 
-  @Column({ type: 'decimal', precision: 10, scale: 2, default: 0 })
+  @Column({ name: 'min_amount', type: 'decimal', precision: 10, scale: 2, default: 0 })
   minAmount: number;
 
-  @Column({ type: 'decimal', precision: 10, scale: 2, default: 0 })
+  @Column({ name: 'max_amount', type: 'decimal', precision: 10, scale: 2, default: 0 })
   maxAmount: number;
 
-  @Column({ type: 'decimal', precision: 10, scale: 2, default: 0 })
+  @Column({ name: 'fixed_fee', type: 'decimal', precision: 10, scale: 2, default: 0 })
   fixedFee: number;
 
-  @Column({ type: 'boolean', default: true })
+  @Column({ name: 'is_active', type: 'boolean', default: true })
   isActive: boolean;
 
   @Column({ type: 'varchar', length: 255, nullable: true })
   description: string | null;
 
-  @Column({ type: 'timestamp', nullable: true })
+  @Column({ name: 'valid_from', type: 'timestamp', nullable: true })
   validFrom: Date | null;
 
-  @Column({ type: 'timestamp', nullable: true })
+  @Column({ name: 'valid_to', type: 'timestamp', nullable: true })
   validTo: Date | null;
 
-  @CreateDateColumn({ type: 'timestamp' })
+  @CreateDateColumn({ name: 'created_at', type: 'timestamp' })
   createdAt: Date;
 
-  @UpdateDateColumn({ type: 'timestamp' })
+  @UpdateDateColumn({ name: 'updated_at', type: 'timestamp' })
   updatedAt: Date;
 
-  @Column({ type: 'uuid', nullable: true })
+  @Column({ name: 'created_by', type: 'uuid', nullable: true })
   createdBy: string | null;
 
   @Column({ type: 'jsonb', default: {} })

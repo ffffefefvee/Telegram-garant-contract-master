@@ -35,7 +35,7 @@ export class ArbitrationDecision {
   @Column({ type: 'uuid', name: 'arbitrator_id' })
   arbitratorId: string;
 
-  @Column({
+  @Column({ name: 'decision_type',
     type: 'enum',
     enum: ArbitrationDecisionType,
   })
@@ -47,34 +47,34 @@ export class ArbitrationDecision {
   @Column({ type: 'text', nullable: true })
   comments: string | null;
 
-  @Column({ type: 'decimal', precision: 12, scale: 2 })
+  @Column({ name: 'refund_to_buyer', type: 'decimal', precision: 12, scale: 2 })
   refundToBuyer: number;
 
-  @Column({ type: 'decimal', precision: 12, scale: 2 })
+  @Column({ name: 'payment_to_seller', type: 'decimal', precision: 12, scale: 2 })
   paymentToSeller: number;
 
-  @Column({ type: 'decimal', precision: 12, scale: 2, default: 0 })
+  @Column({ name: 'penalty_amount', type: 'decimal', precision: 12, scale: 2, default: 0 })
   penaltyAmount: number;
 
-  @Column({ type: 'decimal', precision: 12, scale: 2, default: 0 })
+  @Column({ name: 'arbitrator_fee', type: 'decimal', precision: 12, scale: 2, default: 0 })
   arbitratorFee: number;
 
-  @Column({ type: 'decimal', precision: 12, scale: 2, default: 0 })
+  @Column({ name: 'platform_fee', type: 'decimal', precision: 12, scale: 2, default: 0 })
   platformFee: number;
 
-  @Column({ type: 'text', nullable: true })
+  @Column({ name: 'penalty_reason', type: 'text', nullable: true })
   penaltyReason: string | null;
 
-  @Column({ type: 'boolean', default: false })
+  @Column({ name: 'is_appealable', type: 'boolean', default: false })
   isAppealable: boolean;
 
-  @Column({ type: 'int', default: 24 })
+  @Column({ name: 'appeal_period_hours', type: 'int', default: 24 })
   appealPeriodHours: number;
 
-  @Column({ type: 'boolean', default: false })
+  @Column({ name: 'is_enforced', type: 'boolean', default: false })
   isEnforced: boolean;
 
-  @Column({ type: 'timestamp', nullable: true })
+  @Column({ name: 'enforced_at', type: 'timestamp', nullable: true })
   enforcedAt: Date | null;
 
   @ManyToOne(() => User, { eager: false, nullable: true })
@@ -84,10 +84,10 @@ export class ArbitrationDecision {
   @Column({ type: 'uuid', name: 'enforced_by_id', nullable: true })
   enforcedById: string | null;
 
-  @CreateDateColumn({ type: 'timestamp' })
+  @CreateDateColumn({ name: 'created_at', type: 'timestamp' })
   createdAt: Date;
 
-  @UpdateDateColumn({ type: 'timestamp' })
+  @UpdateDateColumn({ name: 'updated_at', type: 'timestamp' })
   updatedAt: Date;
 
   @Column({ type: 'jsonb', default: {} })

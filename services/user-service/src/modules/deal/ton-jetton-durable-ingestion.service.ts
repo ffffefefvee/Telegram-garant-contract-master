@@ -1,13 +1,11 @@
 import { createHash } from "crypto";
-import { Injectable } from "@nestjs/common";
+import { Inject, Injectable, Optional } from "@nestjs/common";
 import { DataSource, EntityManager } from "typeorm";
 import { TonNetwork } from "../user/entities/ton-wallet-binding.entity";
 import {
   TonJettonChainEvent,
   TonJettonChainEventKind,
   TonJettonChainEventOutcome,
-  TonJettonApplicationReview,
-  TonJettonApplicationReviewAction,
   TonJettonCursorCheckpointKind,
   TonJettonEventApplication,
   TonJettonEventApplicationStatus,
@@ -91,6 +89,8 @@ export class TonJettonEvidenceConflictError extends Error {
 export class TonJettonDurableIngestionService {
   constructor(
     private readonly dataSource: DataSource,
+    @Optional()
+    @Inject("TON_JETTON_MAX_APPLY_FAILURES")
     private readonly maxApplyFailures = 3,
   ) {
     if (
@@ -249,129 +249,18 @@ export class TonJettonDurableIngestionService {
     return report;
   }
 
-  /**
-   * Manual cursor recovery. The mutable high-water mark is rewound only in
-   * the same transaction that appends its immutable recovery checkpoint.
-   */
+  /** Legacy entry point deliberately disabled; use two-person recovery. */
   async rewindCursor(
-    input: TonJettonCursorRecoveryInput,
+    _input: TonJettonCursorRecoveryInput,
   ): Promise<TonJettonIngestionCursor> {
-    validateCursorRecovery(input);
-    const runner = this.dataSource.createQueryRunner();
-    await runner.connect();
-    await runner.startTransaction();
-    try {
-      const cursorRepo = runner.manager.getRepository(TonJettonIngestionCursor);
-      let query = cursorRepo
-        .createQueryBuilder("cursor")
-        .where("cursor.network = :network", { network: input.network })
-        .andWhere("cursor.accountAddress = :accountAddress", {
-          accountAddress: input.accountAddress,
-        });
-      if (this.dataSource.options.type === "postgres") {
-        query = query.setLock("pessimistic_write");
-      }
-      const cursor = await query.getOne();
-      if (!cursor || cursor.lastFinalizedLt === null) {
-        throw new Error("JETTON_CURSOR_NOT_RECOVERABLE");
-      }
-      if (
-        input.toLt !== null &&
-        BigInt(input.toLt) >= BigInt(cursor.lastFinalizedLt)
-      ) {
-        throw new Error("JETTON_CURSOR_RECOVERY_MUST_REWIND");
-      }
-      const checkpointRepo = runner.manager.getRepository(
-        TonJettonIngestionCursorCheckpoint,
-      );
-      await checkpointRepo.save(
-        checkpointRepo.create({
-          cursorId: cursor.id,
-          kind: TonJettonCursorCheckpointKind.RECOVERY,
-          previousLt: cursor.lastFinalizedLt,
-          previousHash: cursor.lastFinalizedTxHash,
-          previousMcSeqno: cursor.lastFinalizedMcSeqno,
-          nextLt: input.toLt,
-          nextHash: input.toTransactionHash,
-          nextMcSeqno: input.toMasterchainSeqno,
-          reasonCode: input.reasonCode,
-          actorId: input.actorId,
-        }),
-      );
-      cursor.lastFinalizedLt = input.toLt;
-      cursor.lastFinalizedTxHash = input.toTransactionHash;
-      cursor.lastFinalizedMcSeqno = input.toMasterchainSeqno;
-      cursor.lastScannedAt = new Date();
-      const saved = await cursorRepo.save(cursor);
-      await runner.commitTransaction();
-      return saved;
-    } catch (error) {
-      if (runner.isTransactionActive) await runner.rollbackTransaction();
-      throw error;
-    } finally {
-      await runner.release();
-    }
+    throw new Error("JETTON_TWO_PERSON_RECOVERY_REQUIRED");
   }
 
-  /** Requeues a stopped event only with an immutable operator review record. */
+  /** Legacy entry point deliberately disabled; use two-person recovery. */
   async requeueManualReview(
-    input: TonJettonManualReviewRequeueInput,
+    _input: TonJettonManualReviewRequeueInput,
   ): Promise<TonJettonEventApplication> {
-    if (!UUID.test(input.eventId))
-      throw new Error("INVALID_JETTON_REVIEW_EVENT");
-    if (!/^[A-Z0-9_]{3,64}$/.test(input.reasonCode)) {
-      throw new Error("INVALID_JETTON_REVIEW_REASON");
-    }
-    if (!/^[a-zA-Z0-9._:@-]{3,128}$/.test(input.actorId)) {
-      throw new Error("INVALID_JETTON_REVIEW_ACTOR");
-    }
-    const runner = this.dataSource.createQueryRunner();
-    await runner.connect();
-    await runner.startTransaction();
-    try {
-      const repository = runner.manager.getRepository(
-        TonJettonEventApplication,
-      );
-      let query = repository
-        .createQueryBuilder("application")
-        .where("application.eventId = :eventId", { eventId: input.eventId });
-      if (this.dataSource.options.type === "postgres") {
-        query = query.setLock("pessimistic_write");
-      }
-      const application = await query.getOne();
-      if (
-        !application ||
-        application.status !== TonJettonEventApplicationStatus.MANUAL_REVIEW
-      ) {
-        throw new Error("JETTON_APPLICATION_NOT_IN_MANUAL_REVIEW");
-      }
-      const auditRepo = runner.manager.getRepository(
-        TonJettonApplicationReview,
-      );
-      await auditRepo.save(
-        auditRepo.create({
-          eventId: input.eventId,
-          action: TonJettonApplicationReviewAction.REQUEUE,
-          previousAttempts: application.attempts,
-          previousError: application.lastError,
-          reasonCode: input.reasonCode,
-          actorId: input.actorId,
-        }),
-      );
-      application.status = TonJettonEventApplicationStatus.PENDING;
-      application.attempts = 0;
-      application.lastError = null;
-      application.appliedAt = null;
-      application.manualReviewAt = null;
-      const saved = await repository.save(application);
-      await runner.commitTransaction();
-      return saved;
-    } catch (error) {
-      if (runner.isTransactionActive) await runner.rollbackTransaction();
-      throw error;
-    } finally {
-      await runner.release();
-    }
+    throw new Error("JETTON_TWO_PERSON_RECOVERY_REQUIRED");
   }
 
   /**
@@ -598,43 +487,6 @@ function sameEvidence(
     existing.evidenceHash === tonJettonEvidenceHash(input.evidence) &&
     stableJson(existing.evidence) === stableJson(input.evidence)
   );
-}
-
-function validateCursorRecovery(input: TonJettonCursorRecoveryInput): void {
-  if (!Object.values(TonNetwork).includes(input.network)) {
-    throw new Error("INVALID_JETTON_CURSOR_NETWORK");
-  }
-  if (!RAW_TON_ADDRESS.test(input.accountAddress)) {
-    throw new Error("INVALID_JETTON_CURSOR_ACCOUNT");
-  }
-  const allNull =
-    input.toLt === null &&
-    input.toTransactionHash === null &&
-    input.toMasterchainSeqno === null;
-  const allPresent =
-    input.toLt !== null &&
-    input.toTransactionHash !== null &&
-    input.toMasterchainSeqno !== null;
-  if (!allNull && !allPresent) {
-    throw new Error("INVALID_JETTON_CURSOR_RECOVERY_TARGET");
-  }
-  if (allPresent) {
-    if (
-      !UINT64_DECIMAL.test(input.toLt!) ||
-      BigInt(input.toLt!) < 1n ||
-      !HASH_256.test(input.toTransactionHash!) ||
-      !Number.isSafeInteger(input.toMasterchainSeqno) ||
-      input.toMasterchainSeqno! < 1
-    ) {
-      throw new Error("INVALID_JETTON_CURSOR_RECOVERY_TARGET");
-    }
-  }
-  if (!/^[A-Z0-9_]{3,64}$/.test(input.reasonCode)) {
-    throw new Error("INVALID_JETTON_CURSOR_RECOVERY_REASON");
-  }
-  if (!/^[a-zA-Z0-9._:@-]{3,128}$/.test(input.actorId)) {
-    throw new Error("INVALID_JETTON_CURSOR_RECOVERY_ACTOR");
-  }
 }
 
 export function tonJettonEvidenceHash(value: Record<string, unknown>): string {

@@ -38,19 +38,19 @@ export class ArbitrationChatMessage {
   @Column({ type: 'text', nullable: true })
   attachments: string | null; // JSON array of file URLs
 
-  @Column({ type: 'boolean', default: false })
+  @Column({ name: 'is_edited', type: 'boolean', default: false })
   isEdited: boolean;
 
-  @Column({ type: 'timestamp', nullable: true })
+  @Column({ name: 'edited_at', type: 'timestamp', nullable: true })
   editedAt: Date | null;
 
-  @Column({ type: 'boolean', default: false })
+  @Column({ name: 'is_deleted', type: 'boolean', default: false })
   isDeleted: boolean;
 
-  @Column({ type: 'timestamp', nullable: true })
+  @Column({ name: 'deleted_at', type: 'timestamp', nullable: true })
   deletedAt: Date | null;
 
-  @CreateDateColumn({ type: 'timestamp' })
+  @CreateDateColumn({ name: 'created_at', type: 'timestamp' })
   createdAt: Date;
 
   @Column({ type: 'jsonb', default: {} })

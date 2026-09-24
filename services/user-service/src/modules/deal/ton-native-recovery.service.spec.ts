@@ -16,6 +16,13 @@ import {
 import { TonNativeRecoveryService } from "./ton-native-recovery.service";
 
 describe("TonNativeRecoveryService", () => {
+  const actor = (id: string, role = "super_admin", sid = `sid:${id}`) => ({
+    id,
+    role,
+    jti: `jti:${id}`,
+    sid,
+    scopes: ["garant:admin:recovery"],
+  });
   it("returns paginated rejected evidence with exact operator filters", async () => {
     const event = Object.assign(new TonNativeChainEvent(), {
       id: "10000000-0000-4000-8000-000000000009",
@@ -102,12 +109,21 @@ describe("TonNativeRecoveryService", () => {
       id: "60000000-0000-4000-8000-000000000001",
       eventId: event.id,
       requestedBy: "50000000-0000-4000-8000-000000000001",
+      requesterJti: "jti:requester",
+      requesterSid: "sid:requester",
       approvedBy: null,
+      approverJti: null,
+      approverSid: null,
       status: TonNativeRecoveryRequestStatus.PENDING,
       reason: "The independent provider has recovered after an outage.",
       expectedLastError: event.lastApplyError,
+      intentHash: "a".repeat(64),
+      expiresAt: new Date(Date.now() + 300_000),
       approvedAt: null,
       executedAt: null,
+      cancelledAt: null,
+      cancelledBy: null,
+      cancellationReason: null,
     });
     const eventRepo = {
       save: jest.fn(async (value) => value),
@@ -161,10 +177,7 @@ describe("TonNativeRecoveryService", () => {
     await expect(
       service.requestRequeue(
         event.id,
-        {
-          id: "50000000-0000-4000-8000-000000000001",
-          role: "super_admin",
-        },
+        actor("50000000-0000-4000-8000-000000000001"),
         {
           reason: "The independent provider has recovered after an outage.",
           expectedLastError: "SECONDARY_HTTP_503",
@@ -202,10 +215,11 @@ describe("TonNativeRecoveryService", () => {
       audit,
     } = fixture();
     await expect(
-      service.approveRequeue(event.id, request.id, {
-        id: "70000000-0000-4000-8000-000000000001",
-        role: "super_admin",
-      }),
+      service.approveRequeue(
+        event.id,
+        request.id,
+        actor("70000000-0000-4000-8000-000000000001"),
+      ),
     ).resolves.toMatchObject({
       status: "queued",
       replayRequiresReconciliation: true,
@@ -240,13 +254,58 @@ describe("TonNativeRecoveryService", () => {
   it("rejects self-approval and leaves the stopped event unchanged", async () => {
     const { service, event, request, eventRepo } = fixture();
     await expect(
-      service.approveRequeue(event.id, request.id, {
-        id: request.requestedBy,
-        role: "super_admin",
-      }),
+      service.approveRequeue(event.id, request.id, actor(request.requestedBy)),
     ).rejects.toBeInstanceOf(ForbiddenException);
     expect(event.automationStoppedAt).not.toBeNull();
     expect(eventRepo.save).not.toHaveBeenCalled();
+  });
+
+  it("rejects approval from the requester's privileged IdP session", async () => {
+    const { service, event, request, eventRepo } = fixture();
+    await expect(
+      service.approveRequeue(
+        event.id,
+        request.id,
+        actor(
+          "70000000-0000-4000-8000-000000000001",
+          "super_admin",
+          request.requesterSid,
+        ),
+      ),
+    ).rejects.toBeInstanceOf(ForbiddenException);
+    expect(eventRepo.save).not.toHaveBeenCalled();
+  });
+
+  it("durably expires a stale request without unblocking the event", async () => {
+    const { service, event, request, eventRepo, recoveryRequestRepo, audit } = fixture();
+    request.expiresAt = new Date(Date.now() - 1);
+    await expect(
+      service.approveRequeue(
+        event.id,
+        request.id,
+        actor("70000000-0000-4000-8000-000000000001"),
+      ),
+    ).rejects.toBeInstanceOf(ConflictException);
+    expect(request.status).toBe(TonNativeRecoveryRequestStatus.EXPIRED);
+    expect(recoveryRequestRepo.save).toHaveBeenCalledWith(request);
+    expect(eventRepo.save).not.toHaveBeenCalled();
+    expect(audit.writeRequired).toHaveBeenCalledWith(
+      expect.objectContaining({ action: "TON_NATIVE_EVENT_REQUEUE_EXPIRED" }),
+    );
+  });
+
+  it("requires the dedicated recovery scope", async () => {
+    const { service, event } = fixture();
+    await expect(
+      service.requestRequeue(
+        event.id,
+        { ...actor("50000000-0000-4000-8000-000000000001"), scopes: [] },
+        {
+          reason: "The independent provider has recovered after an outage.",
+          expectedLastError: "SECONDARY_HTTP_503",
+        },
+      ),
+    ).rejects.toBeInstanceOf(ForbiddenException);
   });
 
   it("rejects a stale operator view before creating a request", async () => {
@@ -254,10 +313,7 @@ describe("TonNativeRecoveryService", () => {
     await expect(
       service.requestRequeue(
         event.id,
-        {
-          id: "50000000-0000-4000-8000-000000000001",
-          role: "super_admin",
-        },
+        actor("50000000-0000-4000-8000-000000000001"),
         {
           reason: "Retry after reviewing the independent provider incident.",
           expectedLastError: "different-error",
@@ -274,10 +330,7 @@ describe("TonNativeRecoveryService", () => {
       service.cancelRequeue(
         event.id,
         request.id,
-        {
-          id: "70000000-0000-4000-8000-000000000001",
-          role: "super_admin",
-        },
+        actor("70000000-0000-4000-8000-000000000001"),
         "The provider incident is not resolved; cancel this recovery request.",
       ),
     ).resolves.toMatchObject({ status: "cancelled" });
@@ -296,10 +349,7 @@ describe("TonNativeRecoveryService", () => {
     await expect(
       service.keepBlocked(
         event.id,
-        {
-          id: "50000000-0000-4000-8000-000000000001",
-          role: "admin",
-        },
+        actor("50000000-0000-4000-8000-000000000001", "admin"),
         "Mismatch requires independent investigation before any replay.",
       ),
     ).resolves.toEqual({ eventId: event.id, status: "manual_review" });

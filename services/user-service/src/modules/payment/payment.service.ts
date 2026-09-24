@@ -369,38 +369,6 @@ export class PaymentService {
       .getMany();
   }
 
-  async refundPayment(
-    paymentId: string,
-    reason: string,
-    userId: string,
-  ): Promise<Payment> {
-    const payment = await this.findById(paymentId);
-
-    if (payment.status !== PaymentStatus.COMPLETED) {
-      throw new BadRequestException("Can only refund completed payments");
-    }
-
-    if (payment.cryptomusData?.uuid) {
-      try {
-        await this.cryptomusService.refundPayment(payment.cryptomusData.uuid);
-      } catch (err) {
-        this.logger.error(
-          `Cryptomus refund failed for ${payment.id}: ${(err as Error).message}`,
-        );
-        throw new BadRequestException(
-          `Cryptomus refund failed: ${(err as Error).message}`,
-        );
-      }
-    }
-
-    payment.status = PaymentStatus.REFUNDED;
-    payment.refundReason = reason;
-    payment.refundedAt = new Date();
-    payment.refundedBy = userId;
-
-    return this.paymentRepository.save(payment);
-  }
-
   async findAllForAdmin(
     page: number = 1,
     limit: number = 20,

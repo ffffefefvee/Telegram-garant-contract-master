@@ -43,6 +43,7 @@ export class LanguagePreference {
 
   @Column({
     type: 'enum',
+    name: 'language_code',
     enum: LanguageCode,
     default: LanguageCode.RU,
   })
@@ -52,16 +53,16 @@ export class LanguagePreference {
   @Index()
   context: string;
 
-  @Column({ type: 'int', default: 0 })
+  @Column({ type: 'int', name: 'usage_count', default: 0 })
   usageCount: number;
 
-  @CreateDateColumn({ type: 'timestamp' })
+  @CreateDateColumn({ type: 'timestamp', name: 'created_at' })
   createdAt: Date;
 
-  @UpdateDateColumn({ type: 'timestamp' })
+  @UpdateDateColumn({ type: 'timestamp', name: 'updated_at' })
   updatedAt: Date;
 
-  @Column({ type: 'boolean', default: true })
+  @Column({ type: 'boolean', name: 'is_active', default: true })
   isActive: boolean;
 
   // Статические методы для работы с языками

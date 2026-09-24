@@ -1,0 +1,3 @@
+# These immutable TON proof fixtures are hashed by exact bytes. Git must not
+# rewrite their JSON line endings on Windows checkouts.
+services/user-service/fixtures/ton-proof/*/*.json text eol=lf

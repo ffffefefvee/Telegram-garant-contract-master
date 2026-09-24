@@ -190,10 +190,10 @@ describe("BlockchainModule (stub mode)", () => {
                 BLOCKCHAIN_RPC_URL: "https://rpc",
                 BLOCKCHAIN_PRIVATE_KEY: "0x" + "1".repeat(64),
                 BLOCKCHAIN_CHAIN_ID: "137",
-                ESCROW_FACTORY_ADDRESS: ethers.ZeroAddress,
-                PLATFORM_TREASURY_ADDRESS: ethers.ZeroAddress,
-                ARBITRATOR_REGISTRY_ADDRESS: ethers.ZeroAddress,
-                USDT_CONTRACT_ADDRESS: ethers.ZeroAddress,
+                ESCROW_FACTORY_ADDRESS: "0x0000000000000000000000000000000000000001",
+                PLATFORM_TREASURY_ADDRESS: "0x0000000000000000000000000000000000000002",
+                ARBITRATOR_REGISTRY_ADDRESS: "0x0000000000000000000000000000000000000003",
+                USDT_CONTRACT_ADDRESS: "0x0000000000000000000000000000000000000004",
               }),
             ],
           }),
@@ -218,10 +218,10 @@ describe("BlockchainModule (stub mode)", () => {
                 BLOCKCHAIN_RPC_URL: "https://rpc",
                 BLOCKCHAIN_PRIVATE_KEY: "0x" + "1".repeat(64),
                 BLOCKCHAIN_CHAIN_ID: "not-a-chain",
-                ESCROW_FACTORY_ADDRESS: ethers.ZeroAddress,
-                PLATFORM_TREASURY_ADDRESS: ethers.ZeroAddress,
-                ARBITRATOR_REGISTRY_ADDRESS: ethers.ZeroAddress,
-                USDT_CONTRACT_ADDRESS: ethers.ZeroAddress,
+                ESCROW_FACTORY_ADDRESS: "0x0000000000000000000000000000000000000001",
+                PLATFORM_TREASURY_ADDRESS: "0x0000000000000000000000000000000000000002",
+                ARBITRATOR_REGISTRY_ADDRESS: "0x0000000000000000000000000000000000000003",
+                USDT_CONTRACT_ADDRESS: "0x0000000000000000000000000000000000000004",
               }),
             ],
           }),
@@ -241,10 +241,10 @@ describe("BlockchainModule (stub mode)", () => {
         WEB3SIGNER_RPC_URL: "http://web3signer.internal:8545",
         WEB3SIGNER_ADDRESS: "0x8a2e349a7d98b024ac892aca2ea17b764bdb62bf",
         BLOCKCHAIN_CHAIN_ID: "80002",
-        ESCROW_FACTORY_ADDRESS: ethers.ZeroAddress,
-        PLATFORM_TREASURY_ADDRESS: ethers.ZeroAddress,
-        ARBITRATOR_REGISTRY_ADDRESS: ethers.ZeroAddress,
-        USDT_CONTRACT_ADDRESS: ethers.ZeroAddress,
+        ESCROW_FACTORY_ADDRESS: "0x0000000000000000000000000000000000000001",
+        PLATFORM_TREASURY_ADDRESS: "0x0000000000000000000000000000000000000002",
+        ARBITRATOR_REGISTRY_ADDRESS: "0x0000000000000000000000000000000000000003",
+        USDT_CONTRACT_ADDRESS: "0x0000000000000000000000000000000000000004",
       };
       const c = new BlockchainConfig({
         get: (key: string, fallback: string) => values[key] ?? fallback,
@@ -263,14 +263,30 @@ describe("BlockchainModule (stub mode)", () => {
             RELAY_SIGNER: "web3-signer",
             BLOCKCHAIN_PRIVATE_KEY: "0x" + "1".repeat(64),
             BLOCKCHAIN_CHAIN_ID: "80002",
-            ESCROW_FACTORY_ADDRESS: ethers.ZeroAddress,
-            PLATFORM_TREASURY_ADDRESS: ethers.ZeroAddress,
-            ARBITRATOR_REGISTRY_ADDRESS: ethers.ZeroAddress,
-            USDT_CONTRACT_ADDRESS: ethers.ZeroAddress,
+            ESCROW_FACTORY_ADDRESS: "0x0000000000000000000000000000000000000001",
+            PLATFORM_TREASURY_ADDRESS: "0x0000000000000000000000000000000000000002",
+            ARBITRATOR_REGISTRY_ADDRESS: "0x0000000000000000000000000000000000000003",
+            USDT_CONTRACT_ADDRESS: "0x0000000000000000000000000000000000000004",
           })[key] ?? fallback,
       } as any);
 
       expect(c.signerType).toBeNull();
+      expect(c.enabled).toBe(false);
+    });
+
+    it("fails closed when any configured contract address is zero", () => {
+      const c = new BlockchainConfig({
+        get: (key: string, fallback: string) =>
+          ({
+            BLOCKCHAIN_RPC_URL: "https://rpc",
+            BLOCKCHAIN_PRIVATE_KEY: "0x" + "1".repeat(64),
+            BLOCKCHAIN_CHAIN_ID: "80002",
+            ESCROW_FACTORY_ADDRESS: ethers.ZeroAddress,
+            PLATFORM_TREASURY_ADDRESS: "0x0000000000000000000000000000000000000002",
+            ARBITRATOR_REGISTRY_ADDRESS: "0x0000000000000000000000000000000000000003",
+            USDT_CONTRACT_ADDRESS: "0x0000000000000000000000000000000000000004",
+          })[key] ?? fallback,
+      } as any);
       expect(c.enabled).toBe(false);
     });
   });

@@ -11,6 +11,13 @@ import { RelayService } from "./relay.service";
 import { RelayTxQueue } from "./relay-tx-queue";
 import { MoneyMovementGate } from "./money-movement.gate";
 import { SafetyModule } from "../safety/safety.module";
+import { PolygonFinalityService } from "./polygon-finality.service";
+import { PolygonLifecycleIngestionService } from "./polygon-lifecycle-ingestion.service";
+import { PolygonLifecycleIngestionScheduler } from "./polygon-lifecycle-ingestion.scheduler";
+import { PolygonRelayNonceService } from "./polygon-relay-nonce.service";
+import { PolygonRelayRecoveryScheduler } from "./polygon-relay-recovery.scheduler";
+import { PolygonReconciliationService } from "./polygon-reconciliation.service";
+import { PolygonReconciliationScheduler } from "./polygon-reconciliation.scheduler";
 
 /**
  * BlockchainModule — single source of truth for on-chain interactions.
@@ -40,6 +47,13 @@ import { SafetyModule } from "../safety/safety.module";
     TreasuryClient,
     RegistryClient,
     RelayService,
+    PolygonFinalityService,
+    PolygonLifecycleIngestionService,
+    PolygonLifecycleIngestionScheduler,
+    PolygonRelayNonceService,
+    PolygonRelayRecoveryScheduler,
+    PolygonReconciliationService,
+    PolygonReconciliationScheduler,
   ],
   exports: [
     BlockchainConfig,
@@ -52,6 +66,10 @@ import { SafetyModule } from "../safety/safety.module";
     TreasuryClient,
     RegistryClient,
     RelayService,
+    PolygonFinalityService,
+    PolygonLifecycleIngestionService,
+    PolygonRelayNonceService,
+    PolygonReconciliationService,
   ],
 })
 export class BlockchainModule {}

@@ -15,7 +15,7 @@ const EXPECTED_INITIAL_NONCE = 0;
 const USDT_DECIMALS = 6;
 const DEFAULT_RELAY_FLOAT_USDT = "10";
 const MIN_DEPLOYER_RESERVE_POL = ethers.parseEther("0.02");
-const ESTIMATED_DEPLOYER_GAS = 7_443_662n;
+const ESTIMATED_DEPLOYER_GAS = 8_037_184n;
 const GAS_SAFETY_NUMERATOR = 150n;
 const GAS_SAFETY_DENOMINATOR = 100n;
 
@@ -347,6 +347,8 @@ async function main() {
     checkpoint.contracts.arbitratorRegistry,
     RELAY_ADDRESS,
     checkpoint.contracts.testGovernance,
+    deployer.address,
+    checkpoint.seller,
     MIN_DEAL,
     TARIFF,
     FINE,

@@ -121,6 +121,8 @@ async function main() {
 
   const factoryAdmin = await factory.ADMIN_ROLE();
   const relayRole = await factory.RELAY_ROLE();
+  const pauserRole = await factory.PAUSER_ROLE();
+  const recoveryRole = await factory.RECOVERY_ROLE();
   const treasuryFactoryRole = await treasury.FACTORY_ROLE();
   const treasuryRegistryRole = await treasury.REGISTRY_ROLE();
   const registryFactoryRole = await registry.FACTORY_ROLE();
@@ -128,6 +130,11 @@ async function main() {
   check("factory.admin.governance", await factory.hasRole(factoryAdmin, manifest.contracts.testGovernance), true);
   check("factory.relay.relay", await factory.hasRole(relayRole, EXPECTED_RELAY), true);
   check("factory.relay.deployer", await factory.hasRole(relayRole, manifest.wallets.deployer.address), false);
+  check("factory.pauser.deployer", await factory.hasRole(pauserRole, manifest.wallets.deployer.address), true);
+  check("factory.recovery.seller", await factory.hasRole(recoveryRole, manifest.wallets.seller.address), true);
+  check("factory.pauser.relay", await factory.hasRole(pauserRole, EXPECTED_RELAY), false);
+  check("factory.recovery.relay", await factory.hasRole(recoveryRole, EXPECTED_RELAY), false);
+  check("factory.settlementPaused", await factory.settlementPaused(), false);
   check("factory.defaultAdmin.deployer", await factory.hasRole(ZERO_ROLE, manifest.wallets.deployer.address), false);
   check("treasury.factoryRole", await treasury.hasRole(treasuryFactoryRole, manifest.contracts.escrowFactory), true);
   check("treasury.registryRole", await treasury.hasRole(treasuryRegistryRole, manifest.contracts.arbitratorRegistry), true);

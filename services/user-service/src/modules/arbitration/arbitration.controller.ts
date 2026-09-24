@@ -1,6 +1,5 @@
 import {
   BadRequestException,
-  ServiceUnavailableException,
   Controller,
   Get,
   Patch,
@@ -14,7 +13,11 @@ import {
   HttpStatus,
   ParseUUIDPipe,
   ParseIntPipe,
+  UploadedFile,
+  UseInterceptors,
 } from "@nestjs/common";
+import { FileInterceptor } from "@nestjs/platform-express";
+import { memoryStorage } from "multer";
 import { Throttle } from "@nestjs/throttler";
 import { ArbitrationService } from "./arbitration.service";
 import { DisputeService } from "./dispute.service";
@@ -30,7 +33,6 @@ import {
   ArbitrationChatMessageDto,
   DealTermsDto,
   EnforceDecisionDto,
-  AssignArbitratorDto,
 } from "./dto";
 import {
   ArbitratorAvailability,
@@ -39,6 +41,8 @@ import {
 import { CurrentUser } from "../auth/current-user.decorator";
 import type { UserPayload } from "../auth/auth.middleware";
 import { TonNativeResolutionRequestService } from "./ton-native-resolution-request.service";
+import { EvidencePipelineService } from "./evidence-pipeline.service";
+import { EvidenceType } from "./entities/enums/arbitration.enum";
 
 /**
  * Контроллер для управления арбитражем
@@ -52,6 +56,7 @@ export class ArbitrationController {
     private readonly arbitratorService: ArbitratorService,
     private readonly settingsService: ArbitrationSettingsService,
     private readonly tonNativeResolution: TonNativeResolutionRequestService,
+    private readonly evidencePipeline: EvidencePipelineService,
   ) {}
 
   // === Deal Terms ===
@@ -104,20 +109,6 @@ export class ArbitrationController {
     return this.disputeService.getDisputeForUser(id, user.id, user.roles);
   }
 
-  @Post("disputes/:id/assign-arbitrator")
-  async assignArbitrator(
-    @Param("id", ParseUUIDPipe) id: string,
-    @Body() dto: AssignArbitratorDto,
-    @CurrentUser() user: UserPayload,
-  ) {
-    return this.disputeService.assignArbitrator(
-      id,
-      dto.arbitratorId,
-      user.id,
-      dto.isAutoAssigned,
-    );
-  }
-
   @Put("disputes/:id/status")
   async updateDisputeStatus(
     @Param("id", ParseUUIDPipe) id: string,
@@ -149,13 +140,35 @@ export class ArbitrationController {
 
   @Post("disputes/:id/evidence/upload")
   @HttpCode(HttpStatus.CREATED)
+  @UseInterceptors(
+    FileInterceptor("file", {
+      storage: memoryStorage(),
+      limits: { files: 1, fileSize: 25 * 1024 * 1024 },
+    }),
+  )
   async uploadEvidence(
-    @Param("id", ParseUUIDPipe) _id: string,
-    @CurrentUser() _user: UserPayload,
+    @Param("id", ParseUUIDPipe) id: string,
+    @CurrentUser() user: UserPayload,
+    @UploadedFile() file: Express.Multer.File | undefined,
+    @Body("description") description: string,
+    @Body("type") type: EvidenceType,
   ) {
-    throw new ServiceUnavailableException(
-      "Evidence file uploads are temporarily unavailable while secure storage is configured",
-    );
+    if (!file) throw new BadRequestException("Evidence file is required");
+    return this.evidencePipeline.upload({
+      disputeId: id,
+      userId: user.id,
+      description,
+      type,
+      file,
+    });
+  }
+
+  @Get("evidence/:id/download")
+  async getEvidenceDownload(
+    @Param("id", ParseUUIDPipe) id: string,
+    @CurrentUser() user: UserPayload,
+  ) {
+    return this.evidencePipeline.createDownloadUrl(id, user.id, user.roles);
   }
 
   @Get("evidence/:id")

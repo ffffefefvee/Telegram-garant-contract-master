@@ -35,7 +35,7 @@ describePostgres("Phase 4 multichain PostgreSQL exit gate", () => {
       TRUNCATE TABLE "settlement_confirmations", "settlement_quotes",
         deals, users RESTART IDENTITY CASCADE
     `);
-  });
+  }, 30_000);
 
   it("rejects update and deletion of authoritative quote evidence", async () => {
     const seeded = await seedDeal(dataSource);

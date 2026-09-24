@@ -26,19 +26,19 @@ export class ArbitrationSettings {
   @Column({ type: 'varchar', length: 255 })
   description: string;
 
-  @Column({ type: 'varchar', length: 50 })
+  @Column({ name: 'value_type', type: 'varchar', length: 50 })
   valueType: 'number' | 'string' | 'boolean' | 'json' | 'percent';
 
   @Column({ type: 'jsonb', nullable: true })
   metadata: Record<string, any> | null;
 
-  @CreateDateColumn({ type: 'timestamp' })
+  @CreateDateColumn({ name: 'created_at', type: 'timestamp' })
   createdAt: Date;
 
-  @UpdateDateColumn({ type: 'timestamp' })
+  @UpdateDateColumn({ name: 'updated_at', type: 'timestamp' })
   updatedAt: Date;
 
-  @Column({ type: 'uuid', nullable: true })
+  @Column({ name: 'updated_by', type: 'uuid', nullable: true })
   updatedBy: string | null;
 
   // Геттеры
@@ -189,7 +189,7 @@ export class ArbitrationSettings {
       },
       {
         key: 'allowed_file_types',
-        value: '["image/jpeg","image/png","image/gif","video/mp4","application/pdf","text/plain"]',
+        value: '["image/jpeg","image/png","video/mp4","application/pdf"]',
         description: 'Разрешённые MIME типы файлов',
         valueType: 'json',
       },

@@ -76,4 +76,20 @@ describe('EvidenceService access policy', () => {
       ),
     ).rejects.toThrow(/disabled until managed storage/);
   });
+
+  it('does not physically delete managed file evidence before retention', async () => {
+    disputeService.getDisputeForUser.mockResolvedValue({ id: 'dispute-1' });
+    evidenceRepository.findOne.mockResolvedValue({
+      id: 'evidence-1',
+      disputeId: 'dispute-1',
+      submittedById: 'buyer-1',
+      isFile: true,
+      canBeDeleted: true,
+    });
+
+    await expect(service.deleteEvidence('evidence-1', 'buyer-1')).rejects.toThrow(
+      /immutable evidence policy/,
+    );
+    expect(evidenceRepository.remove).not.toHaveBeenCalled();
+  });
 });

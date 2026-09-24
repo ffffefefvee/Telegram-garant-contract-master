@@ -9,6 +9,13 @@ import { TonNativeFundingIngestionService } from "./ton-native-funding-ingestion
 import { TonNativeLifecycleIngestionService } from "./ton-native-lifecycle-ingestion.service";
 
 describe("TonNativeBackfillService", () => {
+  const actor = {
+    id: "40000000-0000-4000-8000-000000000001",
+    role: "super_admin",
+    jti: "backfill-jti",
+    sid: "backfill-session",
+    scopes: ["garant:admin:recovery"],
+  };
   function fixture(status = TonNativeEscrowWatchStatus.WATCHING) {
     const watch = Object.assign(new TonNativeEscrowWatch(), {
       id: "10000000-0000-4000-8000-000000000001",
@@ -52,10 +59,7 @@ describe("TonNativeBackfillService", () => {
     await expect(
       service.run(
         watch.id,
-        {
-          id: "40000000-0000-4000-8000-000000000001",
-          role: "super_admin",
-        },
+        actor,
         {
           maxPages: 3,
           reason:
@@ -82,10 +86,7 @@ describe("TonNativeBackfillService", () => {
     );
     await service.run(
       watch.id,
-      {
-        id: "40000000-0000-4000-8000-000000000001",
-        role: "super_admin",
-      },
+      actor,
       {
         maxPages: 2,
         reason:
@@ -102,10 +103,7 @@ describe("TonNativeBackfillService", () => {
     await expect(
       service.run(
         watch.id,
-        {
-          id: "40000000-0000-4000-8000-000000000001",
-          role: "super_admin",
-        },
+        actor,
         {
           maxPages: 1,
           reason: "Attempt to scan a watch which must remain fail-closed.",
@@ -124,10 +122,7 @@ describe("TonNativeBackfillService", () => {
     await expect(
       service.run(
         watch.id,
-        {
-          id: "40000000-0000-4000-8000-000000000001",
-          role: "super_admin",
-        },
+        actor,
         {
           maxPages: 1,
           reason: "Backfill must not begin without a durable audit request.",

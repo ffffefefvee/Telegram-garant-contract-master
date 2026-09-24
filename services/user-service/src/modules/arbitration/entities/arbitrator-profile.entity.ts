@@ -55,22 +55,22 @@ export class ArbitratorProfile {
   @Column({ type: 'decimal', precision: 5, scale: 2, default: 0 })
   rating: number; // Средний рейтинг от сторон (0-5)
 
-  @Column({ type: 'int', default: 0 })
+  @Column({ type: 'int', name: 'total_cases', default: 0 })
   totalCases: number; // Всего дел
 
-  @Column({ type: 'int', default: 0 })
+  @Column({ type: 'int', name: 'completed_cases', default: 0 })
   completedCases: number; // Завершённые дела
 
-  @Column({ type: 'int', default: 0 })
+  @Column({ type: 'int', name: 'appealed_cases', default: 0 })
   appealedCases: number; // Дела с апелляцией
 
-  @Column({ type: 'int', default: 0 })
+  @Column({ type: 'int', name: 'overturned_cases', default: 0 })
   overturnedCases: number; // Дела где решение отменено
 
-  @Column({ type: 'decimal', precision: 12, scale: 2, default: 0 })
+  @Column({ type: 'decimal', name: 'total_earned', precision: 12, scale: 2, default: 0 })
   totalEarned: number; // Всего заработано на арбитраже
 
-  @Column({ type: 'decimal', precision: 12, scale: 2, default: 0 })
+  @Column({ type: 'decimal', name: 'deposit_amount', precision: 12, scale: 2, default: 0 })
   depositAmount: number; // Залог арбитра
 
   @Column({ type: 'text', nullable: true })
@@ -84,7 +84,7 @@ export class ArbitratorProfile {
   languages: string | null; // JSON array языков
   // ["ru", "en", "es"]
 
-  @Column({ type: 'timestamp', nullable: true })
+  @Column({ type: 'timestamp', name: 'approved_at', nullable: true })
   approvedAt: Date | null;
 
   @ManyToOne(() => User, { eager: false, nullable: true })
@@ -94,10 +94,10 @@ export class ArbitratorProfile {
   @Column({ type: 'uuid', name: 'approved_by_id', nullable: true })
   approvedById: string | null;
 
-  @Column({ type: 'timestamp', nullable: true })
+  @Column({ type: 'timestamp', name: 'suspended_at', nullable: true })
   suspendedAt: Date | null;
 
-  @Column({ type: 'text', nullable: true })
+  @Column({ type: 'text', name: 'suspension_reason', nullable: true })
   suspensionReason: string | null;
 
   @ManyToOne(() => User, { eager: false, nullable: true })
@@ -107,13 +107,13 @@ export class ArbitratorProfile {
   @Column({ type: 'uuid', name: 'suspended_by_id', nullable: true })
   suspendedById: string | null;
 
-  @Column({ type: 'timestamp', nullable: true })
+  @Column({ type: 'timestamp', name: 'last_active_at', nullable: true })
   lastActiveAt: Date | null;
 
-  @CreateDateColumn({ type: 'timestamp' })
+  @CreateDateColumn({ type: 'timestamp', name: 'created_at' })
   createdAt: Date;
 
-  @UpdateDateColumn({ type: 'timestamp' })
+  @UpdateDateColumn({ type: 'timestamp', name: 'updated_at' })
   updatedAt: Date;
 
   @Column({ type: 'jsonb', default: {} })

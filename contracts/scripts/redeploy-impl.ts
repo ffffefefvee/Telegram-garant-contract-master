@@ -62,12 +62,26 @@ async function main() {
       oldFactory.fine(),
     ]);
   const admin = process.env.ADMIN_ADDRESS || deployer.address;
+  const isLocal = networkName === "hardhat" || networkName === "localhost";
+  const pauser = process.env.PAUSER_ADDRESS || (isLocal ? deployer.address : undefined);
+  const recovery = process.env.RECOVERY_ADDRESS || (isLocal ? deployer.address : undefined);
+  if (!pauser || !recovery) {
+    throw new Error("PAUSER_ADDRESS and RECOVERY_ADDRESS are required for non-local redeployments");
+  }
+  if (!isLocal) {
+    const privileged = [admin, relay, pauser, recovery].map((value) => value.toLowerCase());
+    if (new Set(privileged).size !== privileged.length) {
+      throw new Error("Admin, relay, pauser and recovery identities must be distinct");
+    }
+  }
 
   console.log(`  token       = ${token}`);
   console.log(`  treasury    = ${treasury}`);
   console.log(`  registry    = ${registry}`);
   console.log(`  relay       = ${relay}`);
   console.log(`  admin       = ${admin}`);
+  console.log(`  pauser      = ${pauser}`);
+  console.log(`  recovery    = ${recovery}`);
   console.log(`  minDeal     = ${minDealAmount}`);
   console.log(`  tariff      = threshold=${tariff.threshold} flat=${tariff.flatFee} bps=${tariff.percentFeeBps}`);
   console.log(`  fine        = bps=${fine.fineBps} min=${fine.fineMin} max=${fine.fineMax}`);
@@ -90,6 +104,8 @@ async function main() {
     registry,
     relay,
     admin,
+    pauser,
+    recovery,
     minDealAmount,
     { threshold: tariff.threshold, flatFee: tariff.flatFee, percentFeeBps: tariff.percentFeeBps },
     { fineBps: fine.fineBps, fineMin: fine.fineMin, fineMax: fine.fineMax },
@@ -126,6 +142,10 @@ async function main() {
   const out = {
     ...(deployment || { network: networkName }),
     timestamp: new Date().toISOString(),
+    relay,
+    admin,
+    pauser,
+    recovery,
     contracts: {
       ...(deployment?.contracts || {}),
       token,

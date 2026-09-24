@@ -65,6 +65,27 @@ The backend build and 102 suites / 1,035 tests pass locally. The six-case Phase
 not yet closed. Polygon results remain non-finalizing pending Phase 5, and the
 TON adapter remains hard-disabled. See `PHASE4_MULTICHAIN_DOMAIN_REPORT.md`.
 
+## Phase 5 local candidate (hosted and Amoy gates pending)
+
+The Polygon hardening described in
+`ADR-021-POLYGON-LIFECYCLE-HARDENING.md` is implemented on a stacked Phase 5
+branch. The factory now pins a deployed six-decimal token and separates
+governance, relay, pause and recovery identities. A chain-wide pause blocks new
+exposure and normal egress while preserving deterministic cancellation/rescue;
+recovery can return all escrowed value to the buyer only while paused.
+
+The backend now requires independent finalized RPC agreement, persists bounded
+log/cursor and reconciliation evidence, detects finalized reorgs, monitors the
+relayer gas floor, allocates nonces across workers and performs bounded
+same-nonce fee-bumped recovery. Production egress refuses unsafe signer,
+finality, RPC, migration or reconciliation configuration.
+
+Contract compile/lint and 122 tests pass. The backend build and 104 suites /
+1,064 tests pass locally. The six-case Phase 5 PostgreSQL gate is blocking in
+hosted CI; fresh Amoy lifecycle/recovery evidence and independent review also
+remain mandatory. No real-funds readiness flag was enabled. See
+`PHASE5_POLYGON_REPORT.md`.
+
 ## P0 — complete the money path
 
 ### 1. Complete the canonical-wallet seal workflow

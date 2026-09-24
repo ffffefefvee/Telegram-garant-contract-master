@@ -48,13 +48,13 @@ export class DealInvite {
   @Column({ type: 'uuid', name: 'invited_user_id', nullable: true })
   invitedUserId: string | null;
 
-  @Column({ type: 'varchar', length: 100, nullable: true })
+  @Column({ name: 'invited_user_telegram_id', type: 'varchar', length: 100, nullable: true })
   invitedUserTelegramId: string | null;
 
-  @Column({ type: 'varchar', length: 255 })
+  @Column({ name: 'invite_token', type: 'varchar', length: 255 })
   inviteToken: string;
 
-  @Column({ type: 'varchar', length: 500 })
+  @Column({ name: 'invite_url', type: 'varchar', length: 500 })
   inviteUrl: string;
 
   @Column({
@@ -67,28 +67,28 @@ export class DealInvite {
   @Column({ type: 'text', nullable: true })
   message: string | null;
 
-  @Column({ type: 'timestamp' })
+  @Column({ name: 'expires_at', type: 'timestamp' })
   expiresAt: Date;
 
-  @Column({ type: 'timestamp', nullable: true })
+  @Column({ name: 'accepted_at', type: 'timestamp', nullable: true })
   acceptedAt: Date | null;
 
-  @Column({ type: 'timestamp', nullable: true })
+  @Column({ name: 'rejected_at', type: 'timestamp', nullable: true })
   rejectedAt: Date | null;
 
-  @Column({ type: 'uuid', nullable: true })
+  @Column({ name: 'rejected_by', type: 'uuid', nullable: true })
   rejectedBy: string | null;
 
-  @CreateDateColumn({ type: 'timestamp' })
+  @CreateDateColumn({ name: 'created_at', type: 'timestamp' })
   createdAt: Date;
 
-  @UpdateDateColumn({ type: 'timestamp' })
+  @UpdateDateColumn({ name: 'updated_at', type: 'timestamp' })
   updatedAt: Date;
 
-  @Column({ type: 'int', default: 0 })
+  @Column({ name: 'view_count', type: 'int', default: 0 })
   viewCount: number;
 
-  @Column({ type: 'timestamp', nullable: true })
+  @Column({ name: 'last_viewed_at', type: 'timestamp', nullable: true })
   lastViewedAt: Date | null;
 
   @Column({ type: 'jsonb', default: {} })

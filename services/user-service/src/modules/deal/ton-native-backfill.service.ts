@@ -1,6 +1,7 @@
 import {
   BadRequestException,
   ConflictException,
+  ForbiddenException,
   Injectable,
   NotFoundException,
 } from "@nestjs/common";
@@ -33,6 +34,15 @@ export class TonNativeBackfillService {
   ) {
     if (!actor.id || actor.role !== "super_admin") {
       throw new BadRequestException("Super-admin backfill actor is required");
+    }
+    if (
+      !actor.jti ||
+      !actor.sid ||
+      !actor.scopes?.includes("garant:admin:recovery")
+    ) {
+      throw new ForbiddenException(
+        "Native TON backfill requires garant:admin:recovery",
+      );
     }
     const reason = input.reason?.trim();
     if (!reason || reason.length < 20 || reason.length > 1000) {

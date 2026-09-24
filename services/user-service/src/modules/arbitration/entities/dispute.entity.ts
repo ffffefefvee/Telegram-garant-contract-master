@@ -34,7 +34,7 @@ export class Dispute {
   @PrimaryGeneratedColumn('uuid')
   id: string;
 
-  @Column({ type: 'varchar', length: 50, unique: true })
+  @Column({ name: 'dispute_number', type: 'varchar', length: 50, unique: true })
   disputeNumber: string;
 
   @ManyToOne(() => Deal, { eager: false })
@@ -51,7 +51,7 @@ export class Dispute {
   @Column({ type: 'uuid', name: 'opener_id' })
   openerId: string;
 
-  @Column({
+  @Column({ name: 'opened_by',
     type: 'enum',
     enum: DisputeSide,
   })
@@ -76,10 +76,10 @@ export class Dispute {
   @Column({ type: 'text', nullable: true })
   description: string | null;
 
-  @Column({ type: 'decimal', precision: 12, scale: 2, nullable: true })
+  @Column({ name: 'claimed_amount', type: 'decimal', precision: 12, scale: 2, nullable: true })
   claimedAmount: number | null;
 
-  @Column({ type: 'decimal', precision: 5, scale: 2, nullable: true })
+  @Column({ name: 'penalty_percent', type: 'decimal', precision: 5, scale: 2, nullable: true })
   penaltyPercent: number | null;
 
   @ManyToOne(() => User, { eager: false, nullable: true })
@@ -89,46 +89,46 @@ export class Dispute {
   @Column({ type: 'uuid', name: 'arbitrator_id', nullable: true })
   arbitratorId: string | null;
 
-  @Column({ type: 'timestamp', nullable: true })
+  @Column({ name: 'arbitrator_assigned_at', type: 'timestamp', nullable: true })
   arbitratorAssignedAt: Date | null;
 
-  @Column({ type: 'timestamp', nullable: true })
+  @Column({ name: 'seller_response_due_at', type: 'timestamp', nullable: true })
   sellerResponseDueAt: Date | null;
 
-  @Column({ type: 'timestamp', nullable: true })
+  @Column({ name: 'evidence_due_at', type: 'timestamp', nullable: true })
   evidenceDueAt: Date | null;
 
-  @Column({ type: 'timestamp', nullable: true })
+  @Column({ name: 'decision_due_at', type: 'timestamp', nullable: true })
   decisionDueAt: Date | null;
 
-  @Column({ type: 'timestamp', nullable: true })
+  @Column({ name: 'appeal_due_at', type: 'timestamp', nullable: true })
   appealDueAt: Date | null;
 
-  @Column({ type: 'timestamp', nullable: true })
+  @Column({ name: 'resolved_at', type: 'timestamp', nullable: true })
   resolvedAt: Date | null;
 
-  @Column({ type: 'timestamp', nullable: true })
+  @Column({ name: 'enforced_at', type: 'timestamp', nullable: true })
   enforcedAt: Date | null;
 
-  @Column({ type: 'timestamp', nullable: true })
+  @Column({ name: 'closed_at', type: 'timestamp', nullable: true })
   closedAt: Date | null;
 
   @Column({ type: 'text', nullable: true })
   resolution: string | null;
 
-  @Column({ type: 'decimal', precision: 12, scale: 2, default: 0 })
+  @Column({ name: 'penalty_amount', type: 'decimal', precision: 12, scale: 2, default: 0 })
   penaltyAmount: number;
 
-  @Column({ type: 'decimal', precision: 12, scale: 2, default: 0 })
+  @Column({ name: 'arbitrator_fee', type: 'decimal', precision: 12, scale: 2, default: 0 })
   arbitratorFee: number;
 
-  @Column({ type: 'decimal', precision: 12, scale: 2, default: 0 })
+  @Column({ name: 'platform_fee', type: 'decimal', precision: 12, scale: 2, default: 0 })
   platformFee: number;
 
-  @Column({ type: 'boolean', default: false })
+  @Column({ name: 'is_appealable', type: 'boolean', default: false })
   isAppealable: boolean;
 
-  @Column({ type: 'timestamp', nullable: true })
+  @Column({ name: 'appealed_at', type: 'timestamp', nullable: true })
   appealedAt: Date | null;
 
   @ManyToOne(() => User, { eager: false, nullable: true })
@@ -138,10 +138,10 @@ export class Dispute {
   @Column({ type: 'uuid', name: 'appeal_arbitrator_id', nullable: true })
   appealArbitratorId: string | null;
 
-  @CreateDateColumn({ type: 'timestamp' })
+  @CreateDateColumn({ name: 'created_at', type: 'timestamp' })
   createdAt: Date;
 
-  @UpdateDateColumn({ type: 'timestamp' })
+  @UpdateDateColumn({ name: 'updated_at', type: 'timestamp' })
   updatedAt: Date;
 
   @Column({ type: 'jsonb', default: {} })

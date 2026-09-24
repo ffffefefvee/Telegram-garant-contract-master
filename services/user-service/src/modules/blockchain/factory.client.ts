@@ -100,7 +100,7 @@ export class FactoryClient {
     if (!this.provider.isReady) {
       throw new Error('Blockchain not ready');
     }
-    return this.txQueue.submit(`factory.createEscrow ${params.dealId}`, async () => {
+    const txHash = await this.txQueue.submit(`factory.createEscrow ${params.dealId}`, async (overrides) => {
       const tx = await this.write().createEscrow(
         params.dealId,
         params.buyer,
@@ -108,12 +108,13 @@ export class FactoryClient {
         params.amount,
         params.feeModel,
         BigInt(params.fundingDeadline),
+        overrides ?? {},
       );
-      const receipt = await tx.wait();
-      const escrow = (await this.read().escrowOf(params.dealId)) as string;
-      this.logger.log(`Escrow deployed for dealId=${params.dealId} → ${escrow}, tx=${receipt.hash}`);
-      return { escrow, txHash: receipt.hash as string };
+      return tx;
     });
+    const escrow = (await this.read().escrowOf(params.dealId)) as string;
+    this.logger.log(`Escrow deployed for dealId=${params.dealId} → ${escrow}, tx=${txHash}`);
+    return { escrow, txHash };
   }
 
   /**

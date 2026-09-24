@@ -42,7 +42,7 @@ export class ArbitrationEvent {
   @Column({ type: 'uuid', name: 'actor_id', nullable: true })
   actorId: string | null;
 
-  @CreateDateColumn({ type: 'timestamp' })
+  @CreateDateColumn({ name: 'created_at', type: 'timestamp' })
   createdAt: Date;
 
   @Column({ type: 'jsonb', default: {} })

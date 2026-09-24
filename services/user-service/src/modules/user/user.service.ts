@@ -255,55 +255,6 @@ export class UserService {
     });
   }
 
-  async setStatus(id: string, status: UserStatus): Promise<User> {
-    const user = await this.findById(id);
-    user.status = status;
-    user.updatedAt = new Date();
-    return this.userRepository.save(user);
-  }
-
-  async ban(id: string, reason?: string): Promise<User> {
-    const user = await this.findById(id);
-    user.status = UserStatus.BANNED;
-    user.metadata = {
-      ...user.metadata,
-      banReason: reason,
-      bannedAt: new Date().toISOString(),
-    };
-    user.updatedAt = new Date();
-    return this.userRepository.save(user);
-  }
-
-  async unban(id: string): Promise<User> {
-    const user = await this.findById(id);
-    user.status = UserStatus.ACTIVE;
-    user.metadata = {
-      ...user.metadata,
-      unbannedAt: new Date().toISOString(),
-    };
-    user.updatedAt = new Date();
-    return this.userRepository.save(user);
-  }
-
-  async addRole(id: string, role: UserType): Promise<User> {
-    const user = await this.findById(id);
-
-    if (!user.roles.includes(role)) {
-      user.roles.push(role);
-      user.updatedAt = new Date();
-      await this.userRepository.save(user);
-    }
-
-    return user;
-  }
-
-  async removeRole(id: string, role: UserType): Promise<User> {
-    const user = await this.findById(id);
-    user.roles = user.roles.filter((r) => r !== role);
-    user.updatedAt = new Date();
-    return this.userRepository.save(user);
-  }
-
   async createSession(data: CreateSessionDto): Promise<UserSession> {
     const user = await this.findById(data.userId);
 
@@ -330,6 +281,10 @@ export class UserService {
     });
   }
 
+  async findSessionById(id: string): Promise<UserSession | null> {
+    return this.sessionRepository.findOne({ where: { id } });
+  }
+
   async validateSession(token: string): Promise<UserSession | null> {
     const session = await this.findSessionByToken(token);
 
@@ -354,6 +309,19 @@ export class UserService {
       session.revoke(reason);
       await this.sessionRepository.save(session);
     }
+  }
+
+  async revokeSessionById(
+    sessionId: string,
+    userId: string,
+    reason?: string,
+  ): Promise<void> {
+    const session = await this.sessionRepository.findOne({
+      where: { id: sessionId, userId },
+    });
+    if (!session) return;
+    session.revoke(reason);
+    await this.sessionRepository.save(session);
   }
 
   async revokeAllUserSessions(userId: string, reason?: string): Promise<void> {
@@ -449,19 +417,6 @@ export class UserService {
     user.reputationScore = newScore;
     user.updatedAt = new Date();
 
-    return this.userRepository.save(user);
-  }
-
-  async updateBalance(userId: string, amount: number): Promise<User> {
-    const user = await this.findById(userId);
-
-    user.balance += amount;
-
-    if (user.balance < 0) {
-      throw new ConflictException('Insufficient balance');
-    }
-
-    user.updatedAt = new Date();
     return this.userRepository.save(user);
   }
 

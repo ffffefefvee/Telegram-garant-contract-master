@@ -25,28 +25,28 @@ export class ArbitrationChat {
   @Column({ type: 'uuid', name: 'dispute_id', unique: true })
   disputeId: string;
 
-  @Column({ type: 'text', nullable: true })
+  @Column({ name: 'last_message', type: 'text', nullable: true })
   lastMessage: string | null;
 
-  @Column({ type: 'timestamp', nullable: true })
+  @Column({ name: 'last_message_at', type: 'timestamp', nullable: true })
   lastMessageAt: Date | null;
 
-  @Column({ type: 'int', default: 0 })
+  @Column({ name: 'buyer_unread_count', type: 'int', default: 0 })
   buyerUnreadCount: number;
 
-  @Column({ type: 'int', default: 0 })
+  @Column({ name: 'seller_unread_count', type: 'int', default: 0 })
   sellerUnreadCount: number;
 
-  @Column({ type: 'int', default: 0 })
+  @Column({ name: 'arbitrator_unread_count', type: 'int', default: 0 })
   arbitratorUnreadCount: number;
 
-  @Column({ type: 'boolean', default: true })
+  @Column({ name: 'is_active', type: 'boolean', default: true })
   isActive: boolean;
 
-  @CreateDateColumn({ type: 'timestamp' })
+  @CreateDateColumn({ name: 'created_at', type: 'timestamp' })
   createdAt: Date;
 
-  @UpdateDateColumn({ type: 'timestamp' })
+  @UpdateDateColumn({ name: 'updated_at', type: 'timestamp' })
   updatedAt: Date;
 
   @OneToMany(() => ArbitrationChatMessage, (message) => message.chat, { cascade: true })

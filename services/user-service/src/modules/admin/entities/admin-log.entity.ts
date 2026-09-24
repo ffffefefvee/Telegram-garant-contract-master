@@ -14,18 +14,18 @@ export class AdminLog {
   @Column({ type: 'varchar', length: 100 })
   action: string;
 
-  @Column({ type: 'text', nullable: true })
+  @Column({ name: 'target_id', type: 'text', nullable: true })
   targetId: string | null;
 
   @Column({ type: 'text', nullable: true })
   description: string | null;
 
-  @Column({ type: 'varchar', length: 45, nullable: true })
+  @Column({ name: 'ip_address', type: 'varchar', length: 45, nullable: true })
   ipAddress: string | null;
 
   @Column({ type: 'jsonb', default: {} })
   details: Record<string, any>;
 
-  @CreateDateColumn({ type: 'timestamp' })
+  @CreateDateColumn({ name: 'created_at', type: 'timestamp' })
   createdAt: Date;
 }

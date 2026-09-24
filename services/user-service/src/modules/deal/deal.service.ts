@@ -1661,21 +1661,6 @@ export class DealService {
     return { deals, total };
   }
 
-  async forceComplete(id: string): Promise<Deal> {
-    const deal = await this.findById(id);
-    deal.status = DealStatus.COMPLETED;
-    deal.completedAt = new Date();
-    return this.dealRepository.save(deal);
-  }
-
-  async forceCancel(id: string, reason: string): Promise<Deal> {
-    const deal = await this.findById(id);
-    deal.status = DealStatus.CANCELLED;
-    deal.cancelReason = reason;
-    deal.cancelledAt = new Date();
-    return this.dealRepository.save(deal);
-  }
-
   async getDealMessages(
     dealId: string,
     limit: number = 50,

@@ -5,3 +5,7 @@ ff0525c141bf17f257d2bacf445932aa01aa3644:services/user-service/src/modules/auth/
 df0e843f621777ba3702a5603fe3785b9d15090f:docs/NEXT_STEPS.md:generic-api-key:161
 df0e843f621777ba3702a5603fe3785b9d15090f:docs/PRODUCT_PLAN.md:generic-api-key:551
 df0e843f621777ba3702a5603fe3785b9d15090f:docs/PRODUCT_PLAN.md:generic-api-key:554
+
+# Retired, test-only JWT signing constant in a historical guard Jest fixture;
+# not an IdP key and absent from the current source tree.
+769398e55c44fbf0ba48a9bfe1e969c518b269a4:services/user-service/src/modules/admin/guards/privileged-access.guard.spec.ts:generic-api-key:11

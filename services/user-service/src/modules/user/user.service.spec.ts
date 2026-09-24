@@ -258,6 +258,34 @@ describe('UserService', () => {
     });
   });
 
+  describe('revokeSessionById', () => {
+    it('scopes revocation to the authenticated session owner', async () => {
+      const session = {
+        id: 'session-1',
+        userId: 'user-1',
+        revoke: jest.fn(),
+      };
+      mockSessionRepository.findOne.mockResolvedValue(session);
+      mockSessionRepository.save.mockResolvedValue(session);
+
+      await service.revokeSessionById('session-1', 'user-1', 'logout');
+
+      expect(mockSessionRepository.findOne).toHaveBeenCalledWith({
+        where: { id: 'session-1', userId: 'user-1' },
+      });
+      expect(session.revoke).toHaveBeenCalledWith('logout');
+      expect(mockSessionRepository.save).toHaveBeenCalledWith(session);
+    });
+
+    it('does not reveal or revoke another user session', async () => {
+      mockSessionRepository.findOne.mockResolvedValue(null);
+
+      await service.revokeSessionById('session-2', 'user-1', 'logout');
+
+      expect(mockSessionRepository.save).not.toHaveBeenCalled();
+    });
+  });
+
   describe('getUserLanguage', () => {
     it('should return user language preference', async () => {
       const mockPreference = {
@@ -311,28 +339,6 @@ describe('UserService', () => {
       const result = await service.updateReputation('test-uuid-123', -10);
 
       expect(result.reputationScore).toBe(0);
-    });
-  });
-
-  describe('updateBalance', () => {
-    it('should update user balance', async () => {
-      mockUserRepository.findOne.mockResolvedValue(mockUser);
-      mockUserRepository.save.mockResolvedValue({
-        ...mockUser,
-        balance: 100,
-      });
-
-      const result = await service.updateBalance('test-uuid-123', 100);
-
-      expect(result.balance).toBe(100);
-    });
-
-    it('should throw error on insufficient balance', async () => {
-      mockUserRepository.findOne.mockResolvedValue(mockUser);
-
-      await expect(service.updateBalance('test-uuid-123', -100)).rejects.toThrow(
-        'Insufficient balance',
-      );
     });
   });
 

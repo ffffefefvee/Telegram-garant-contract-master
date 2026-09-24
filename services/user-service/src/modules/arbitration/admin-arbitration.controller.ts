@@ -27,7 +27,7 @@ import { RolesGuard } from '../admin/guards/roles.guard';
  */
 @Controller('admin/arbitration')
 @UseGuards(RolesGuard)
-@Roles(Role.ADMIN, Role.SUPER_ADMIN)
+@Roles(Role.SUPER_ADMIN)
 export class AdminArbitrationController {
   constructor(
     private readonly arbitratorService: ArbitratorService,
@@ -103,25 +103,6 @@ export class AdminArbitrationController {
   @Get('disputes/:id')
   async getDispute(@Param('id', ParseUUIDPipe) id: string) {
     return this.disputeService.getDispute(id);
-  }
-
-  @Post('disputes/:id/reassign')
-  async reassignArbitrator(
-    @Param('id', ParseUUIDPipe) id: string,
-    @Body() dto: { arbitratorId: string },
-    @CurrentUser() user: UserPayload,
-  ) {
-    return this.disputeService.assignArbitrator(id, dto.arbitratorId, user.id, false);
-  }
-
-  @Post('disputes/:id/close')
-  @HttpCode(HttpStatus.NO_CONTENT)
-  async closeDispute(
-    @Param('id', ParseUUIDPipe) id: string,
-    @CurrentUser() user: UserPayload,
-    @Body() dto?: { reason?: string },
-  ) {
-    return this.disputeService.closeDispute(id, user.id, dto?.reason);
   }
 
   // === Settings Management ===

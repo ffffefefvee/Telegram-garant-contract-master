@@ -7,26 +7,21 @@ import {
   Query,
   UseGuards,
   Req,
-  HttpCode,
-  HttpStatus,
 } from '@nestjs/common';
 import { Roles } from './decorators/roles.decorator';
 import { Role } from './enums/role.enum';
 import { RolesGuard } from './guards/roles.guard';
-import { AdminService } from './admin.service';
 import { PaymentService } from '../payment/payment.service';
 import { TonRecoveryService } from '../payment/rails/ton-recovery.service';
-import { EscrowDeadlineService } from '../payment/escrow-deadline.service';
 import type { UnmatchedDepositStatus } from '../payment/entities/ton-unmatched-deposit.entity';
+import type { VerifiedPrivilegedIdentity } from '../auth/privileged-identity.service';
 
 @Controller('admin/payments')
 @UseGuards(RolesGuard)
 export class AdminPaymentController {
   constructor(
     private readonly paymentService: PaymentService,
-    private readonly adminService: AdminService,
     private readonly tonRecovery: TonRecoveryService,
-    private readonly escrowDeadline: EscrowDeadlineService,
   ) {}
 
   @Get('stats/summary')
@@ -61,71 +56,48 @@ export class AdminPaymentController {
     return this.tonRecovery.list(status, limit);
   }
 
-  /** Credit an unmatched TON deposit to a payment → standard settlement. */
-  @Post('ton/unmatched/:id/match')
-  @Roles(Role.ADMIN, Role.SUPER_ADMIN)
-  async matchTonUnmatched(
+  @Post('ton/unmatched/:id/match-requests')
+  @Roles(Role.SUPER_ADMIN)
+  async requestTonMatch(
     @Param('id') id: string,
     @Body('paymentId') paymentId: string,
     @Body('note') note: string | undefined,
+    @Body('expiresInSeconds') expiresInSeconds: number | undefined,
     @Req() req: any,
   ) {
-    const result = await this.tonRecovery.match(id, paymentId, req.user?.id, note);
-    await this.adminService.logAction({
-      adminId: req.user?.id,
-      action: 'TON_DEPOSIT_MATCH',
-      targetId: paymentId,
-      description: `Ручной матчинг TON-депозита ${id} (${result.deposit.amountUnits} units) к платежу ${paymentId}`,
-    });
-    return result;
+    return this.tonRecovery.requestMatch(id, paymentId, this.recoveryActor(req), note, expiresInSeconds ?? 300);
   }
 
-  /** Mark an unmatched TON deposit as handled outside the system. */
-  @Post('ton/unmatched/:id/ignore')
-  @Roles(Role.ADMIN, Role.SUPER_ADMIN)
-  async ignoreTonUnmatched(
+  @Post('ton/unmatched/:id/ignore-requests')
+  @Roles(Role.SUPER_ADMIN)
+  async requestTonIgnore(
     @Param('id') id: string,
+    @Body('reason') reason: string,
+    @Body('expiresInSeconds') expiresInSeconds: number | undefined,
+    @Req() req: any,
+  ) {
+    return this.tonRecovery.requestIgnore(id, this.recoveryActor(req), reason, expiresInSeconds ?? 300);
+  }
+
+  @Post('ton/unmatched/:id/recovery-requests/:requestId/approve')
+  @Roles(Role.SUPER_ADMIN)
+  async approveTonRecovery(
+    @Param('id') id: string,
+    @Param('requestId') requestId: string,
+    @Req() req: any,
+  ) {
+    return this.tonRecovery.approve(id, requestId, this.recoveryActor(req));
+  }
+
+  @Post('ton/unmatched/:id/recovery-requests/:requestId/cancel')
+  @Roles(Role.SUPER_ADMIN)
+  async cancelTonRecovery(
+    @Param('id') id: string,
+    @Param('requestId') requestId: string,
     @Body('reason') reason: string,
     @Req() req: any,
   ) {
-    const deposit = await this.tonRecovery.ignore(id, req.user?.id, reason);
-    await this.adminService.logAction({
-      adminId: req.user?.id,
-      action: 'TON_DEPOSIT_IGNORE',
-      targetId: id,
-      description: `TON-депозит ${id} помечен ignored. Причина: ${reason}`,
-    });
-    return deposit;
-  }
-
-  /**
-   * Extend the on-chain funding deadline of a payment's escrow so a LATE
-   * deposit can settle through the standard path instead of a manual refund.
-   */
-  @Post(':id/extend-deadline')
-  @Roles(Role.ADMIN, Role.SUPER_ADMIN)
-  async extendEscrowDeadline(
-    @Param('id') id: string,
-    @Body('hours') hours: number,
-    @Body('extendRateLock') extendRateLock: boolean | undefined,
-    @Body('note') note: string | undefined,
-    @Req() req: any,
-  ) {
-    const result = await this.escrowDeadline.extend(id, Number(hours), req.user?.id, {
-      extendRateLock: extendRateLock === true,
-      note,
-    });
-    await this.adminService.logAction({
-      adminId: req.user?.id,
-      action: 'ESCROW_DEADLINE_EXTEND',
-      targetId: id,
-      description:
-        `Продление funding-дедлайна эскроу ${result.escrowAddress}: ` +
-        `${result.previousDeadlineUnix} → ${result.newDeadlineUnix} (tx ${result.txHash})` +
-        (result.rateLockExtended ? ', rate-lock продлён по зафиксированному курсу' : '') +
-        (note ? `. Заметка: ${note}` : ''),
-    });
-    return result;
+    return this.tonRecovery.cancel(id, requestId, this.recoveryActor(req), reason);
   }
 
   @Get(':id')
@@ -134,27 +106,15 @@ export class AdminPaymentController {
     return this.paymentService.findById(id);
   }
 
-  @Post(':id/refund')
-  @HttpCode(HttpStatus.NO_CONTENT)
-  @Roles(Role.ADMIN, Role.SUPER_ADMIN)
-  async refundPayment(
-    @Param('id') id: string,
-    @Body('reason') reason: string,
-    @Req() req: any,
-  ) {
-    await this.paymentService.refundPayment(id, reason, req.user?.id);
-    await this.adminService.logAction({
-      adminId: req.user?.id,
-      action: 'PAYMENT_REFUND',
-      targetId: id,
-      description: `Возврат. Причина: ${reason}`,
-    });
-  }
-
   @Get(':id/check-cryptomus')
   @Roles(Role.ADMIN, Role.SUPER_ADMIN)
   async checkCryptomusStatus(@Param('id') id: string) {
     return this.paymentService.checkCryptomusStatus(id);
+  }
+
+  private recoveryActor(req: any) {
+    const identity = req.privilegedIdentity as VerifiedPrivilegedIdentity | undefined;
+    return { id: req.user?.id, jti: identity?.jti ?? '', sid: identity?.sid ?? '', scopes: identity?.scope ?? [] };
   }
 
 }
